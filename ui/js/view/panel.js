@@ -49,13 +49,14 @@ function focusCard(id) {
   el.classList.add("flash");
 }
 
-// 큰 카드를 처음 열 때의 자리: 클러스터 오른쪽, 다른 카드와 겹치지 않는 곳.
+// 큰 카드를 처음 열 때의 자리: 클러스터 오른쪽. 다른 카드와 겹치면 아래가 아니라 그 카드 오른쪽으로 민다.
 function placeSatellite(anchor) {
   const obstacles = [...CLUSTERS, ...geo.values(), ...SATS.values()];
   const box = { x: anchor.x + anchor.w + 80, y: anchor.y, w: BIG_W, h: BIG_H };
   for (let i = 0; i < 400; i++) {
-    if (!obstacles.some((r) => rectsOverlap(box, r))) break;
-    box.y += 26;
+    const hit = obstacles.find((r) => rectsOverlap(box, r));
+    if (!hit) break;
+    box.x = hit.x + hit.w + 40;
   }
   return box;
 }
