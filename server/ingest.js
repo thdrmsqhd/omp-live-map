@@ -49,6 +49,7 @@ function newFileState(file) {
     lastUser: "",
     lastAssistant: "",
     jobs: [], // 백그라운드 잡 {id, cmd, ts, endedAt, done, status, toolCallId, tail}
+    taskProfiles: new Map(), // task 툴로 띄운 서브 이름 -> 프로필 이름(생략 시 "task")
     active: new Map(), // 도는 툴 toolCallId -> {id, name, args, ts}
     liveq: [], // 아직 방송하지 않은 live 이벤트(server/active.js 가 비운다)
     offset: 0,
@@ -64,6 +65,30 @@ function parentOf(file, depth) {
 }
 
 const PATH_KEYS = ["path", "file_path", "filePath", "file"];
+
+// 툴 인자는 객체일 수도 JSON 문자열일 수도 있다.
+function toolArgs(a) {
+  if (typeof a === "string") {
+    try {
+      return JSON.parse(a) || {};
+    } catch {
+      return {};
+    }
+  }
+  return a && typeof a === "object" ? a : {};
+}
+
+// task 툴의 tasks[] 에서 서브 이름 -> 프로필 이름을 적어 둔다(agent 생략은 "task").
+// 서브 기록 파일명(<Name>.jsonl)이 tasks[].name 과 같아 자식 노드에 프로필로 붙는다.
+function noteTasks(st, a) {
+  const tasks = Array.isArray(a.tasks) ? a.tasks : [];
+  if (!st.taskProfiles) st.taskProfiles = new Map();
+  for (const t of tasks) {
+    if (!t || !t.name) continue;
+    const agent = typeof t.agent === "string" && t.agent ? t.agent : "task";
+    st.taskProfiles.set(String(t.name), agent);
+  }
+}
 
 function notePath(st, value) {
   if (typeof value !== "string" || !value) return;
@@ -114,8 +139,9 @@ function onAssistant(st, m, ts) {
   recordAssistant(st, said, tools, ts);
   for (const block of blocks) {
     if (block.type !== "toolCall") continue;
-    const a = block.arguments || {};
+    const a = toolArgs(block.arguments);
     for (const k of PATH_KEYS) notePath(st, a[k]);
+    if (block.name === "task") noteTasks(st, a);
     if (block.name === "bash" && typeof a.command === "string") {
       st.commands = [{ cmd: a.command.slice(0, 140), ts: ts || 0 }, ...st.commands].slice(0, 8);
       if (block.id) st.toolCmds.set(block.id, a.command.slice(0, 300));
@@ -159,6 +185,7 @@ function ingest(st, raw) {
       cur.lastTs = ts || cur.lastTs;
       cur.intent = d.intent || cur.intent;
       st.tools.set(d.toolName, cur);
+      if (d.toolName === "task") noteTasks(st, toolArgs(d.args));
       toolStart(st, d, ts);
     } else if (e.customType === "session_exit") {
       st.endedAt = ts || st.endedAt;

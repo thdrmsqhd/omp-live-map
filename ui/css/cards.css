@@ -51,6 +51,8 @@
   .node .ctxp.warn { color: var(--idle); border-color: #e0a83c66; }
   .node .ctxp.err { color: #ff8d86; border-color: #e3564f88; }
   .node .ctxp + .mod { margin-left: 0; max-width: 34%; }
+  .node .prof { color: #9ecbff; background: #16273a; font-size: 9.5px; padding: 0 5px; border-radius: 8px;
+    border: 1px solid #2f5d85; flex: none; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .node .sub-t { color: var(--dim); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
   .node .sub-t[data-subtoggle] { cursor: pointer; }
   .node .sub-t.open { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 14px; }

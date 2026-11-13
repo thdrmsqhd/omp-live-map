@@ -73,9 +73,10 @@ function smallCard(n) {
   if (!agentKind(n.kind)) return infraCard(n, base);
   const subText = n.synthetic ? "원본 기록 없음" : (n.title || n.firstUser || (n.kind === "main" ? "main agent" : "subagent"));
   const sum = tokTotal(n.tokens);
+  const prof = profileChip(n); // 좁은 카드라 프로필이 있으면 모델 글자 대신 칩을 둔다(모델은 칩 title 에).
   return `<div class="node ${n.kind} ${n.status}${SUBSIZE.has(n.id) ? " sized" : ""}" data-id="${esc(n.id)}" style="${base}">
     <div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i><span class="nm">${esc(displayName(n))}</span>
-      ${ctxChip(n)}<span class="mod" title="${esc(n.provider ? n.provider + " · " : "")}${esc(n.model || "?")}">${esc(modelShort(n.model))}</span><button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">닫기</button></div>
+      ${ctxChip(n)}${prof || `<span class="mod" title="${esc(n.provider ? n.provider + " · " : "")}${esc(n.model || "?")}">${esc(modelShort(n.model))}</span>`}<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">닫기</button></div>
     <div class="sub-t" title="${esc(subText)}">${esc(subText)}</div>
     ${nowLine(n)}
     <div class="ibar">${tokenTape(n.tokens)}</div>

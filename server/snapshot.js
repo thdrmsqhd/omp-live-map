@@ -6,6 +6,7 @@ const { HOME, ROOT, SESSIONS, HOURS, ACTIVE_MS, MSG_BUDGET, USD_KRW } = require(
 const { allStates, stateOf } = require("./tail");
 const { resFor, histOf } = require("./proc");
 const { ctxWindowOf } = require("./models");
+const { profileOf } = require("./profiles");
 const { sumHourly } = require("./turns");
 
 function tokPerSec(st) {
@@ -26,6 +27,9 @@ function nodeOf(st, now, last) {
     id: st.file,
     name: st.name,
     kind: st.kind,
+    agent: "", // 서브에이전트가 쓴 프로필 이름. finishSession 이 부모 task 툴 호출에서 채운다.
+    agentModel: "", // 그 프로필 정의의 첫 모델
+    agentThinking: "", // 그 프로필 정의의 thinking-level
     parent: st.parent, // 세션 안에 없는 부모는 finishSession에서 정리한다.
     title: st.title,
     firstUser: st.firstUser,
@@ -110,6 +114,19 @@ function finishSession(s) {
     { tokens: 0, output: 0, cost: 0, requests: 0, agents: 0 }
   );
   s.live = s.nodes.some((n) => n.status === "live");
+  // 서브 기록 파일명(<Name>)은 부모 task 툴 호출의 tasks[].name 과 같다. 부모 상태에서 프로필 이름을 찾는다.
+  for (const n of s.nodes) {
+    if (n.kind !== "sub") continue;
+    const pst = stateOf(n.parent);
+    const map = pst && pst.taskProfiles;
+    if (!map || !map.has(n.name)) continue;
+    n.agent = map.get(n.name);
+    const prof = profileOf(n.agent);
+    if (prof) {
+      n.agentModel = prof.models[0] || "";
+      n.agentThinking = prof.thinking;
+    }
+  }
   s.jobs = [];
   for (const n of s.nodes) {
     const st = stateOf(n.id);
