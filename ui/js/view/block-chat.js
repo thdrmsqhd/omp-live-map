@@ -163,4 +163,4 @@ function mountChat(blk, n) {
   paintChatModel(box, n, st);
 }
 
-registerBlock({ type: "chat", slot: "main", flex: 1, render: chatBlock, mount: mountChat, paint: (box, n) => paintChat(n.id) });
+registerBlock({ type: "chat", slot: "main", flex: 3, render: chatBlock, mount: mountChat, paint: (box, n) => paintChat(n.id) });
