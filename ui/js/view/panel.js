@@ -12,6 +12,21 @@ function openNode(id) {
   loadBg(id);
 }
 
+// 컨텍스트를 비운 세션이 새 기록 파일로 옮겨 가면 열린 카드·자리·이름을 새 노드로 넘긴다.
+// 새 카드의 대화 상태는 비우기 전 기록을 따라가지 않도록 버린다.
+function adoptOpenCard(oldId, newId) {
+  if (!newId || newId === oldId) return;
+  if (openIds.delete(oldId)) openIds.add(newId);
+  const box = BIGPOS.get(oldId);
+  if (box) { BIGPOS.delete(oldId); BIGPOS.set(newId, box); }
+  const alias = ALIAS.get(oldId);
+  if (alias) { ALIAS.delete(oldId); ALIAS.set(newId, alias); saveAlias(); }
+  CHAT.delete(oldId);
+  CHAT_TOOL.delete(oldId);
+  CTX.delete(oldId);
+  saveOpenCards();
+}
+
 // 열린 카드의 클러스터와 큰 카드가 한 화면에 들어오게 맞춘다.
 function focusCluster(nodeId) {
   const c = clusterOfCard(nodeId) || geo.get(nodeId);

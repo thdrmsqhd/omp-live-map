@@ -1,10 +1,11 @@
 // 세션 컨텍스트 보기·편집: 기록에서 지금 유효한 컨텍스트를 읽고, omp 가 실제로 지원하는 방법으로만 고친다.
-// 지원되는 편집 = (a) 작업 가이드를 프롬프트/steer 로 보내기, (b) compact + customInstructions 지시문.
+// 지원되는 편집 = (a) 작업 가이드를 프롬프트/steer 로 보내기, (b) compact + customInstructions 지시문, (c) new_session 으로 비우기.
 // omp rpc 에는 메시지 삭제·수정·시스템 프롬프트 교체 명령이 없다(JSONL 직접 수정은 하지 않는다).
 "use strict";
 
+const path = require("path");
 const { readContext, compactInstructions, safeFile } = require("./context");
-const { acquire, prompt, list } = require("./sessions");
+const { acquire, prompt, list, rekey } = require("./sessions");
 
 const COMPACT_MS = 300000; // 압축은 요약 모델 호출이 끝나야 응답이 온다
 const errText = (e) => String((e && e.message) || e);
@@ -48,4 +49,25 @@ async function compact(node, text, omit) {
   }
 }
 
-module.exports = { view, guide, compact };
+// (c) 비우기: omp 의 new_session 으로 컨텍스트 없이 이어 간다. 맵은 세션을 기록 파일 경로로 추적하므로
+// 새 sessionFile 을 다시 읽어 등록부 키를 옮긴다(그래야 다음 프롬프트·카드가 새 세션을 따라간다).
+async function clear(node) {
+  const { s, err } = await acquire(node);
+  if (err) return err;
+  if (s.busy) return { ok: false, out: "에이전트가 도는 중입니다" };
+  try {
+    const r = await s.rpc.send({ type: "new_session", parentSession: s.node });
+    if (!r.success) throw new Error(r.error || "omp 가 새 세션을 시작하지 않았습니다");
+    if (r.data && r.data.cancelled) return { ok: false, cancelled: true, out: "새 세션 시작이 취소되었습니다" };
+    const st = await s.rpc.send({ type: "get_state" });
+    const file = st.success && st.data && st.data.sessionFile;
+    if (!file) throw new Error("omp 가 새 세션 파일을 알려 주지 않았습니다");
+    const next = path.normalize(file);
+    rekey(s, next);
+    return { ok: true, mode: "clear", node: next, out: "대화 컨텍스트를 비웠습니다" };
+  } catch (e) {
+    return { ok: false, out: errText(e) };
+  }
+}
+
+module.exports = { view, guide, compact, clear };

@@ -12,6 +12,14 @@ function apply(data) {
   renderMap(false);
 }
 
+// 스냅샷을 지금 다시 받는다(새 세션 파일처럼 SSE 방송을 기다리지 않을 때).
+async function reloadGraph() {
+  try {
+    const res = await fetch("/api/graph");
+    if (res.ok) setGraph(await res.json());
+  } catch { /* 서버 재시작 중 */ }
+}
+
 async function fetchInfra() {
   const res = await fetch("/api/infra");
   const data = await res.json();

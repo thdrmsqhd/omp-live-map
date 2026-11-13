@@ -82,6 +82,67 @@ async function summarize(id) {
   paintChat(id);
 }
 
+// 컨텍스트 압축: 작업 가이드 없이 omp 의 compact 만 부른다. 결과는 요약 줄(.csum)에 남긴다.
+async function compactChat(id) {
+  const st = chatState(id);
+  if (st.compacting || st.busy) return;
+  st.compacting = true;
+  st.summary = "";
+  st.error = "";
+  st.retry = "";
+  paintChat(id);
+  let out = {};
+  try {
+    const res = await postJSON("/api/context", { node: id, mode: "compact" });
+    out = await res.json().catch(() => ({ ok: false, out: "HTTP " + res.status }));
+  } catch (err) {
+    out = { ok: false, out: err.message };
+  }
+  st.compacting = false;
+  if (out.ok) st.summary = out.out || "압축했습니다";
+  else st.error = "압축 실패: " + (out.out || "응답 없음");
+  paintChat(id);
+}
+
+// 비우기: omp 의 new_session 으로 컨텍스트 없는 새 세션을 연다. 맵은 세션 파일 경로로 카드를 추적하므로
+// 새 node 로 열린 카드·자리를 넘기고, 새 기록이 스냅샷에 들어올 때까지 그래프를 다시 받는다.
+async function clearChat(id) {
+  const st = chatState(id);
+  if (st.clearing || st.busy) return;
+  if (!confirm("대화 컨텍스트를 비우고 새 세션으로 이어갑니다")) return;
+  st.clearing = true;
+  st.summary = "";
+  st.error = "";
+  st.retry = "";
+  paintChat(id);
+  let out = {};
+  try {
+    const res = await postJSON("/api/context", { node: id, mode: "clear" });
+    out = await res.json().catch(() => ({ ok: false, out: "HTTP " + res.status }));
+  } catch (err) {
+    out = { ok: false, out: err.message };
+  }
+  st.clearing = false;
+  if (!out.ok) {
+    st.error = (out.cancelled ? "비우기 취소: " : "비우기 실패: ") + (out.out || "응답 없음");
+    paintChat(id);
+    return;
+  }
+  adoptOpenCard(id, out.node);
+  let found = false;
+  for (let i = 0; i < 10 && !found; i++) {
+    await reloadGraph();
+    found = DATA.sessions.some((s) => (s.nodes || []).some((n) => n.id === out.node));
+    if (!found) await new Promise((done) => setTimeout(done, 300));
+  }
+  // 새 기록이 아직 스냅샷에 없으면 없는 노드를 열어 둘 수 없으므로 카드를 접고 알린다.
+  if (!found) {
+    closeCard(out.node);
+    alert("새 세션 기록을 찾지 못했습니다: " + out.node);
+  }
+  renderMap(false, true);
+}
+
 // 오류 줄의 "다시 시도": 마지막 전송 입력 또는 요약을 그대로 다시 요청한다.
 function retryChat(id) {
   const st = chatState(id);

@@ -63,6 +63,8 @@ function chatBlock(n) {
       <button data-send="1">보내기</button>
       <button class="stop" data-cancel="1"${st.busy ? "" : " hidden"}>취소</button>
       <button data-sum="1">요약</button>
+      <button data-compact="1"${st.busy || st.compacting ? " disabled" : ""}>${st.compacting ? "압축 중…" : "압축"}</button>
+      <button data-clear="1"${st.busy || st.clearing ? " disabled" : ""}>${st.clearing ? "비우는 중…" : "비우기"}</button>
     </div>
     <div class="csum">${chatSumHTML(st)}</div>
   </div>`;
@@ -109,6 +111,13 @@ function paintChat(id) {
   if (sum.__html !== sumHTML) { sum.__html = sumHTML; sum.innerHTML = sumHTML; }
   // 도는 중에도 보내기는 열려 있다(추가 지시). 취소는 도는 동안만 보인다.
   box.querySelector("button[data-cancel]").hidden = !st.busy;
+  // 압축·비우기는 진행 중이거나 에이전트가 도는 동안 눌러지지 않는다.
+  const compact = box.querySelector("button[data-compact]");
+  compact.disabled = !!(st.busy || st.compacting);
+  compact.textContent = st.compacting ? "압축 중…" : "압축";
+  const clr = box.querySelector("button[data-clear]");
+  clr.disabled = !!(st.busy || st.clearing);
+  clr.textContent = st.clearing ? "비우는 중…" : "비우기";
   // 입력 중에는 input 리스너가 draft 를 맞춰 두므로, 값이 다르면 전송·실패 복원 같은 프로그램 변경이다.
   const ta = box.querySelector(".cin");
   if (ta.value !== st.draft) { ta.value = st.draft; fitChatInput(ta); }
@@ -143,6 +152,8 @@ function mountChat(blk, n) {
     else if (b.dataset.pickId) { if (!modelPick(id).loading) pickModel(id, b.dataset.pickP, b.dataset.pickId); }
     else if (b.dataset.cancel) cancelChat(id);
     else if (b.dataset.sum) summarize(id);
+    else if (b.dataset.compact) compactChat(id);
+    else if (b.dataset.clear) clearChat(id);
     else if (b.dataset.retry) retryChat(id);
     else if (b.dataset.more) { st.expanded = !st.expanded; paintChat(id); }
     else if (b.dataset.unfilter) toggleChatTool(id, CHAT_TOOL.get(id));

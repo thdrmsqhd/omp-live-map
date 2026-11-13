@@ -179,4 +179,12 @@ function list() {
   return [...sessions.values()].map((s) => ({ node: s.node, pid: s.rpc.child.pid, busy: s.busy }));
 }
 
-module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has };
+// omp 의 new_session 처럼 프로세스가 새 기록 파일로 옮겨 가면 등록부 키도 함께 옮긴다.
+function rekey(s, next) {
+  if (!s || !next || next === s.node) return;
+  if (sessions.get(s.node) === s) sessions.delete(s.node);
+  s.node = next;
+  sessions.set(next, s);
+}
+
+module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has, rekey };
