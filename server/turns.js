@@ -6,6 +6,8 @@ const { MSG_KEEP } = require("./config");
 const HOUR_MS = 3_600_000;
 const TOOL_TAGS = 12; // 툴 전용 병합 항목의 tools 최대 개수
 const EMPTY_TEXT = /^[.·,\s]*$/;
+const MSG_TEXT_MAX = 8000; // 기록 메시지 한 건의 글자 수. 줄바꿈은 지켜야 대화 블록 markdown 이 살아난다.
+const keepText = (t) => t.replace(/\r\n?/g, "\n").trim().slice(0, MSG_TEXT_MAX);
 
 function pushMessage(st, msg) {
   st.messages.push(msg);
@@ -13,14 +15,14 @@ function pushMessage(st, msg) {
 }
 
 function recordUser(st, text, ts) {
-  pushMessage(st, { role: "user", text: text.replace(/\s+/g, " ").slice(0, 700), ts });
+  pushMessage(st, { role: "user", text: keepText(text), ts });
 }
 
 // said: 본문 텍스트, tools: 이 턴의 toolCall 이름(중복 제거됨).
 function recordAssistant(st, said, tools, ts) {
   if (said && !EMPTY_TEXT.test(said)) {
     st.lastAssistant = said.replace(/\s+/g, " ").slice(0, 300);
-    const msg = { role: "assistant", text: said.replace(/\s+/g, " ").slice(0, 700), ts };
+    const msg = { role: "assistant", text: keepText(said), ts };
     if (tools.length) msg.tools = tools;
     pushMessage(st, msg);
     return;
