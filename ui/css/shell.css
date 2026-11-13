@@ -1,0 +1,48 @@
+/* omp-live-map · view · 상단바·검색·메뉴·미니맵·스테이지 */
+  #topbar { display: flex; gap: 10px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--panel); flex: none; }
+  .brand { font-size: 11px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+  .brand b { color: var(--fg); font-weight: 650; }
+  .filters, .zoom { display: flex; gap: 4px; flex: none; }
+  .filters { padding-left: 8px; border-left: 1px solid var(--border); }
+  .filters button { padding: 3px 9px; font-size: 11.5px; color: var(--muted); }
+  .filters button.on { color: #bfe0ff; }
+  .searchwrap { position: relative; flex: none; width: 210px; }
+  #search { width: 100%; background: #0c131b; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--fg); font: inherit; font-size: 11.5px; padding: 4px 8px; outline: 0; }
+  #search:focus { border-color: #2f5d85; }
+  #searchResults { position: absolute; top: 28px; left: 0; width: 340px; z-index: 60; display: none;
+    background: #0d151d; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 30px #000a;
+    max-height: 320px; overflow: auto; padding: 4px; }
+  #searchResults.open { display: block; }
+  .sres { padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 11.5px; }
+  .sres:hover { background: #16222e; }
+  .sres .t { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sres .m { color: var(--dim); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #unhide { font-size: 11px; flex: none; }
+  #conn { flex: none; font-size: 11px; padding: 2px 8px; border-radius: 6px; border: 1px solid #6b2724; background: #3a1715; color: #ffb0aa; }
+  #spath { color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 60px; }
+  #ctxmenu { position: fixed; z-index: 80; min-width: 210px; background: #0d151d; border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 14px 34px #000b; padding: 4px; display: none; }
+  #ctxmenu.open { display: block; }
+  #ctxmenu button { display: flex; gap: 14px; width: 100%; text-align: left; border: 0; background: transparent;
+    padding: 6px 9px; font-size: 12px; border-radius: 5px; }
+  #ctxmenu button:hover { background: #17242f; }
+  #ctxmenu button:disabled { opacity: .4; cursor: default; background: transparent; }
+  #ctxmenu .mh { margin-left: auto; color: var(--dim); }
+  #ctxmenu .sep { height: 1px; background: #1b2836; margin: 4px 2px; }
+  #minimap { position: absolute; right: 14px; top: 46px; width: 204px; height: 142px; z-index: 40;
+    background: #0b1219cc; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 22px #0008;
+    backdrop-filter: blur(2px); overflow: hidden; cursor: crosshair; touch-action: none; }
+  #minimap svg { display: block; }
+  #minimap .mm-view { fill: #4aa8ff18; stroke: #4aa8ff; stroke-width: 1; }
+  #minimap .mm-c { fill: #1c3a52; stroke: #2b4f6e; stroke-width: .8; }
+  #minimap .mm-cl { fill: #17324a; stroke: #274b68; stroke-width: .8; }
+  #minimap .mm-sat { fill: #2f6da8; stroke: #4aa8ff; stroke-width: .8; }
+  #stage { position: relative; flex: 1; overflow: hidden; cursor: grab; min-height: 0; touch-action: none;
+    user-select: none; -webkit-user-select: none;
+    background: radial-gradient(circle at 1px 1px, #1b2733 1px, transparent 0) 0 0 / 22px 22px; }
+  #stage.drag { cursor: grabbing; }
+  #wrapper { position: absolute; transform-origin: 0 0; }
+  #guides { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 4; }
+  #edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 2; }
+  #nodes { position: absolute; left: 0; top: 0; }

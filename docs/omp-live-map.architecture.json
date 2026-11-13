@@ -1,0 +1,336 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "omp-live-map 구조",
+    "output": "omp-live-map.architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main-path",
+        "label": "기록 → 스냅샷 → SSE → UI",
+        "focus": [
+          "transcripts",
+          "collect",
+          "graph",
+          "sse",
+          "ui"
+        ],
+        "note": "OMP가 쓴 JSONL을 tail이 읽고, snapshot이 그래프로 만들며, 바뀐 때만 SSE로 화면에 보낸다."
+      },
+      {
+        "id": "intervene-path",
+        "label": "UI → API → 셸·omp·WSL",
+        "focus": [
+          "ui",
+          "routes",
+          "act",
+          "cli",
+          "observe",
+          "wsl"
+        ],
+        "note": "화면의 명령은 요청 가드를 지난 뒤 Git Bash·omp CLI 또는 WSL·Docker 조회·동작으로 실행된다."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "transcripts",
+      "type": "database",
+      "label": "OMP transcripts",
+      "sublabel": "sessions/*.jsonl",
+      "pos": [
+        40,
+        90
+      ],
+      "size": [
+        170,
+        72
+      ]
+    },
+    {
+      "id": "collect",
+      "type": "backend",
+      "label": "수집",
+      "sublabel": "tail · ingest · turns",
+      "pos": [
+        310,
+        90
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "2초 scan · fs.watch"
+    },
+    {
+      "id": "graph",
+      "type": "backend",
+      "label": "그래프",
+      "sublabel": "snapshot · models",
+      "pos": [
+        580,
+        90
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "세션 → 노드 트리"
+    },
+    {
+      "id": "sse",
+      "type": "messagebus",
+      "label": "SSE 전송",
+      "sublabel": "sse.js · /api/events",
+      "pos": [
+        850,
+        90
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "바뀔 때만 방송"
+    },
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "ui/ (MVVM)",
+      "sublabel": "34 js · 5 css",
+      "pos": [
+        1120,
+        90
+      ],
+      "size": [
+        180,
+        72
+      ],
+      "tag": "core → model → viewmodel → view"
+    },
+    {
+      "id": "wsl",
+      "type": "cloud",
+      "label": "WSL · Docker",
+      "sublabel": "배포판 · 컨테이너",
+      "pos": [
+        310,
+        250
+      ],
+      "size": [
+        170,
+        72
+      ]
+    },
+    {
+      "id": "observe",
+      "type": "backend",
+      "label": "관측",
+      "sublabel": "proc · owner · sys · infra",
+      "pos": [
+        580,
+        250
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "4초 refreshProc"
+    },
+    {
+      "id": "act",
+      "type": "backend",
+      "label": "개입",
+      "sublabel": "shell · prompt",
+      "pos": [
+        850,
+        250
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "exec · bg · prompt"
+    },
+    {
+      "id": "routes",
+      "type": "security",
+      "label": "routes · http",
+      "sublabel": "Host · Origin · JSON 검사",
+      "pos": [
+        1120,
+        250
+      ],
+      "size": [
+        180,
+        72
+      ],
+      "tag": "라우트 표 · ui/ 정적 서빙"
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "Git Bash · omp CLI",
+      "sublabel": "bash -lc · omp -p -r",
+      "pos": [
+        850,
+        410
+      ],
+      "size": [
+        170,
+        72
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Windows host · 127.0.0.1",
+      "wraps": [
+        "transcripts",
+        "collect",
+        "graph",
+        "sse",
+        "ui",
+        "wsl",
+        "observe",
+        "act",
+        "routes",
+        "cli"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "요청 가드",
+      "wraps": [
+        "routes"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "tail",
+      "from": "transcripts",
+      "to": "collect",
+      "label": "증분 tail",
+      "variant": "emphasis"
+    },
+    {
+      "id": "state",
+      "from": "collect",
+      "to": "graph",
+      "label": "파일 상태",
+      "variant": "emphasis"
+    },
+    {
+      "id": "broadcast",
+      "from": "graph",
+      "to": "sse",
+      "label": "변경 시 방송",
+      "variant": "emphasis"
+    },
+    {
+      "id": "stream",
+      "from": "sse",
+      "to": "ui",
+      "label": "EventSource",
+      "variant": "emphasis"
+    },
+    {
+      "id": "resources",
+      "from": "observe",
+      "to": "graph",
+      "label": "자원 · 소유 세션"
+    },
+    {
+      "id": "infra-run",
+      "from": "observe",
+      "to": "wsl",
+      "label": "wsl · docker"
+    },
+    {
+      "id": "chat-events",
+      "from": "act",
+      "to": "sse",
+      "label": "chat 이벤트",
+      "variant": "dashed"
+    },
+    {
+      "id": "spawn",
+      "from": "act",
+      "to": "cli",
+      "label": "자식 프로세스",
+      "labelAt": [
+        935,
+        366
+      ]
+    },
+    {
+      "id": "requests",
+      "from": "ui",
+      "to": "routes",
+      "label": "GET · POST /api/*",
+      "variant": "dashed",
+      "labelAt": [
+        1210,
+        206
+      ]
+    },
+    {
+      "id": "dispatch",
+      "from": "routes",
+      "to": "act",
+      "label": "exec·prompt",
+      "variant": "dashed"
+    },
+    {
+      "id": "ops-read",
+      "from": "routes",
+      "to": "observe",
+      "label": "infra · sys · res",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          1210,
+          520
+        ],
+        [
+          665,
+          520
+        ]
+      ],
+      "labelAt": [
+        1100,
+        520
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "수집",
+      "items": [
+        "tail이 세션 JSONL과 서브에이전트 JSONL을 증분으로 읽고, ingest·turns가 제목·모델·토큰·비용·메시지를 파일 상태에 쌓는다",
+        "폴더 scan은 2초 주기와 fs.watch(300ms 디바운스), 프로세스 목록 갱신은 4초 주기"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "전송",
+      "items": [
+        "broadcast가 세션 키·마지막 시각·토큰·live·자원 요약이 달라질 때만 스냅샷 전체를 보낸다",
+        "omp -p 결과는 같은 SSE 연결의 chat 이벤트로 돌아오고, 셸 exec 결과는 HTTP 응답으로 돌아온다"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "노출 범위 · 가드",
+      "items": [
+        "127.0.0.1에만 listen하고 인증은 없다. Host가 127.0.0.1:포트·localhost:포트가 아니면 403",
+        "/api/*는 Origin·Sec-Fetch-Site가 같은 출처여야 하고 POST는 application/json만 받는다(아니면 403·415). 본문 상한 1MB"
+      ]
+    }
+  ]
+}

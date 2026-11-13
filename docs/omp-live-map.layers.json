@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "omp-live-map UI 계층",
+    "output": "omp-live-map.layers.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "boot",
+        "label": "Boot",
+        "focus": [
+          "index",
+          "app",
+          "store",
+          "vmap",
+          "vcard",
+          "vblock"
+        ],
+        "note": "index.html 이 스크립트를 순서대로 적재하고, app.js 가 첫 스냅샷을 받아 첫 렌더까지 가는 경로."
+      },
+      {
+        "id": "layers",
+        "label": "Layers",
+        "focus": [
+          "state",
+          "layout",
+          "vmmap",
+          "vmap",
+          "vcard",
+          "vblock"
+        ],
+        "note": "core → model → viewmodel → view 경계와, view 안의 맵 · 카드 · 블록 묶음."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "index",
+      "type": "external",
+      "label": "index.html",
+      "sublabel": "5 css · 34 script",
+      "pos": [
+        40,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "app.js",
+      "sublabel": "boot · SSE · 폴러",
+      "pos": [
+        760,
+        50
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "util",
+      "type": "frontend",
+      "label": "format · dom",
+      "sublabel": "esc · fmt · $",
+      "pos": [
+        270,
+        220
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "state",
+      "sublabel": "DATA · openId · geo",
+      "pos": [
+        270,
+        390
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "persist",
+      "type": "database",
+      "label": "persist",
+      "sublabel": "localStorage 7키",
+      "pos": [
+        270,
+        560
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "layout",
+      "type": "frontend",
+      "label": "layout",
+      "sublabel": "layoutTree",
+      "pos": [
+        520,
+        390
+      ],
+      "size": [
+        130,
+        56
+      ]
+    },
+    {
+      "id": "store",
+      "type": "frontend",
+      "label": "store",
+      "sublabel": "setGraph · apply",
+      "pos": [
+        760,
+        220
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "vmmap",
+      "type": "frontend",
+      "label": "map",
+      "sublabel": "buildBlocks",
+      "pos": [
+        760,
+        390
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "vmcmd",
+      "type": "frontend",
+      "label": "chat · term · files",
+      "sublabel": "sendChat · runTerm",
+      "pos": [
+        760,
+        560
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "vmap",
+      "type": "frontend",
+      "label": "맵",
+      "sublabel": "render-map · patch-nodes · stage*",
+      "pos": [
+        1040,
+        220
+      ],
+      "size": [
+        210,
+        56
+      ],
+      "tag": "스테이지 · 클러스터"
+    },
+    {
+      "id": "vcard",
+      "type": "frontend",
+      "label": "카드",
+      "sublabel": "card-compact · session · metrics",
+      "pos": [
+        1040,
+        390
+      ],
+      "size": [
+        210,
+        56
+      ],
+      "tag": "카드"
+    },
+    {
+      "id": "vblock",
+      "type": "frontend",
+      "label": "블록",
+      "sublabel": "blocks · block-* 7개",
+      "pos": [
+        1040,
+        560
+      ],
+      "size": [
+        210,
+        56
+      ],
+      "tag": "블록"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "core",
+      "wraps": [
+        "util",
+        "state",
+        "persist"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "model",
+      "wraps": [
+        "layout"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "viewmodel",
+      "wraps": [
+        "store",
+        "vmmap",
+        "vmcmd"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "view",
+      "wraps": [
+        "vmap",
+        "vcard",
+        "vblock"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "index-app",
+      "from": "index",
+      "to": "app",
+      "label": "스크립트 순서",
+      "variant": "dashed"
+    },
+    {
+      "id": "app-store",
+      "from": "app",
+      "to": "store",
+      "label": "fetch · SSE",
+      "variant": "emphasis",
+      "labelAt": [
+        835,
+        163
+      ]
+    },
+    {
+      "id": "app-vmap",
+      "from": "app",
+      "to": "vmap",
+      "label": "renderMap",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelAt": [
+        975,
+        78
+      ]
+    },
+    {
+      "id": "store-vmmap",
+      "from": "store",
+      "to": "vmmap",
+      "label": "apply()",
+      "labelAt": [
+        835,
+        333
+      ]
+    },
+    {
+      "id": "vmmap-layout",
+      "from": "vmmap",
+      "to": "layout",
+      "label": "배치",
+      "labelAt": [
+        705,
+        418
+      ]
+    },
+    {
+      "id": "vmap-vmmap",
+      "from": "vmap",
+      "to": "vmmap",
+      "label": "buildBlocks",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelAt": [
+        975,
+        333
+      ]
+    },
+    {
+      "id": "vmap-vcard",
+      "from": "vmap",
+      "to": "vcard",
+      "label": "카드 HTML",
+      "variant": "emphasis",
+      "labelAt": [
+        1145,
+        333
+      ]
+    },
+    {
+      "id": "vcard-vblock",
+      "from": "vcard",
+      "to": "vblock",
+      "label": "블록 구성",
+      "variant": "emphasis",
+      "labelAt": [
+        1145,
+        503
+      ]
+    },
+    {
+      "id": "vblock-vmcmd",
+      "from": "vblock",
+      "to": "vmcmd",
+      "label": "명령 호출",
+      "labelAt": [
+        975,
+        588
+      ]
+    },
+    {
+      "id": "util-state",
+      "from": "util",
+      "to": "state",
+      "label": "유틸",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        345,
+        333
+      ]
+    },
+    {
+      "id": "persist-state",
+      "from": "persist",
+      "to": "state",
+      "label": "복원",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelAt": [
+        345,
+        503
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "계층",
+      "items": [
+        "core → model → viewmodel → view → app 순으로 적재하고, 앞 계층만 가져다 쓴다",
+        "model 은 DOM 을 모르고 view 만 DOM 을 만진다"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "요소 계층",
+      "items": [
+        "스테이지 → 클러스터 → 카드 → 블록",
+        "맵이 스테이지·클러스터를, 카드가 작은·미러·큰 카드를, 블록이 큰 카드 body 를 맡는다"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "view 나머지",
+      "items": [
+        "charts · spark-hover · panel · edges · minimap · menu · search · topbar",
+        "view 23개 = 맵 5 · 카드 3 · 블록 7(block-controls 포함) · 나머지 8"
+      ]
+    }
+  ]
+}

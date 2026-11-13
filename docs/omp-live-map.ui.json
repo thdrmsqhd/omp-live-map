@@ -1,0 +1,361 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "omp-live-map UI 구조",
+    "output": "omp-live-map.ui.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "render-path",
+        "label": "렌더 경로",
+        "focus": [
+          "feed",
+          "apply",
+          "render",
+          "patch",
+          "cards",
+          "bigcard",
+          "blocks"
+        ],
+        "note": "SSE 프레임이 apply → renderMap → patchPieces를 거쳐 카드가 되고, 큰 카드는 chrome만 교체된다."
+      },
+      {
+        "id": "interaction",
+        "label": "상호작용",
+        "focus": [
+          "input",
+          "cluster",
+          "cards",
+          "bigcard",
+          "storage",
+          "blocks",
+          "host"
+        ],
+        "note": "클릭은 선택, 더블클릭은 열기, 끌기는 배치 저장, 블록의 명령만 서버 API를 호출한다."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "feed",
+      "type": "backend",
+      "label": "서버 스냅샷",
+      "sublabel": "/api/graph · /api/events",
+      "pos": [
+        40,
+        90
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "tag": "infra 5초 · sys 3초 폴링"
+    },
+    {
+      "id": "apply",
+      "type": "frontend",
+      "label": "apply()",
+      "sublabel": "setGraph → renderMap",
+      "pos": [
+        310,
+        90
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "tag": "viewmodel/store.js"
+    },
+    {
+      "id": "render",
+      "type": "frontend",
+      "label": "renderMap()",
+      "sublabel": "배치 → 조각 목록 → 패치",
+      "pos": [
+        580,
+        90
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "tag": "입력 중 0.7초 보류"
+    },
+    {
+      "id": "patch",
+      "type": "frontend",
+      "label": "patchPieces()",
+      "sublabel": "key별 마크업 비교",
+      "pos": [
+        850,
+        90
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "tag": "view/patch-nodes.js"
+    },
+    {
+      "id": "storage",
+      "type": "database",
+      "label": "localStorage",
+      "sublabel": "omp-map-* 7개 키",
+      "pos": [
+        40,
+        240
+      ],
+      "size": [
+        170,
+        70
+      ]
+    },
+    {
+      "id": "input",
+      "type": "frontend",
+      "label": "조작 입력",
+      "sublabel": "클릭 · 끌기 · 키보드",
+      "pos": [
+        310,
+        240
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "tag": "stage-input · stage-card-drag"
+    },
+    {
+      "id": "cluster",
+      "type": "frontend",
+      "label": "클러스터",
+      "sublabel": "세션 · 인프라 · HOST · 로컬",
+      "pos": [
+        580,
+        240
+      ],
+      "size": [
+        170,
+        70
+      ]
+    },
+    {
+      "id": "cards",
+      "type": "frontend",
+      "label": "카드",
+      "sublabel": "작은 카드 · 미러 카드",
+      "pos": [
+        850,
+        240
+      ],
+      "size": [
+        170,
+        70
+      ]
+    },
+    {
+      "id": "bigcard",
+      "type": "frontend",
+      "label": "큰 카드 840×720",
+      "sublabel": "chrome + body",
+      "pos": [
+        1120,
+        240
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "tag": "chrome만 교체"
+    },
+    {
+      "id": "blocks",
+      "type": "frontend",
+      "label": "블록 5종",
+      "sublabel": "chat · terminal · bg · files · browser",
+      "pos": [
+        1090,
+        390
+      ],
+      "size": [
+        230,
+        70
+      ],
+      "tag": "render → mount → paint"
+    },
+    {
+      "id": "host",
+      "type": "backend",
+      "label": "서버 호출",
+      "sublabel": "/api/exec · /api/bg · /api/prompt",
+      "pos": [
+        1090,
+        540
+      ],
+      "size": [
+        230,
+        70
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "스테이지 #stage · 클러스터 → 카드 → 블록",
+      "wraps": [
+        "cluster",
+        "cards",
+        "bigcard",
+        "blocks"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "sse-frame",
+      "from": "feed",
+      "to": "apply",
+      "label": "SSE 프레임",
+      "variant": "emphasis"
+    },
+    {
+      "id": "poll",
+      "from": "feed",
+      "to": "render",
+      "label": "폴링 응답이 바뀔 때",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          125,
+          200
+        ],
+        [
+          665,
+          200
+        ]
+      ],
+      "labelAt": [
+        330,
+        200
+      ]
+    },
+    {
+      "id": "apply-render",
+      "from": "apply",
+      "to": "render",
+      "label": "매 스냅샷",
+      "variant": "emphasis"
+    },
+    {
+      "id": "render-patch",
+      "from": "render",
+      "to": "patch",
+      "label": "조각 목록",
+      "variant": "emphasis"
+    },
+    {
+      "id": "patch-cards",
+      "from": "patch",
+      "to": "cards",
+      "label": "key별 비교",
+      "variant": "emphasis",
+      "labelAt": [
+        935,
+        200
+      ]
+    },
+    {
+      "id": "patch-big",
+      "from": "patch",
+      "to": "bigcard",
+      "label": "chrome만 교체",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          1205,
+          125
+        ]
+      ],
+      "labelAt": [
+        1205,
+        185
+      ]
+    },
+    {
+      "id": "cluster-cards",
+      "from": "cluster",
+      "to": "cards",
+      "label": "포함"
+    },
+    {
+      "id": "open",
+      "from": "cards",
+      "to": "bigcard",
+      "label": "더블클릭 열기"
+    },
+    {
+      "id": "big-blocks",
+      "from": "bigcard",
+      "to": "blocks",
+      "label": "body에 장착",
+      "labelAt": [
+        1205,
+        350
+      ]
+    },
+    {
+      "id": "select",
+      "from": "input",
+      "to": "cluster",
+      "label": "선택 · 끌기"
+    },
+    {
+      "id": "save",
+      "from": "input",
+      "to": "storage",
+      "label": "배치 저장"
+    },
+    {
+      "id": "call",
+      "from": "blocks",
+      "to": "host",
+      "label": "exec · bg · prompt",
+      "variant": "dashed",
+      "labelAt": [
+        1205,
+        500
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "렌더 경로",
+      "items": [
+        "SSE 프레임은 apply()에서 상태에 들어가 renderMap()을 부른다. infra(5초)·sys(3초) 폴링은 응답이 바뀔 때만 renderMap()을 부른다",
+        "renderMap()은 배치(끌어 놓은 위치 우선) → 조각 목록 → patchPieces → 관계선·미니맵 순서다. 포인터를 누르는 중이거나 입력 중이면 0.7초 뒤로 미룬다"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "카드와 블록",
+      "items": [
+        "스테이지 → 클러스터(세션·WSL/Docker·HOST·로컬) → 카드(작은 카드·미러 카드·큰 카드) → 블록. 큰 카드는 한 번에 1장",
+        "스냅샷마다 큰 카드의 chrome만 교체하고, body는 블록 구성 서명(blockSig)이 같으면 그대로 둔다. 입력 포커스·스크롤·파일 트리 펼침이 유지된다"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "조작 규칙",
+      "items": [
+        "클릭 = 클러스터 선택, Shift+클릭 = 다중 선택, 더블클릭 = 카드 열기(미러 카드는 닫기), Esc = 선택 해제 후 카드 닫기",
+        "작은 카드·미러 카드·클러스터 제목 끌기 = 선택한 클러스터 이동, 큰 카드 끌기 = 큰 카드·클러스터·미러 카드 함께 이동. 8px 스냅, Ctrl+Z로 배치 되돌리기"
+      ]
+    }
+  ]
+}

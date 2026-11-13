@@ -1,0 +1,127 @@
+/* omp-live-map · view · 큰 카드(크롬 = 헤더·지표, 바디 = 블록) */
+//
+// 큰 카드는 .chrome 과 .body 두 덩어리다. 스냅샷이 바뀌면 .chrome 만 갈아 끼우고,
+// 블록이 사는 .body 는 블록 구성(data-sig)이 같으면 DOM 을 그대로 둔다(patch-nodes.js).
+
+// 부제 원문 전체(subtitleOf 는 세션 제목을 자른다).
+function subtitleFull(n, isLocal) {
+  const main = n.synthetic && !isLocal ? "원본 기록 없음" : (n.title || n.firstUser || subtitleOf(n, isLocal));
+  const extra = String(n.sessionTitle || "").trim();
+  return extra && !String(main).includes(extra) ? main + " · " + extra : main;
+}
+
+function nameField(n) {
+  return renamingId === n.id
+    ? `<input class="rename big" data-id="${esc(n.id)}" value="${esc(displayName(n))}">`
+    : `<span class="nm" title="더블클릭: 이름 변경">${esc(displayName(n))}</span>`;
+}
+
+function sessionChrome(n) {
+  const isLocal = n.kind === "local";
+  const series = n.series || [];
+  const maxOut = series.length ? Math.max(...series.map((s) => s.out || 0)) : 0;
+  return `<div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i>
+      ${nameField(n)}
+      ${!isLocal && n.startedAt ? `<span class="since" title="시작 ${esc(new Date(n.startedAt).toLocaleString("ko-KR"))}">시작 ${ago(n.startedAt)}</span>` : ""}
+      <button class="x" data-rename="${esc(n.id)}" title="이름 변경${isLocal ? "" : " (비우면 원래 이름)"}">✎</button>
+      ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제">🗑</button>` : `<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">세션 닫기</button>`}
+      ${isLocal ? `<span class="mod">local</span>` : cardBlockTypes(n).includes("chat") ? "" : `<span class="mod" title="${esc(n.provider || "provider 미상")} · ${esc(n.model || "?")}">${esc(modelShort(n.model))}</span>`}
+      <button class="x" data-close="1" title="큰 카드 축소 (Esc)" aria-label="큰 카드 축소">−</button></div>
+    <div class="sub-t${SUB_OPEN.has(n.id) ? " open" : ""}" data-subtoggle="${esc(n.id)}" title="${esc(subtitleFull(n, isLocal))}">${esc(subtitleOf(n, isLocal))}</div>
+    ${isLocal ? resRow(n, true) : `${tokenSection(n)}
+    <div class="sparkwrap" style="height:34px">
+      <span class="rate">${n.liveTokPerSec} t/s</span>
+      ${spark(series, BIG_W - 40, 30, "#2fbf9b", true, n.id)}
+      <span class="cap">턴당 출력 max ${fmt(maxOut)} · 최근 ${series.length}턴</span>
+    </div>
+    ${ctxBlock(n)}
+    ${sessionCtxBlock(n)}
+    <div class="chips">${toolChips(n)}${progChips(programs(n))}</div>
+    ${resRow(n, true)}`}`;
+}
+
+function infraChrome(n) {
+  const c = n.kind === "container" ? INFRA.containers.find((x) => "ctr:" + x.id === n.id) : null;
+  const acts = c
+    ? (c.state === "running"
+      ? `<button class="stop" data-act="container-stop" data-t="${esc(c.id)}">stop</button>
+         <button data-act="container-restart" data-t="${esc(c.id)}">restart</button>`
+      : `<button class="go" data-act="container-start" data-t="${esc(c.id)}">start</button>`)
+    : n.kind === "distro"
+      ? (n.status === "live"
+        ? `<button class="stop" data-act="distro-stop" data-t="${esc(n.name)}">shutdown WSL</button>`
+        : `<button class="go" data-act="distro-start" data-t="${esc(n.name)}">boot WSL</button>`)
+      : "";
+  return `<div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(n.name)}</span>
+      <span class="mod">${esc(n.kind)}</span>
+      <button class="x" data-close="1" title="닫기 (Esc)">✕</button></div>
+    <div class="sub-t">${esc([n.meta1, n.meta2].filter(Boolean).join(" · "))}</div>
+    ${c ? `<div class="chips">
+      <span class="chip">image ${esc(modelShort(c.image))}</span>
+      <span class="chip">state ${esc(c.state)}</span>
+      ${c.ports ? `<span class="chip">ports ${esc(c.ports)}</span>` : ""}
+      <span class="chip">${esc(c.project)}${c.service ? " / " + esc(c.service) : ""}</span></div>` : ""}
+    ${acts ? `<div class="chips">${acts}</div>` : ""}`;
+}
+
+function bigCard(n) {
+  const box = SATS.get(n.id);
+  const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px`;
+  const chrome = agentKind(n.kind) || n.kind === "local" ? sessionChrome(n) : infraChrome(n);
+  const side = renderBlocks(n, "side");
+  return `<div class="node big ${n.kind} ${n.status}" data-id="${esc(n.id)}" style="${style}">
+    <div class="chrome">${chrome}</div>
+    <div class="body" data-sig="${esc(blockSig(n))}">
+      <div class="col-main">${renderBlocks(n, "main")}</div>
+      ${side ? `<div class="col-tree">${side}</div>` : ""}
+    </div>
+    ${n.kind === "sub" ? resizeGrip() : ""}
+  </div>`;
+}
+
+// 큰 카드 크롬 안의 클릭. 처리했으면 true.
+function chromeClick(target, id) {
+  const pick = (attr) => target.closest(`[${attr}]`);
+  const toggle = (set) => { if (set.has(id)) set.delete(id); else set.add(id); renderMap(false, true); return true; };
+  if (pick("data-ctxmore")) return toggle(CTX_OPEN);
+  if (pick("data-toolsmore")) return toggle(TOOLS_OPEN);
+  if (pick("data-subtoggle")) return toggle(SUB_OPEN);
+  if (pick("data-tokscope")) {
+    if (TOK_SCOPE.get(id) === "1h") TOK_SCOPE.delete(id); else TOK_SCOPE.set(id, "1h");
+    renderMap(false, true);
+    return true;
+  }
+  const tool = pick("data-tool");
+  if (tool) { toggleChatTool(id, tool.dataset.tool); return true; }
+  const row = pick("data-ctxnode");
+  if (row) { focusCard(row.dataset.ctxnode); return true; }
+  return false;
+}
+
+// 이름 입력 확정: 로컬 카드는 제목을, 나머지는 별칭을 바꾼다(비우면 원래 이름).
+function commitRename(id, value) {
+  renamingId = null;
+  const L = LOCALS.find((l) => l.id === id);
+  if (L) {
+    if (value) { L.title = value; saveLocals(); }
+  } else {
+    const n = nodeById(id);
+    const base = n && (n.kind === "main" ? "main" : n.name);
+    if (value && value !== base) ALIAS.set(id, value); else ALIAS.delete(id);
+    saveAlias();
+  }
+  renderMap(false, true);
+}
+
+function wireRename(input) {
+  if (!input || input.dataset.wired) return;
+  input.dataset.wired = "1";
+  const id = input.dataset.id;
+  input.focus();
+  input.select();
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commitRename(id, input.value.trim()); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); renamingId = null; renderMap(false, true); }
+  });
+  input.addEventListener("blur", () => { if (renamingId === id) commitRename(id, input.value.trim()); });
+}

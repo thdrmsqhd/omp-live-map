@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>M2 맵 위에서 보이는 실시간</title>
+<style>
+  body {
+    margin: 0;
+    padding: 30px;
+    background: #eef2f5;
+    font-family: "Malgun Gothic", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    color: #10243a;
+  }
+  .container {
+    width: 1160px;
+    margin: 0 auto;
+  }
+  h2 {
+    font-size: 20px;
+    margin: 0 0 8px 0;
+    color: #10243a;
+  }
+  .desc {
+    color: #5a6e82;
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+  .canvas-wrapper {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(16, 36, 58, 0.06);
+    margin-bottom: 12px;
+  }
+  svg {
+    display: block;
+    width: 1160px;
+    height: 560px;
+  }
+  .note {
+    font-size: 11px;
+    color: #5a6e82;
+    margin-bottom: 24px;
+    text-align: right;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(16, 36, 58, 0.04);
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid #e1e7ec;
+    font-size: 13px;
+  }
+  th {
+    background: #f4f7f9;
+    color: #10243a;
+    font-weight: 600;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  .tag-new {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #fff0e6;
+    color: #e8590c;
+    font-weight: bold;
+    font-size: 11px;
+  }
+  .tag-exist {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #edf2f7;
+    color: #5a6e82;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>M2 맵 위에서 보이는 실시간</h2>
+  <div class="desc">카드를 열지 않아도 각 카드가 지금 하는 일이 맵 위에서 흐른다.</div>
+
+  <div class="canvas-wrapper">
+    <svg viewBox="0 0 1160 560" xmlns="http://www.w3.org/2000/svg">
+      <!-- 배경 그리드 캔버스 패턴 느낌 -->
+      <rect x="0" y="0" width="1160" height="560" fill="#f8fafc" rx="8" />
+
+      <!-- 세션 묶음 클러스터 배경 -->
+      <rect x="40" y="30" width="1080" height="490" rx="16" fill="#f0f4f8" stroke="#b8c4cf" stroke-width="1.2" stroke-dasharray="4 4" />
+      <text x="65" y="65" font-size="14" font-weight="bold" fill="#10243a">세션 묶음: #ses-20261113-core (웹 분석 및 데이터 가공)</text>
+      <!-- 1번 배지: 세션 묶음 -->
+      <circle cx="50" cy="60" r="10" fill="#10243a" />
+      <text x="50" y="64" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">1</text>
+
+      <!-- 연결선: 메인 에이전트 -> 서브에이전트 A -->
+      <path d="M 330 220 L 460 160" stroke="#0f766e" stroke-width="2" stroke-dasharray="3 3" />
+      <rect x="365" y="172" width="60" height="20" rx="4" fill="#ffffff" stroke="#e8590c" stroke-width="1.5" />
+      <text x="395" y="186" font-size="11" fill="#e8590c" font-weight="bold" text-anchor="middle">일 나눔</text>
+      <!-- 11번 배지: 일 나눔 연결선 -->
+      <circle cx="360" cy="182" r="9" fill="#10243a" />
+      <text x="360" y="186" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">11</text>
+
+      <!-- 연결선: 메인 에이전트 -> 서브에이전트 B -->
+      <path d="M 330 270 L 460 330" stroke="#0f766e" stroke-width="2" stroke-dasharray="3 3" />
+      <rect x="365" y="302" width="60" height="20" rx="4" fill="#ffffff" stroke="#e8590c" stroke-width="1.5" />
+      <text x="395" y="316" font-size="11" fill="#e8590c" font-weight="bold" text-anchor="middle">일 나눔</text>
+
+      <!-- 연결선: 서브에이전트 B -> 잡 -->
+      <path d="M 750 360 L 820 360" stroke="#b8c4cf" stroke-width="1.5" />
+
+      <!-- [카드 1] 메인 에이전트 카드 (위치: x:80, y:170, w:250, h:180) -->
+      <!-- 고비용 모델 주황 띠 (신규) -->
+      <rect x="80" y="170" width="250" height="180" rx="10" fill="#ffffff" stroke="#e8590c" stroke-width="2.5" />
+      <!-- 주황 경고 상단 띠 -->
+      <path d="M 80 180 A 10 10 0 0 1 90 170 L 320 170 A 10 10 0 0 1 330 180 L 330 176 L 80 176 Z" fill="#e8590c" />
+      <circle cx="98" cy="195" r="5" fill="#0f766e" />
+      <text x="110" y="199" font-size="13" font-weight="bold" fill="#10243a">메인 에이전트 (총괄)</text>
+      <!-- 모델 & 단가 배지 (고비용 주황) -->
+      <rect x="235" y="184" width="85" height="20" rx="4" fill="#fff0e6" stroke="#e8590c" stroke-width="1" />
+      <text x="277" y="198" font-size="10" fill="#e8590c" font-weight="bold" text-anchor="middle">Opus · 고단가</text>
+
+      <!-- 기존 수치: 컨텍스트 및 비용 -->
+      <text x="98" y="228" font-size="11" fill="#5a6e82">컨텍스트: 54.2k / 200k (27%)</text>
+      <text x="98" y="248" font-size="11" fill="#5a6e82">누적 비용: $0.482 · 18턴</text>
+
+      <!-- 실시간 흐름 영역 (신규) -->
+      <rect x="90" y="270" width="230" height="66" rx="6" fill="#f8fafc" stroke="#b8c4cf" stroke-width="1" />
+      <circle cx="104" cy="288" r="3" fill="#0f766e" />
+      <text x="114" y="291" font-size="11" font-weight="bold" fill="#0f766e">지금: 하위 작업 결과 종합 및 판단</text>
+      <text x="104" y="310" font-size="11" fill="#5a6e82">대기: 서브에이전트 B 분석 완료 응답</text>
+      <text x="104" y="326" font-size="10" fill="#8899a6">경과: 4.8s · 최근 호출: tool.task</text>
+
+      <!-- 번호 배지들: 메인 카드 -->
+      <circle cx="80" cy="170" r="10" fill="#10243a" />
+      <text x="80" y="174" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">2</text>
+      <!-- 6번: 고단가 주황 띠 -->
+      <circle cx="320" cy="170" r="10" fill="#10243a" />
+      <text x="320" y="174" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">6</text>
+      <!-- 8번: 실시간 한 줄 표시 -->
+      <circle cx="90" cy="270" r="10" fill="#10243a" />
+      <text x="90" y="274" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">8</text>
+
+      <!-- [카드 2] 서브에이전트 A (답변 대기 중, 주황 테두리 강조 신규) (x:460, y:90, w:290, h:180) -->
+      <rect x="460" y="90" width="290" height="180" rx="10" fill="#ffffff" stroke="#e8590c" stroke-width="2.5" />
+      <!-- 상태 점: 답 대기(주황) -->
+      <circle cx="480" cy="118" r="5" fill="#e8590c" />
+      <text x="492" y="122" font-size="13" font-weight="bold" fill="#10243a">서브에이전트 A (자료 수집)</text>
+      <!-- 저단가 모델 배지 -->
+      <rect x="665" y="107" width="75" height="20" rx="4" fill="#f0f4f8" stroke="#b8c4cf" stroke-width="1" />
+      <text x="702" y="121" font-size="10" fill="#5a6e82" text-anchor="middle">Haiku · 실속</text>
+
+      <!-- 기존 수치 -->
+      <text x="480" y="150" font-size="11" fill="#5a6e82">컨텍스트: 12.1k / 200k (6%)</text>
+      <text x="480" y="168" font-size="11" fill="#5a6e82">누적 비용: $0.018 · 4턴</text>
+
+      <!-- 실시간 흐름 영역 (답 대기 상태 강조) -->
+      <rect x="472" y="184" width="266" height="72" rx="6" fill="#fffaf5" stroke="#e8590c" stroke-width="1" />
+      <circle cx="488" cy="204" r="3" fill="#e8590c" />
+      <text x="498" y="208" font-size="11" font-weight="bold" fill="#e8590c">지금: 사용자 확인 응답 대기 중</text>
+      <text x="488" y="226" font-size="11" fill="#10243a">질문: "외부 API 키 갱신을 진행할까요?"</text>
+      <text x="488" y="244" font-size="10" fill="#8899a6">대기 시간: 23s 경과 (클릭 시 입력창 열림)</text>
+
+      <!-- 번호 배지: 서브 A -->
+      <circle cx="460" cy="90" r="10" fill="#10243a" />
+      <text x="460" y="94" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">3</text>
+      <!-- 5번: 답 대기 상태점 -->
+      <circle cx="480" cy="104" r="9" fill="#10243a" />
+      <text x="480" y="108" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">5</text>
+      <!-- 10번: 답 대기 주황 테두리 강조 -->
+      <circle cx="750" cy="90" r="10" fill="#10243a" />
+      <text x="750" y="94" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">10</text>
+
+      <!-- [카드 3] 서브에이전트 B (정상 실행 중) (x:460, y:300, w:290, h:180) -->
+      <rect x="460" y="300" width="290" height="180" rx="10" fill="#ffffff" stroke="#b8c4cf" stroke-width="1.2" />
+      <!-- 상태 점: 도는 중 (초록) -->
+      <circle cx="480" cy="328" r="5" fill="#0f766e" />
+      <text x="492" y="332" font-size="13" font-weight="bold" fill="#10243a">서브에이전트 B (코드 파싱)</text>
+      <!-- 저단가 모델 배지 -->
+      <rect x="665" y="317" width="75" height="20" rx="4" fill="#f0f4f8" stroke="#b8c4cf" stroke-width="1" />
+      <text x="702" y="331" font-size="10" fill="#5a6e82" text-anchor="middle">Sonnet · 표준</text>
+
+      <!-- 기존 수치 -->
+      <text x="480" y="358" font-size="11" fill="#5a6e82">컨텍스트: 28.6k / 200k (14%)</text>
+      <text x="480" y="376" font-size="11" fill="#5a6e82">누적 비용: $0.094 · 9턴</text>
+
+      <!-- 실시간 흐름 영역 (신규 한 줄 실시간) -->
+      <rect x="472" y="392" width="266" height="74" rx="6" fill="#f8fafc" stroke="#b8c4cf" stroke-width="1" />
+      <circle cx="488" cy="412" r="3" fill="#0f766e" />
+      <text x="498" y="416" font-size="11" font-weight="bold" fill="#0f766e">지금: 파일 읽는 중 · ingest.js (180줄)</text>
+      <text x="488" y="434" font-size="11" fill="#5a6e82">작업: AST 파싱 및 심볼 의존성 추출</text>
+      <text x="488" y="452" font-size="10" fill="#8899a6">진행: 14/20 파일 완료 (70%)</text>
+
+      <!-- 번호 배지: 서브 B -->
+      <circle cx="460" cy="300" r="10" fill="#10243a" />
+      <text x="460" y="304" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">4</text>
+      <!-- 7번: 수치 정보 -->
+      <circle cx="480" cy="367" r="9" fill="#10243a" />
+      <text x="480" y="371" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">7</text>
+
+      <!-- [카드 4] 백그라운드 잡 카드 (콘솔 스트리밍 신규) (x:820, y:300, w:270, h:180) -->
+      <rect x="820" y="300" width="270" height="180" rx="10" fill="#ffffff" stroke="#b8c4cf" stroke-width="1.2" />
+      <circle cx="840" cy="328" r="5" fill="#0f766e" />
+      <text x="852" y="332" font-size="13" font-weight="bold" fill="#10243a">잡 #bg_2 (테스트 빌드)</text>
+      <!-- 잡 상태 배지 -->
+      <rect x="1015" y="317" width="65" height="20" rx="4" fill="#edf2f7" stroke="#b8c4cf" stroke-width="1" />
+      <text x="1047" y="331" font-size="10" fill="#5a6e82" text-anchor="middle">PID 14208</text>
+
+      <!-- 기존 잡 정보 -->
+      <text x="840" y="358" font-size="11" fill="#5a6e82">명령: bun test --run</text>
+      <text x="840" y="376" font-size="11" fill="#5a6e82">실행 시간: 14.2s 경과 (CPU 24%)</text>
+
+      <!-- 잡 콘솔 스트리밍 2줄 영역 (신규) -->
+      <rect x="830" y="392" width="250" height="74" rx="6" fill="#10243a" stroke="#0f766e" stroke-width="1.5" />
+      <text x="842" y="412" font-size="10" fill="#68d391" font-family="Consolas, monospace">&gt; PASS test/parser.spec.ts (4.1s)</text>
+      <text x="842" y="432" font-size="10" fill="#e2e8f0" font-family="Consolas, monospace">&gt; RUN test/bundle.spec.ts [3/8]...</text>
+      <text x="842" y="452" font-size="9" fill="#8899a6" font-family="Consolas, monospace">출력 스트림 갱신 0.3s 전</text>
+
+      <!-- 번호 배지: 잡 카드 -->
+      <circle cx="820" cy="300" r="10" fill="#10243a" />
+      <text x="820" y="304" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">9</text>
+    </svg>
+  </div>
+
+  <div class="note">* 본 화면의 카드 내 작업 내용, 도구 호출명, 콘솔 로그, 모델명 및 수치는 실시간 관제 이해를 돕기 위한 예시 데이터입니다.</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 45px; text-align: center;">번호</th>
+        <th style="width: 170px;">요소</th>
+        <th style="width: 320px;">보여 주는 것</th>
+        <th>누르면 일어나는 일</th>
+        <th style="width: 65px; text-align: center;">구분</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="text-align: center;"><b>1</b></td>
+        <td><b>세션 묶음 (클러스터)</b></td>
+        <td>세션 ID, 세션 주 목적, 소속 에이전트 및 잡 카드의 시각적 묶음 점선 영역</td>
+        <td>빈 영역 클릭 시 세션 전체 포커스, 더블클릭 시 세션 전체 펼치기/접기</td>
+        <td style="text-align: center;"><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>2</b></td>
+        <td><b>메인 에이전트 카드</b></td>
+        <td>전체 세션을 총괄하는 메인 모델 카드, 상태, 토큰량, 실시간 오케스트레이션 현황</td>
+        <td>더블클릭 시 큰 메인 카드(전체 턴 대화 및 도구 이력) 열기, 우클릭 시 메뉴</td>
+        <td style="text-align: center;"><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>3</b></td>
+        <td><b>서브에이전트 A 카드</b></td>
+        <td>분할된 하위 작업(수집/조사) 전담 모델 카드, 현재 사용자 응답 대기 상태</td>
+        <td>더블클릭 시 서브 대화 세부 보기, 클릭 시 대기 중인 사용자 입력창 바로 열기</td>
+        <td style="text-align: center;"><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>4</b></td>
+        <td><b>서브에이전트 B 카드</b></td>
+        <td>실행 중인 하위 작업(코드 파싱) 카드 및 현재 백그라운드 잡과의 연계 상태</td>
+        <td>더블클릭 시 상세 로그 및 실행 트레이스 열기</td>
+        <td style="text-align: center;"><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>5</b></td>
+        <td><b>상태 점 (Status Dot)</b></td>
+        <td>에이전트의 현재 활동 상태 (초록 #0f766e: 실행 중, 주황 #e8590c: 대기/답변 대기, 회색: 완료)</td>
+        <td>상태 툴팁 표시 및 일시정지/재개 단축 액션</td>
+        <td style="text-align: center;"><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>6</b></td>
+        <td><b>고비용 모델 경고 띠 및 단가 배지</b></td>
+        <td>비싼 모델(Opus 등)이 직접 실무 코딩이나 읽기를 수행할 때 주의를 환기하는 주황 띠와 모델 단가 레벨</td>
+        <td>클릭 시 저비용 서브에이전트 위임 권고 팝업 또는 모델 변경 옵션 표시</td>
+        <td style="text-align: center;"><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>7</b></td>
+        <td><b>컨텍스트 및 비용 수치</b></td>
+        <td>누적 사용 토큰 비율(%), 턴 수, 현재까지 발생한 누적 달러($) 비용</td>
+        <td>클릭 시 토큰 사용량 차트 미니 팝업 표시</td>
+        <td style="text-align: center;"><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>8</b></td>
+        <td><b>실시간 한 줄 활동 흐름</b></td>
+        <td>카드를 열지 않고도 맵 위에서 바로 보이는 현재 행동 (`지금: 파일 읽는 중 · ingest.js` 등)</td>
+        <td>클릭 시 해당 도구 호출 상세 로그 위치로 즉시 스크롤 및 큰 카드 열기</td>
+        <td style="text-align: center;"><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>9</b></td>
+        <td><b>잡 콘솔 2줄 스트리밍</b></td>
+        <td>백그라운드에서 실행 중인 프로세스의 최신 stdout/stderr 마지막 2줄을 터미널 스타일로 실시간 출력</td>
+        <td>클릭 시 전체 터미널 실시간 스트리밍 모달 팝업 열기</td>
+        <td style="text-align: center;"><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>10</b></td>
+        <td><b>답 대기 주황 테두리 강조</b></td>
+        <td>사용자 입력이나 확인 승인이 필요해 멈춰 있는 카드를 맵 전체에서 한눈에 찾도록 주황 테두리로 강조</td>
+        <td>클릭 시 즉시 해당 에이전트의 프롬프트 응답 입력 포커스로 이동</td>
+        <td style="text-align: center;"><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td style="text-align: center;"><b>11</b></td>
+        <td><b>일 나눔 연결선 및 라벨</b></td>
+        <td>메인이 서브에이전트에게 할당한 작업 관계선 위에 '일 나눔' 배지를 띄워 위임 관계 명시</td>
+        <td>연결선 클릭 시 전달된 서브태스크 목표와 계약(Contract) 요약 툴팁 표시</td>
+        <td style="text-align: center;"><span class="tag-new">신규</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

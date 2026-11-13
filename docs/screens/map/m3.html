@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>M3 맵 위에서 카드 여러 장 열기</title>
+<style>
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #eef2f5;
+    font-family: "Malgun Gothic", sans-serif;
+    font-size: 13px;
+    color: #10243a;
+  }
+  .container {
+    width: 1160px;
+    margin: 0 auto;
+  }
+  h2 {
+    margin: 0 0 8px 0;
+    font-size: 20px;
+    color: #10243a;
+  }
+  .desc {
+    margin: 0 0 16px 0;
+    color: #5a6e82;
+    font-size: 13px;
+  }
+  .canvas-wrap {
+    width: 1160px;
+    height: 560px;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  table {
+    width: 1160px;
+    border-collapse: collapse;
+    background: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #d0d7de;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid #e1e4e8;
+    vertical-align: middle;
+  }
+  th {
+    background: #f6f8fa;
+    color: #10243a;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  .badge-num {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #10243a;
+    color: #ffffff;
+    text-align: center;
+    line-height: 18px;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .tag-new {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #fff0eb;
+    color: #e8590c;
+    border: 1px solid #e8590c;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .tag-exist {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #f1f3f5;
+    color: #5a6e82;
+    border: 1px solid #b8c4cf;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>M3 맵 위에서 카드 여러 장 열기</h2>
+  <p class="desc">작은 카드를 열면 맵 위에 큰 카드가 펼쳐진다. 여러 장을 동시에 열어 나란히 본다.</p>
+
+  <div class="canvas-wrap">
+    <svg width="1160" height="560" viewBox="0 0 1160 560" xmlns="http://www.w3.org/2000/svg">
+      <!-- 배경 그리드 패턴 효과 -->
+      <defs>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <circle cx="2" cy="2" r="1" fill="#e2e8f0" />
+        </pattern>
+      </defs>
+      <rect width="1160" height="560" fill="url(#grid)" />
+
+      <!-- 연결선 (작은 카드 -> 큰 카드) -->
+      <!-- 세션1 메인 -> 메인 큰카드 -->
+      <path d="M 240 135 C 275 135, 285 70, 316 70" fill="none" stroke="#e8590c" stroke-width="2" stroke-dasharray="4,4" />
+      <!-- 세션1 서브 -> 서브 큰카드 -->
+      <path d="M 240 230 C 350 230, 480 70, 596 70" fill="none" stroke="#e8590c" stroke-width="2" stroke-dasharray="4,4" />
+      <!-- 세션1 잡 -> 잡 큰카드 -->
+      <path d="M 240 420 C 400 420, 700 70, 876 70" fill="none" stroke="#e8590c" stroke-width="2" stroke-dasharray="4,4" />
+
+      <!-- 왼쪽: 세션 묶음 컨테이너 -->
+      <g id="session-bundle">
+        <rect x="24" y="24" width="230" height="505" rx="10" fill="#ffffff" stroke="#b8c4cf" stroke-width="1.2" />
+        <rect x="24" y="24" width="230" height="36" rx="10" fill="#f8fafc" />
+        <rect x="24" y="50" width="230" height="10" fill="#f8fafc" />
+        <text x="38" y="47" font-size="12" font-weight="bold" fill="#10243a">세션 #12 (omp-live-map)</text>
+        <circle cx="236" cy="42" r="4" fill="#0f766e" />
+
+        <!-- 1) 작은 카드: 메인 에이전트 (열림 상태 표시: 흐린 점선 자리 표시) -->
+        <g id="small-card-1">
+          <rect x="36" y="75" width="204" height="85" rx="8" fill="#f8fafc" stroke="#e8590c" stroke-width="1.5" stroke-dasharray="4,3" />
+          <circle cx="52" cy="95" r="4" fill="#0f766e" />
+          <text x="64" y="99" font-size="12" font-weight="bold" fill="#5a6e82">Main Agent (열림)</text>
+          <text x="52" y="122" font-size="11" fill="#8898aa">sonnet-3.7 · 14.2k tok</text>
+          <text x="52" y="142" font-size="11" fill="#e8590c">↳ 맵 우측 큰 카드 확인 중</text>
+        </g>
+
+        <!-- 2) 작은 카드: 서브에이전트 (열림 상태 표시) -->
+        <g id="small-card-2">
+          <rect x="36" y="172" width="204" height="85" rx="8" fill="#f8fafc" stroke="#e8590c" stroke-width="1.5" stroke-dasharray="4,3" />
+          <circle cx="52" cy="192" r="4" fill="#0f766e" />
+          <text x="64" y="196" font-size="12" font-weight="bold" fill="#5a6e82">SubAgent #1 (열림)</text>
+          <text x="52" y="219" font-size="11" fill="#8898aa">haiku-3.5 · 3.8k tok</text>
+          <text x="52" y="239" font-size="11" fill="#e8590c">↳ 맵 우측 큰 카드 확인 중</text>
+        </g>
+
+        <!-- 3) 작은 카드: 서브에이전트 2 (닫힌 기본 카드) -->
+        <g id="small-card-3">
+          <rect x="36" y="269" width="204" height="85" rx="8" fill="#ffffff" stroke="#b8c4cf" stroke-width="1.2" />
+          <circle cx="52" cy="289" r="4" fill="#b8c4cf" />
+          <text x="64" y="293" font-size="12" font-weight="bold" fill="#10243a">SubAgent #2 (완료)</text>
+          <text x="52" y="316" font-size="11" fill="#5a6e82">haiku-3.5 · 1.2k tok</text>
+          <text x="52" y="336" font-size="11" fill="#5a6e82">더블클릭 시 큰 카드 열기</text>
+        </g>
+
+        <!-- 4) 작은 카드: 백그라운드 잡 (열림 상태 표시) -->
+        <g id="small-card-4">
+          <rect x="36" y="366" width="204" height="85" rx="8" fill="#f8fafc" stroke="#e8590c" stroke-width="1.5" stroke-dasharray="4,3" />
+          <circle cx="52" cy="386" r="4" fill="#0f766e" />
+          <text x="64" y="390" font-size="12" font-weight="bold" fill="#5a6e82">Job: vite dev (열림)</text>
+          <text x="52" y="413" font-size="11" fill="#8898aa">PID 29401 · port 5173</text>
+          <text x="52" y="433" font-size="11" fill="#e8590c">↳ 맵 우측 큰 카드 확인 중</text>
+        </g>
+
+        <!-- 미니 범례 -->
+        <text x="36" y="485" font-size="11" fill="#5a6e82">• 여러 카드 더블클릭 시</text>
+        <text x="36" y="503" font-size="11" fill="#5a6e82">  우측 캔버스에 나란히 배치</text>
+      </g>
+
+      <!-- 오른쪽 1: 메인 에이전트 큰 카드 (기존 구조 + 신규 실시간 흐름) -->
+      <g id="large-card-main" transform="translate(316, 24)">
+        <!-- 카드 외곽선 (rx 10) -->
+        <rect x="0" y="0" width="264" height="505" rx="10" fill="#ffffff" stroke="#b8c4cf" stroke-width="1.2" />
+
+        <!-- 카드 헤더 -->
+        <path d="M 0 10 Q 0 0 10 0 L 254 0 Q 264 0 264 10 L 264 46 L 0 46 Z" fill="#ffffff" />
+        <line x1="0" y1="46" x2="264" y2="46" stroke="#edf2f7" stroke-width="1" />
+        <circle cx="16" cy="23" r="5" fill="#0f766e" />
+        <text x="28" y="27" font-size="13" font-weight="bold" fill="#10243a">메인 에이전트</text>
+        <!-- 멈춤/중지 버튼 -->
+        <rect x="206" y="12" width="46" height="22" rx="4" fill="#fff5f5" stroke="#ff8787" stroke-width="1" />
+        <text x="217" y="27" font-size="11" font-weight="bold" fill="#e03131">중지</text>
+
+        <!-- 메타 정보 영역 -->
+        <rect x="12" y="56" width="240" height="34" rx="6" fill="#f8fafc" stroke="#edf2f7" stroke-width="1" />
+        <text x="20" y="70" font-size="11" fill="#5a6e82">모델: claude-3-7-sonnet</text>
+        <text x="20" y="84" font-size="11" fill="#5a6e82">토큰: 14,208 tok ($0.042)</text>
+
+        <!-- 실시간 흐름 칸 (신규: 4줄) -->
+        <rect x="12" y="98" width="240" height="295" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="2.5" />
+        <rect x="12" y="98" width="240" height="26" rx="8" fill="#fff9db" />
+        <rect x="12" y="116" width="240" height="8" fill="#fff9db" />
+        <text x="20" y="115" font-size="11" font-weight="bold" fill="#10243a">실시간 흐름 (진행 중)</text>
+
+        <!-- 흐름 1: 생각 -->
+        <g transform="translate(20, 134)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#e7f5ff" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#1971c2">생각</text>
+          <text x="46" y="13" font-size="11" fill="#5a6e82">컴포넌트 props 검증 단계 진입</text>
+        </g>
+
+        <!-- 흐름 2: 도구 호출 -->
+        <g transform="translate(20, 160)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#f3f0ff" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#6741d9">도구</text>
+          <text x="46" y="13" font-size="11" fill="#10243a">grep("interface Props", "src/")</text>
+        </g>
+
+        <!-- 흐름 3: 도구 결과 -->
+        <g transform="translate(20, 186)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#e6fcf5" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#0ca678">결과</text>
+          <text x="46" y="13" font-size="11" fill="#5a6e82">3개 파일에서 5개 매칭 확인</text>
+        </g>
+
+        <!-- 흐름 4: 쓰는 글 (스트리밍) -->
+        <g transform="translate(20, 212)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#fff4e6" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#d9480f">출력</text>
+          <text x="46" y="13" font-size="11" fill="#10243a">"수정 대상을 확정했습니다."</text>
+        </g>
+
+        <line x1="20" y1="240" x2="244" y2="240" stroke="#f1f3f5" stroke-width="1" />
+        <text x="20" y="260" font-size="11" fill="#8898aa">[이전 로그 24건 스크롤 가능]</text>
+
+        <!-- 프롬프트 입력창 (하단) -->
+        <g transform="translate(12, 404)">
+          <rect x="0" y="0" width="240" height="88" rx="6" fill="#f8fafc" stroke="#b8c4cf" stroke-width="1.2" />
+          <text x="12" y="24" font-size="11" fill="#8898aa">메인에게 지시사항 입력...</text>
+          <rect x="186" y="52" width="44" height="26" rx="4" fill="#10243a" />
+          <text x="198" y="69" font-size="11" font-weight="bold" fill="#ffffff">전송</text>
+        </g>
+      </g>
+
+      <!-- 오른쪽 2: 서브에이전트 큰 카드 (신규: 멈춤 버튼, 입력창, 실시간 흐름) -->
+      <g id="large-card-sub" transform="translate(596, 24)">
+        <rect x="0" y="0" width="264" height="505" rx="10" fill="#ffffff" stroke="#e8590c" stroke-width="2.5" />
+
+        <!-- 카드 헤더 -->
+        <path d="M 0 10 Q 0 0 10 0 L 254 0 Q 264 0 264 10 L 264 46 L 0 46 Z" fill="#ffffff" />
+        <line x1="0" y1="46" x2="264" y2="46" stroke="#edf2f7" stroke-width="1" />
+        <circle cx="16" cy="23" r="5" fill="#0f766e" />
+        <text x="28" y="27" font-size="13" font-weight="bold" fill="#10243a">서브에이전트 #1</text>
+        <!-- 서브에이전트 멈춤 버튼 (신규) -->
+        <rect x="196" y="12" width="56" height="22" rx="4" fill="#fff0f6" stroke="#e8590c" stroke-width="1.5" />
+        <text x="206" y="27" font-size="11" font-weight="bold" fill="#e8590c">일시멈춤</text>
+
+        <!-- 메타 정보 영역 -->
+        <rect x="12" y="56" width="240" height="34" rx="6" fill="#f8fafc" stroke="#edf2f7" stroke-width="1" />
+        <text x="20" y="70" font-size="11" fill="#5a6e82">모델: claude-3-5-haiku</text>
+        <text x="20" y="84" font-size="11" fill="#5a6e82">역할: 타입 검사 및 테스트 러너</text>
+
+        <!-- 실시간 흐름 칸 (신규) -->
+        <rect x="12" y="98" width="240" height="295" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="2" />
+        <rect x="12" y="98" width="240" height="26" rx="8" fill="#f1f3f5" />
+        <rect x="12" y="116" width="240" height="8" fill="#f1f3f5" />
+        <text x="20" y="115" font-size="11" font-weight="bold" fill="#10243a">실시간 흐름 (작업 수행)</text>
+
+        <!-- 흐름 1: 생각 -->
+        <g transform="translate(20, 134)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#e7f5ff" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#1971c2">생각</text>
+          <text x="46" y="13" font-size="11" fill="#5a6e82">실패한 테스트 케이스 재확인</text>
+        </g>
+
+        <!-- 흐름 2: 도구 호출 -->
+        <g transform="translate(20, 160)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#f3f0ff" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#6741d9">도구</text>
+          <text x="46" y="13" font-size="11" fill="#10243a">bash("npm test -- -t button")</text>
+        </g>
+
+        <!-- 흐름 3: 결과 -->
+        <g transform="translate(20, 186)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#ffe3e3" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#e03131">결과</text>
+          <text x="46" y="13" font-size="11" fill="#e03131">1 failed, 4 passed (코드 불일치)</text>
+        </g>
+
+        <!-- 흐름 4: 쓰는 글 -->
+        <g transform="translate(20, 212)">
+          <rect x="0" y="0" width="40" height="18" rx="4" fill="#fff4e6" />
+          <text x="8" y="13" font-size="10" font-weight="bold" fill="#d9480f">출력</text>
+          <text x="46" y="13" font-size="11" fill="#10243a">"button.test.ts 24행 수정 착수"</text>
+        </g>
+
+        <!-- 서브에이전트 입력창 (신규) -->
+        <g transform="translate(12, 404)">
+          <rect x="0" y="0" width="240" height="88" rx="6" fill="#f8fafc" stroke="#e8590c" stroke-width="2" />
+          <text x="12" y="24" font-size="11" fill="#e8590c">서브 직접 제어 프롬프트 (신규)...</text>
+          <rect x="186" y="52" width="44" height="26" rx="4" fill="#e8590c" />
+          <text x="198" y="69" font-size="11" font-weight="bold" fill="#ffffff">개입</text>
+        </g>
+      </g>
+
+      <!-- 오른쪽 3: 잡 큰 카드 (신규: 어두운 콘솔 출력 4줄, 입력창 없음) -->
+      <g id="large-card-job" transform="translate(876, 24)">
+        <rect x="0" y="0" width="260" height="505" rx="10" fill="#ffffff" stroke="#e8590c" stroke-width="2.5" />
+
+        <!-- 카드 헤더 -->
+        <path d="M 0 10 Q 0 0 10 0 L 250 0 Q 260 0 260 10 L 260 46 L 0 46 Z" fill="#ffffff" />
+        <line x1="0" y1="46" x2="260" y2="46" stroke="#edf2f7" stroke-width="1" />
+        <circle cx="16" cy="23" r="5" fill="#0f766e" />
+        <text x="28" y="27" font-size="13" font-weight="bold" fill="#10243a">Job: vite dev server</text>
+        <!-- 잡 중지 버튼 -->
+        <rect x="202" y="12" width="46" height="22" rx="4" fill="#fff5f5" stroke="#ff8787" stroke-width="1" />
+        <text x="213" y="27" font-size="11" font-weight="bold" fill="#e03131">Kill</text>
+
+        <!-- 메타 정보 영역 -->
+        <rect x="12" y="56" width="236" height="34" rx="6" fill="#f8fafc" stroke="#edf2f7" stroke-width="1" />
+        <text x="20" y="70" font-size="11" fill="#5a6e82">PID: 29401 | 포트: 5173</text>
+        <text x="20" y="84" font-size="11" fill="#5a6e82">상태: 활성 (백그라운드 서비스)</text>
+
+        <!-- 잡 실시간 콘솔 흐름 칸 (신규: 어두운 배경) -->
+        <rect x="12" y="98" width="236" height="394" rx="8" fill="#1e293b" stroke="#e8590c" stroke-width="2" />
+        <rect x="12" y="98" width="236" height="26" rx="8" fill="#0f172a" />
+        <rect x="12" y="116" width="236" height="8" fill="#0f172a" />
+        <text x="20" y="115" font-size="11" font-weight="bold" fill="#94a3b8">터미널 로그 스트림 (stdout/err)</text>
+
+        <!-- 잡 로그 4줄 -->
+        <g transform="translate(20, 138)" font-family="monospace">
+          <text x="0" y="14" font-size="11" fill="#38bdf8">&gt; vite dev --port 5173</text>
+          <text x="0" y="38" font-size="11" fill="#4ade80">VITE v5.4.2  ready in 240 ms</text>
+          <text x="0" y="62" font-size="11" fill="#cbd5e1">➜  Local:   http://localhost:5173/</text>
+          <text x="0" y="86" font-size="11" fill="#facc15">[hmr] page reload src/App.vue</text>
+          <text x="0" y="110" font-size="11" fill="#94a3b8">[vite] 11:42:01 AM connected.</text>
+        </g>
+
+        <!-- 잡 특성 안내: 입력창 없음 -->
+        <rect x="20" y="440" width="220" height="36" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1" />
+        <text x="28" y="462" font-size="11" fill="#94a3b8">※ 백그라운드 잡은 입력창 없음</text>
+      </g>
+
+      <!-- 남색 동그라미 번호 뱃지 (SVG 1160x560 내 오버레이) -->
+      <!-- 1: 세션 묶음 -->
+      <circle cx="36" cy="34" r="10" fill="#10243a" /><text x="36" y="38" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">1</text>
+      <!-- 2: 작은 카드 -->
+      <circle cx="230" cy="300" r="10" fill="#10243a" /><text x="230" y="304" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">2</text>
+      <!-- 3: 열린 자리 표시 카드 -->
+      <circle cx="230" cy="115" r="10" fill="#10243a" /><text x="230" y="119" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">3</text>
+      <!-- 4: 연결선 -->
+      <circle cx="270" cy="190" r="10" fill="#10243a" /><text x="270" y="194" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">4</text>
+      <!-- 5: 동시 열기 레이아웃 -->
+      <circle cx="730" cy="14" r="10" fill="#10243a" /><text x="730" y="18" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">5</text>
+      <!-- 6: 메인 에이전트 큰 카드 -->
+      <circle cx="326" cy="34" r="10" fill="#10243a" /><text x="326" y="38" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">6</text>
+      <!-- 7: 서브에이전트 큰 카드 -->
+      <circle cx="606" cy="34" r="10" fill="#10243a" /><text x="606" y="38" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">7</text>
+      <!-- 8: 잡 큰 카드 -->
+      <circle cx="886" cy="34" r="10" fill="#10243a" /><text x="886" y="38" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">8</text>
+      <!-- 9: 헤더 및 중지/멈춤 버튼 -->
+      <circle cx="820" cy="36" r="10" fill="#10243a" /><text x="820" y="40" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">9</text>
+      <!-- 10: 에이전트 실시간 흐름 칸 -->
+      <circle cx="560" cy="210" r="10" fill="#10243a" /><text x="560" y="214" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">10</text>
+      <!-- 11: 잡 어두운 콘솔 흐름 칸 -->
+      <circle cx="1120" cy="210" r="10" fill="#10243a" /><text x="1120" y="214" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">11</text>
+      <!-- 12: 하단 프롬프트 입력창 -->
+      <circle cx="820" cy="460" r="10" fill="#10243a" /><text x="820" y="464" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">12</text>
+    </svg>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 50px;">번호</th>
+        <th style="width: 170px;">요소</th>
+        <th style="width: 380px;">보여 주는 것</th>
+        <th style="width: 440px;">누르면 일어나는 일</th>
+        <th style="width: 80px;">구분</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge-num">1</span></td>
+        <td><strong>세션 묶음</strong></td>
+        <td>한 세션에 속한 메인/서브에이전트, 잡 카드들의 클러스터 그룹 영역</td>
+        <td>묶음 타이틀 클릭 및 드래그 시 세션 소속 카드 전체를 맵 위에서 일괄 이동</td>
+        <td><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">2</span></td>
+        <td><strong>작은 카드 (기본)</strong></td>
+        <td>에이전트 이름, 모델명, 토큰 사용량, 현재 상태 요약 표시</td>
+        <td>더블클릭 시 맵 우측 캔버스 영역에 해당 카드의 큰 카드가 열림</td>
+        <td><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">3</span></td>
+        <td><strong>열린 자리 표시 카드</strong></td>
+        <td>이미 큰 카드로 펼쳐진 작은 카드 자리에 흐린 점선 테두리로 열림 상태 표시</td>
+        <td>클릭 시 이미 열려 있는 해당 큰 카드로 시선 포커스 및 강조 이동</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">4</span></td>
+        <td><strong>카드 연결선</strong></td>
+        <td>세션 묶음 내 작은 카드와 맵 위에 펼쳐진 큰 카드 사이를 잇는 곡선 가이드</td>
+        <td>마우스 오버 시 연결선이 강조되어 어떤 작은 카드가 열린 상태인지 즉시 식별</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">5</span></td>
+        <td><strong>카드 동시 열기</strong></td>
+        <td>단일 모달이 아닌 맵 캔버스 위에 여러 장의 큰 카드를 나란히 동시 배치</td>
+        <td>원하는 카드를 계속 더블클릭하여 나란히 띄우고 비교 관제 가능</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">6</span></td>
+        <td><strong>메인 에이전트 큰 카드</strong></td>
+        <td>메인의 상태, 누적 토큰 비용, 실시간 흐름, 하단 전송 입력창을 한눈에 표시</td>
+        <td>상단 드래그로 맵 상 위치 이동, X 버튼 클릭 시 큰 카드 닫기</td>
+        <td><span class="tag-exist">기존</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">7</span></td>
+        <td><strong>서브에이전트 큰 카드</strong></td>
+        <td>서브에이전트의 구체적 작업 맥락, 모델명, 실시간 진행 로그 및 전용 제어부</td>
+        <td>개별 서브의 작업 상황을 독립적으로 확인 및 제어</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">8</span></td>
+        <td><strong>잡 큰 카드</strong></td>
+        <td>백그라운드 실행 중인 프로세스(Vite, 테스트 등)의 PID, 포트, 터미널 스트림</td>
+        <td>상단 헤더 드래그로 위치 이동 및 백그라운드 잡 상세 관제</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">9</span></td>
+        <td><strong>멈춤 / 중지 버튼</strong></td>
+        <td>메인/잡의 중지(Kill) 및 서브에이전트 일시멈춤 제어 버튼</td>
+        <td>클릭 시 즉시 해당 에이전트 또는 잡 프로세스에 중지/정지 시그널 전송</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">10</span></td>
+        <td><strong>에이전트 실시간 흐름 칸</strong></td>
+        <td>생각(파랑) · 도구 호출(보라) · 실행 결과(초록/빨강) · 출력 텍스트 4줄 스트림</td>
+        <td>각 로그 항목 클릭 시 세부 페이로드 및 전체 입출력 JSON 팝업 확인</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">11</span></td>
+        <td><strong>잡 콘솔 흐름 칸</strong></td>
+        <td>어두운 콘솔 배경(#1e293b)에 표준 출력(stdout) 및 에러(stderr) 스트림 4줄 이상</td>
+        <td>마우스 휠 스크롤로 이전 로그 버퍼 탐색, 텍스트 선택 및 복사 가능</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge-num">12</span></td>
+        <td><strong>프롬프트 입력창</strong></td>
+        <td>선택한 에이전트(메인 또는 개별 서브)에게 직접 추가 프롬프트 지시 입력창</td>
+        <td>텍스트 입력 후 '전송' 또는 Enter 시 해당 에이전트에게 지시문 즉시 주입 (잡 카드는 미제공)</td>
+        <td><span class="tag-new">신규</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

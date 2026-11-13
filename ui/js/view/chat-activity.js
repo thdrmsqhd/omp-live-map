@@ -1,0 +1,68 @@
+/* omp-live-map · view · chat 블록 끝에 붙는 마지막 턴 활동(생각·툴·서브에이전트) */
+
+const LIVE_TAIL = 12;   // 접힌 툴 출력에 보이는 줄 수
+const LIVE_LABEL = { think: "생각", sub: "서브에이전트" };
+const LIVE_RUNNING = /^(running|live|started|spawned|active|pending|queued)$/i;
+
+function liveItemHTML(it) {
+  if (it.kind === "sub") {
+    return `<div class="lvitem sub"><span class="lvk">${LIVE_LABEL.sub}</span><span class="lvt">${esc(it.name)}${it.status ? " · " + esc(it.status) : ""}</span></div>`;
+  }
+  if (it.kind !== "tool") {
+    return `<div class="lvitem think"><span class="lvk">${LIVE_LABEL[it.kind] || esc(it.kind)}</span><span class="lvt">${esc(it.text)}</span></div>`;
+  }
+  if (it.job) {
+    return `<div class="lvitem tool job"><div class="lvh"><i class="dot live"></i><span class="lvk">${esc(it.name)}</span>
+      <span class="lva">잡 ${esc(it.job)} 띄움 · 출력은 잡 카드</span></div></div>`;
+  }
+  const args = String(it.args || "").replace(/\s+/g, " ").trim();
+  const lines = it.out ? it.out.replace(/\s+$/, "").split("\n") : [];
+  const more = lines.length > LIVE_TAIL;
+  const shown = it.open || !more ? lines : lines.slice(-LIVE_TAIL);
+  const out = !lines.length ? ""
+    : `<pre class="lvout${more ? " more" : ""}${it.open ? " open" : ""}" data-lvout="${esc(it.seq)}"${more ? ` title="${it.open ? `눌러서 끝 ${LIVE_TAIL}줄만 보기` : `전체 ${lines.length}줄 · 눌러서 모두 보기`}"` : ""}>${esc(shown.join("\n"))}</pre>`;
+  return `<div class="lvitem tool${it.error ? " fail" : ""}">
+    <div class="lvh">${it.done ? "" : '<span class="dot live" title="실행 중"></span>'}<span class="lvk">${esc(it.name)}</span>${it.error ? '<span class="lvbad">실패</span>' : ""}<span class="lva" title="${esc(args)}">${esc(cut(args, 160))}</span></div>
+    ${out}
+  </div>`;
+}
+
+// 마지막 턴의 항목 범위. 도는 중이면 마지막 turn_end 뒤, 끝났으면 그 턴(turn_end 두 개 사이)이다.
+function actRange(list) {
+  let end = -1;
+  for (let i = list.length - 1; i >= 0; i--) if (list[i].kind === "turn_end") { end = i; break; }
+  if (list.length && end !== list.length - 1) return { items: list.slice(end + 1), running: true };
+  if (!list.length) return { items: [], running: false };
+  let prev = -1;
+  for (let i = end - 1; i >= 0; i--) if (list[i].kind === "turn_end") { prev = i; break; }
+  return { items: list.slice(prev + 1, end), running: false };
+}
+
+// 글(text) 항목은 넣지 않는다 — AI 글은 대화 말풍선과 기록 메시지가 이미 보여준다.
+function actItems(nodeId) {
+  const { items, running } = actRange(liveItems(nodeId));
+  return {
+    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub")
+      && (it.kind !== "sub" || !HIDE_DONE_SUBS || !it.status || LIVE_RUNNING.test(it.status))),
+    running,
+  };
+}
+
+function actSummary(items) {
+  const tool = items.filter((it) => it.kind === "tool").length;
+  const think = items.filter((it) => it.kind === "think").length;
+  return [tool ? `도구 ${tool}회` : "", think ? `생각 ${think}` : ""].filter(Boolean).join(" · ");
+}
+
+// 대화 목록 끝에 붙는 활동 묶음. 도는 중이면 펼치고, 끝난 턴은 한 줄 요약으로 접는다(펼침은 chatState 에 보관).
+function chatActivityHTML(nodeId, st) {
+  const { items, running } = actItems(nodeId);
+  if (!items.length) return "";
+  const list = items.map(liveItemHTML).join("");
+  if (running) return `<div class="lvact">${list}</div>`;
+  const seq = items[items.length - 1].seq;
+  if (st.actTurn !== seq) { st.actTurn = seq; st.actOpen = false; }
+  const open = !!st.actOpen;
+  return `<button class="lvsum" data-actsum="1" title="${open ? "활동 접기" : "활동 펼치기"}"><span class="lvk">작업 내역</span><span class="lva">${esc(actSummary(items))}</span><span class="lvcar">${open ? "▴" : "▾"}</span></button>`
+    + (open ? `<div class="lvact">${list}</div>` : "");
+}

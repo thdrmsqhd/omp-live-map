@@ -1,0 +1,39 @@
+/* omp-live-map · viewmodel · 서버 스냅샷·인프라·호스트 상태 수신 */
+
+// 스냅샷을 상태에 넣는다. 서버가 변화가 있을 때만 보내므로 받은 대로 그린다.
+function setGraph(data) {
+  DATA = data;
+  if (data.fx && data.fx.usdKrw) FX = data.fx.usdKrw;
+  if (data.env) ENV = data.env;
+}
+
+function apply(data) {
+  setGraph(data);
+  renderMap(false);
+}
+
+async function fetchInfra() {
+  const res = await fetch("/api/infra");
+  const data = await res.json();
+  const sig = (v) => JSON.stringify((v.containers || []).map((c) => [c.id, c.state]).concat((v.distros || []).map((d) => [d.name, d.state])));
+  const changed = sig(data) !== sig(INFRA);
+  INFRA = { distros: [], containers: [], projects: [], ...data };
+  return changed;
+}
+
+async function loadInfra() {
+  try { if (await fetchInfra()) renderMap(false); } catch { /* server restarting */ }
+}
+
+async function fetchSys() {
+  const res = await fetch("/api/sys");
+  const next = await res.json();
+  const sig = (v) => (v ? v.mem.usedPct + ":" + v.cpu.pct + ":" + (v.disk ? v.disk.freeGB : "") : "");
+  const changed = sig(SYS) !== sig(next);
+  SYS = next;
+  return changed;
+}
+
+async function loadSys() {
+  try { if (await fetchSys()) renderMap(false); } catch { /* server restarting */ }
+}

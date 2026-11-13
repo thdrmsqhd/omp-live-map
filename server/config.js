@@ -1,0 +1,33 @@
+// 설정: 경로·MIME·셸 경로·argv(--port, --hours)·상수.
+"use strict";
+
+const path = require("path");
+const os = require("os");
+
+const HOME = os.homedir();
+const SESSIONS = path.join(HOME, ".omp", "agent", "sessions");
+const ROOT = path.join(__dirname, "..");
+const UI_DIR = path.join(ROOT, "ui");
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+};
+const BASH = process.env.OMP_MAP_BASH || "C:\\Program Files\\Git\\bin\\bash.exe";
+
+const argv = process.argv.slice(2);
+const argOf = (name, def) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
+};
+const PORT = Number(argOf("port", 7800));
+const HOURS = Number(argOf("hours", 24));
+const ACTIVE_MS = 90_000;
+const MSG_KEEP = 120; // 노드당 보존 메시지 수
+const MSG_BUDGET = 200_000; // 응답 전체 messages 바이트 상한
+const USD_KRW = Number(process.env.OMP_USD_KRW || 1390);
+
+module.exports = { HOME, SESSIONS, ROOT, UI_DIR, MIME, BASH, PORT, HOURS, ACTIVE_MS, MSG_KEEP, MSG_BUDGET, USD_KRW };

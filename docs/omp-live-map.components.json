@@ -1,0 +1,330 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "omp-live-map UI 컴포넌트",
+    "output": "omp-live-map.components.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "render",
+        "label": "Render path",
+        "focus": [
+          "app",
+          "vm-store",
+          "render",
+          "vm-map",
+          "layout",
+          "cards",
+          "patch",
+          "blocks"
+        ],
+        "note": "스냅샷이 화면이 되는 경로: 받기 → 배치 → 카드 HTML → 조각 패치 → 블록 mount·paint."
+      },
+      {
+        "id": "state",
+        "label": "State",
+        "focus": [
+          "state",
+          "vm-store",
+          "vm-map",
+          "blocks"
+        ],
+        "note": "상태는 core/state 한 곳이 소유하고, 사용자 조작 결과만 core/persist 가 localStorage 에 저장한다."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "app.js",
+      "sublabel": "boot · SSE · 폴러",
+      "pos": [
+        40,
+        70
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "부트스트랩"
+    },
+    {
+      "id": "vm-store",
+      "type": "frontend",
+      "label": "viewmodel/store",
+      "sublabel": "setGraph · apply",
+      "pos": [
+        340,
+        70
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "시그니처 비교"
+    },
+    {
+      "id": "render",
+      "type": "frontend",
+      "label": "render-map",
+      "sublabel": "renderMap()",
+      "pos": [
+        640,
+        70
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "보류 0.7초"
+    },
+    {
+      "id": "cards",
+      "type": "frontend",
+      "label": "카드 빌더",
+      "sublabel": "card-compact · session · metrics",
+      "pos": [
+        940,
+        70
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "tag": "조각 HTML"
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "core/state · persist",
+      "sublabel": "DATA · openId · localStorage",
+      "pos": [
+        40,
+        270
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "상태 소유·저장"
+    },
+    {
+      "id": "layout",
+      "type": "frontend",
+      "label": "model/layout",
+      "sublabel": "layoutTree · chooseCols",
+      "pos": [
+        340,
+        270
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "순수 계산"
+    },
+    {
+      "id": "vm-map",
+      "type": "frontend",
+      "label": "viewmodel/map",
+      "sublabel": "buildBlocks · filter",
+      "pos": [
+        640,
+        270
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "patch",
+      "type": "frontend",
+      "label": "patch-nodes",
+      "sublabel": "patchPieces",
+      "pos": [
+        940,
+        270
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "tag": "key 같으면 유지"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "서버 API",
+      "sublabel": "/api/exec · bg · prompt · tree",
+      "pos": [
+        40,
+        470
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "vm-cmd",
+      "type": "frontend",
+      "label": "viewmodel 명령",
+      "sublabel": "chat · term · files",
+      "pos": [
+        340,
+        470
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "fetch"
+    },
+    {
+      "id": "block-types",
+      "type": "frontend",
+      "label": "블록 5종",
+      "sublabel": "chat · term · bg · files · browser",
+      "pos": [
+        640,
+        470
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "blocks",
+      "type": "frontend",
+      "label": "blocks.js",
+      "sublabel": "registerBlock · mountBlocks · blockSig",
+      "pos": [
+        940,
+        470
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "tag": "레지스트리"
+    }
+  ],
+  "connections": [
+    {
+      "id": "app-to-store",
+      "from": "app",
+      "to": "vm-store",
+      "label": "fetch · SSE",
+      "variant": "emphasis"
+    },
+    {
+      "id": "store-to-render",
+      "from": "vm-store",
+      "to": "render",
+      "label": "apply()",
+      "variant": "emphasis"
+    },
+    {
+      "id": "render-to-cards",
+      "from": "render",
+      "to": "cards",
+      "label": "카드 HTML",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cards-to-patch",
+      "from": "cards",
+      "to": "patch",
+      "label": "조각",
+      "variant": "emphasis",
+      "labelAt": [
+        1040,
+        202
+      ]
+    },
+    {
+      "id": "patch-to-blocks",
+      "from": "patch",
+      "to": "blocks",
+      "label": "mountBlocks",
+      "variant": "emphasis",
+      "labelAt": [
+        1040,
+        402
+      ]
+    },
+    {
+      "id": "blocks-to-types",
+      "from": "blocks",
+      "to": "block-types",
+      "label": "render · mount · paint",
+      "variant": "emphasis"
+    },
+    {
+      "id": "types-to-cmd",
+      "from": "block-types",
+      "to": "vm-cmd",
+      "label": "명령 호출",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cmd-to-api",
+      "from": "vm-cmd",
+      "to": "api",
+      "label": "POST · GET",
+      "variant": "emphasis"
+    },
+    {
+      "id": "render-to-vmmap",
+      "from": "render",
+      "to": "vm-map",
+      "label": "buildBlocks",
+      "labelAt": [
+        725,
+        202
+      ]
+    },
+    {
+      "id": "vmmap-to-layout",
+      "from": "vm-map",
+      "to": "layout",
+      "label": "layoutTree"
+    },
+    {
+      "id": "store-to-state",
+      "from": "vm-store",
+      "to": "state",
+      "label": "DATA 갱신"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "렌더",
+      "items": [
+        "renderMap 이 배치 → 조각 목록 → patchPieces → 관계선·미니맵 순으로 실행한다",
+        "patchPieces 는 key 별 마크업이 같으면 DOM 을 그대로 두고, 큰 카드는 .body 를 보존한다"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "블록",
+      "items": [
+        "큰 카드 = chrome + body(블록). 블록은 render → mount(1회) → paint(스냅샷마다) 순서다",
+        "blockSig 가 같으면 body DOM 을 유지해 입력 포커스와 파일 트리 펼침이 남는다"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "상태",
+      "items": [
+        "가변 상태는 core/state 한 곳이 소유한다",
+        "core/persist 는 omp-map-manual·locals·hidden·pinned·alias·blocks·cardui 7개 키를 저장한다"
+      ]
+    }
+  ]
+}
