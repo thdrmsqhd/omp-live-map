@@ -1,7 +1,7 @@
 /* omp-live-map · view · chat 블록 끝에 붙는 마지막 턴 활동(생각·툴·서브에이전트) */
 
 const LIVE_TAIL = 12;   // 접힌 툴 출력에 보이는 줄 수
-const LIVE_LABEL = { think: "생각", sub: "서브에이전트" };
+const LIVE_LABEL = { think: "생각", text: "답변", sub: "서브에이전트" };
 const LIVE_RUNNING = /^(running|live|started|spawned|active|pending|queued)$/i;
 
 function liveItemHTML(it) {
@@ -9,7 +9,8 @@ function liveItemHTML(it) {
     return `<div class="lvitem sub"><span class="lvk">${LIVE_LABEL.sub}</span><span class="lvt">${esc(it.name)}${it.status ? " · " + esc(it.status) : ""}</span></div>`;
   }
   if (it.kind !== "tool") {
-    return `<div class="lvitem think"><span class="lvk">${LIVE_LABEL[it.kind] || esc(it.kind)}</span><span class="lvt">${esc(it.text)}</span></div>`;
+    const cls = it.kind === "text" ? "text" : "think";
+    return `<div class="lvitem ${cls}"><span class="lvk">${LIVE_LABEL[it.kind] || esc(it.kind)}</span><div class="lvt md">${mdHTML(it.text)}</div></div>`;
   }
   if (it.job) {
     return `<div class="lvitem tool job"><div class="lvh"><i class="dot live"></i><span class="lvk">${esc(it.name)}</span>
@@ -38,11 +39,11 @@ function actRange(list) {
   return { items: list.slice(prev + 1, end), running: false };
 }
 
-// 글(text) 항목은 넣지 않는다 — AI 글은 대화 말풍선과 기록 메시지가 이미 보여준다.
+// 글(text) 항목은 도는 중에만 넣는다 — 끝난 턴의 답변은 기록 메시지가 보여준다.
 function actItems(nodeId) {
   const { items, running } = actRange(liveItems(nodeId));
   return {
-    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub")
+    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || (running && it.kind === "text"))
       && (it.kind !== "sub" || !HIDE_DONE_SUBS || !it.status || LIVE_RUNNING.test(it.status))),
     running,
   };

@@ -36,7 +36,8 @@ function chatListHTML(st, shown, tool, act) {
       <span class="who">${m.role === "user" ? "user" : "ai"}</span><div class="tx${toolOnly ? " dim" : ""}">${m.role === "user" || toolOnly ? chatBodyHTML(label) : mdHTML(label)}</div>
       <span class="cact">${cts}${toolOnly ? "" : `<button class="ccopy" data-copy="${i}">복사</button>`}</span></div>`;
   }).join("");
-  const stream = st.stream ? `<div class="cmsg a"><span class="who">ai</span><div class="tx">${mdHTML(st.stream)}</div></div>` : "";
+  // 도는 중인 활동에 답변 글이 있으면 같은 글을 말풍선으로 또 그리지 않는다.
+  const stream = st.stream && !act.includes('class="lvitem text"') ? `<div class="cmsg a"><span class="who">ai</span><div class="tx">${mdHTML(st.stream)}</div></div>` : "";
   // 기록 메시지 → 마지막 턴 활동 → 흘러나오는 답변 순서.
   if (html || act || stream) return html + act + stream;
   return `<div class="cmsg"><div class="tx dim">${tool ? "최근 기록에 이 툴을 쓴 턴이 없습니다" : "대화 기록 없음"}</div></div>`;
