@@ -95,6 +95,17 @@
   .csum:empty { display: none; }
   .csum .cerr { display: flex; align-items: center; gap: 6px; color: #ff9a94; white-space: normal; }
   .csum .cerr button { padding: 0 7px; font-size: 10px; flex: none; }
+  .achips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .achips:empty { display: none; }
+  .achip { display: flex; align-items: center; gap: 5px; max-width: 220px; height: 30px; padding: 2px 2px 2px 3px; border: 1px solid #1c2a39;
+    border-radius: 6px; background: #0a1017; font-size: 10.5px; color: var(--fg); }
+  .achip img { width: 24px; height: 24px; object-fit: cover; border-radius: 4px; flex: none; }
+  .achip .aext { min-width: 24px; padding: 0 3px; font-family: var(--mono); font-size: 9px; color: #9fc0d8; text-align: center; flex: none; }
+  .achip .anm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .achip .asz { color: var(--dim); flex: none; }
+  .achip.err { border-color: #7a3431; } .achip.err .asz { color: #ff9a94; }
+  .achip .ax { height: 20px; padding: 0 6px; flex: none; }
+  .chat.dropping, #newsess.dropping .nsbox { outline: 1px dashed #2f5d85; outline-offset: 2px; }
   .crow .cmodel { max-width: 150px; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: #9fc0d8; }
   .cmnote { margin-top: 4px; font-size: 10px; color: #8fd7c1; }
   .cmnote[hidden], .cmpick[hidden] { display: none; }
@@ -129,14 +140,34 @@
   .col-tree .fq:focus { border-color: #2f5d85; }
   .tree { flex: 1; min-height: 0; overflow: auto; margin-top: 5px; font-family: var(--mono); font-size: 11px; }
   .tree details { margin-left: 3px; }
-  .tree details > details, .tree details > .f, .tree details > .n { margin-left: 12px; }
+  .tree details > details, .tree details > .n { margin-left: 12px; }
+  .tree details > .f { margin-left: 9px; }
   .tree summary { cursor: pointer; color: #9fc0d8; padding: 1px 0; list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tree summary::before { content: "▸ "; color: #47607a; }
   .tree details[open] > summary::before { content: "▾ "; }
-  .tree .f { color: #7d93a8; padding: 1px 0 1px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .tree .f { color: #7d93a8; padding: 1px 0 1px 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
   .tree .f.up { color: #47607a; }
   .tree .f:hover, .tree summary:hover { color: #cfe3f5; }
   .tree .n { color: #45607a; font-size: 10px; padding-left: 12px; }
+  /* 파일 트리 아이콘: SVG 마스크를 확장자별 고정 색으로 칠한다(14px, 이름과 가운데 정렬). */
+  .tree .ic { display: inline-block; width: 14px; height: 14px; margin-right: 5px; vertical-align: -3px;
+    background: #8fa3b6; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat;
+    --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M3 1h6.5L14 5.5V15H3zM9 2v4h4z'/></svg>"); }
+  .tree .ic.d { background: #e3b558;
+    --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M1 2.5h5l1.6 1.8H15V14H1z'/></svg>"); }
+  .tree details[open] > summary .ic.d { background: #f2c96b;
+    --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M1 2.5h5l1.6 1.8H13v1.9H3.6L1 13zM4.2 7.2H16L13 14H1z'/></svg>"); }
+  .tree .f.up .ic.d { background: #6f8aa3; }
+  .tree .ic[data-ext="js"], .tree .ic[data-ext="mjs"], .tree .ic[data-ext="cjs"] { background: #f0db4f; }
+  .tree .ic[data-ext="ts"], .tree .ic[data-ext="tsx"], .tree .ic[data-ext="jsx"] { background: #4ea6f5; }
+  .tree .ic[data-ext="py"] { background: #5fb3e8; }
+  .tree .ic[data-ext="md"], .tree .ic[data-ext="txt"] { background: #c9d6e2; }
+  .tree .ic[data-ext="json"], .tree .ic[data-ext="jsonl"], .tree .ic[data-ext="yml"], .tree .ic[data-ext="yaml"], .tree .ic[data-ext="toml"] { background: #e8a33d; }
+  .tree .ic[data-ext="css"], .tree .ic[data-ext="scss"] { background: #b07cf0; }
+  .tree .ic[data-ext="html"], .tree .ic[data-ext="htm"], .tree .ic[data-ext="svg"] { background: #f2774b; }
+  .tree .ic[data-ext="go"], .tree .ic[data-ext="rs"], .tree .ic[data-ext="cs"], .tree .ic[data-ext="java"] { background: #5fd1c4; }
+  .tree .ic[data-ext="sh"], .tree .ic[data-ext="ps1"], .tree .ic[data-ext="bat"], .tree .ic[data-ext="cmd"] { background: #8fd16a; }
+  .tree .ic[data-ext="png"], .tree .ic[data-ext="jpg"], .tree .ic[data-ext="gif"], .tree .ic[data-ext="webp"], .tree .ic[data-ext="pdf"] { background: #e86f9a; }
 
   .jcard { position: absolute; border: 1px solid #1d2c3a; background: #0e161f; border-radius: 8px;
     padding: 5px 7px; overflow: hidden; }

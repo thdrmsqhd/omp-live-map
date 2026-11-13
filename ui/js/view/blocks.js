@@ -6,6 +6,7 @@
 //   render(n)       블록 안쪽 마크업(문자열). 큰 카드 바디를 새로 만들 때만 불린다.
 //   mount(box, n)   바디가 새로 생긴 직후 1회. 리스너 배선과 첫 스크롤 위치.
 //   paint(box, n)   바디 DOM 을 유지한 채 스냅샷이 바뀌었을 때. 바뀐 부분만 갱신한다.
+//   onAdd(nodeId)   (선택) 블록 메뉴로 카드에 더해 다시 그린 직후 1회. 카드 크기 맞추기 등.
 //
 // 블록 접기·순서·높이는 CARD_UI(nodeId) 에 저장한다(조작 배선: block-controls.js).
 
@@ -34,7 +35,7 @@ function cardBlockTypes(n) {
   return [...new Set(list)].filter((t) => BLOCKS.has(t));
 }
 
-const BLOCK_H_MIN = 80, BLOCK_H_MAX = 400;
+const BLOCK_H_MIN = 80, BLOCK_H_MAX = 1080;
 
 function cardUI(nodeId) {
   let u = CARD_UI.get(nodeId);
@@ -106,4 +107,6 @@ function toggleBlock(nodeId, type) {
   CARD_BLOCKS.set(nodeId, { add: cur.filter((t) => !base.includes(t)), remove: base.filter((t) => !cur.includes(t)) });
   saveBlocks();
   renderMap(false, true);
+  const def = BLOCKS.get(type);
+  if (i < 0 && def && def.onAdd) def.onAdd(nodeId);
 }

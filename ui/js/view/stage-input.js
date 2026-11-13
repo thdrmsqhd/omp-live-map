@@ -48,13 +48,13 @@ function bindStageInput() {
     toggleJobCard(card.dataset.job);
   });
 
-  // 피그마식: 카드 더블클릭 = 열기, 미러 카드 더블클릭 = 접기, 클러스터 제목 = 그 클러스터로 확대, 빈 바탕 = 전체 보기.
+  // 피그마식: 카드 더블클릭 = 열기, 미러 카드 더블클릭 = 접기, 클러스터 제목 = 그 클러스터로 확대. 빈 바탕은 아무 동작 없음.
   stage.addEventListener("dblclick", (e) => {
     const node = e.target.closest(".node");
     if (!node) {
       const head = e.target.closest(".cluster .ch");
       const c = head && clusterByKey(head.parentElement.dataset.ckey);
-      if (c) fitBox(c, 26, 220); else if (!head) fit();
+      if (c) fitBox(c, 26, 220);
       return;
     }
     const id = node.dataset.id;

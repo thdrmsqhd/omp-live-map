@@ -2,14 +2,20 @@
 
 // opened: 사용자가 펼쳐 둔 폴더 경로 Set. all: 필터 중이라 읽어 온 폴더를 모두 펼친다.
 // children 이 없는 폴더는 아직 안 읽은 것이다(서버는 두 단계까지만 준다). 펼칠 때 마저 읽는다.
+// 아이콘은 panel.css 의 .tree .ic (SVG 마스크) 가 그린다. 파일은 확장자로 색을 고른다.
+function fileIcon(name) {
+  const m = /\.([a-z0-9]+)$/i.exec(name || "");
+  return `<i class="ic" data-ext="${m ? esc(m[1].toLowerCase()) : ""}"></i>`;
+}
+
 function treeNodes(entries, opened, all) {
   return entries.map((e) => {
-    if (!e.dir) return `<div class="f" data-file="${esc(e.path)}" title="${esc(e.path)}\n클릭: 이 파일의 폴더로 이동 · 더블클릭: 이름 복사">${esc(e.name)}</div>`;
+    if (!e.dir) return `<div class="f" data-file="${esc(e.path)}" title="${esc(e.path)}\n클릭: 이 파일의 폴더로 이동 · 더블클릭: 이름 복사">${fileIcon(e.name)}${esc(e.name)}</div>`;
     const loaded = e.children !== undefined;
     const open = opened.has(e.path) || (all && loaded);
     const kids = !loaded ? '<div class="n">불러오는 중…</div>'
       : e.children.length ? treeNodes(e.children, opened, all) : '<div class="n">(빈 폴더)</div>';
-    return `<details${open ? " open" : ""}><summary data-dir="${esc(e.path)}" title="클릭: 펼치기 · 더블클릭: 이 폴더로 이동">${esc(e.name)}</summary>
+    return `<details${open ? " open" : ""}><summary data-dir="${esc(e.path)}" title="클릭: 펼치기 · 더블클릭: 이 폴더로 이동"><i class="ic d"></i>${esc(e.name)}</summary>
         ${kids}</details>`;
   }).join("");
 }
@@ -44,7 +50,7 @@ function paintTree(id) {
   const has = data.entries && data.entries.length;
   const shown = has && q ? filterTree(data.entries, q, root) : data.entries;
   const up = !data.loading && parentDir(data.path)
-    ? `<div class="f up" data-up="${esc(parentDir(data.path))}" title="상위 폴더로 이동">‥</div>` : "";
+    ? `<div class="f up" data-up="${esc(parentDir(data.path))}" title="상위 폴더로 이동"><i class="ic d"></i>‥</div>` : "";
   box.innerHTML = data.loading
     ? '<div class="n">불러오는 중…</div>'
     : up + (shown && shown.length

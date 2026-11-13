@@ -21,30 +21,36 @@ function commitStream(st, fallback) {
 }
 
 // 서버는 받자마자 ok 를 돌려준다. 답변 확정과 busy 해제는 SSE done(handleChatEvent)이 맡는다. 도는 중이면 추가 지시로 간다.
+// 첨부(st.files)는 함께 보내고, 실패하면 입력창 아래로 되돌린다.
 async function sendChat(id) {
   const st = chatState(id);
   const text = (st.draft || "").trim();
-  if (!text) return;
+  const files = st.files;
+  if (!text && !files.length) return;
+  const bad = attachProblem(files);
+  if (bad) { st.error = bad; st.retry = ""; paintChat(id); return; }
   commitStream(st);
   const since = Date.now();
-  const entry = { role: "user", text, ts: since, since };
+  // 첨부가 있으면 서버가 저장 경로를 붙인 글을 SSE req 로 돌려주므로(handleChatEvent) 그때 바꿔 단다.
+  const entry = { role: "user", text: text || "(첨부 " + files.map((f) => f.name).join(", ") + ")", ts: since, since, attach: files.length > 0 };
   // 모델 변경 안내는 새 턴이 시작되면 끝난 이야기다(도는 중 추가 지시는 같은 턴).
   if (!st.busy) st.modelNote = "";
-  Object.assign(st, { busy: true, draft: "", error: "", retry: "", lastText: text, since });
+  Object.assign(st, { busy: true, draft: "", files: [], error: "", retry: "", lastText: text, since });
   st.log.push(entry);
   paintChat(id);
   let out = {};
   try {
-    const res = await postJSON("/api/prompt", { node: id, text });
+    const res = await postJSON("/api/prompt", { node: id, text, files: attachPayload(files) });
     out = await res.json().catch(() => ({ ok: false, out: "HTTP " + res.status }));
   } catch (err) {
     out = { ok: false, out: err.message };
   }
-  if (out.ok) return;
+  if (out.ok) { clearAttachments(files); return; }
   // 전달되지 않은 입력은 대화 목록에서 빼고 입력창에 되돌려 다시 시도할 수 있게 한다.
   const i = st.log.indexOf(entry);
   if (i >= 0) st.log.splice(i, 1);
   if (!st.draft) st.draft = text;
+  st.files = files.concat(st.files);
   st.busy = false;
   st.error = "전송 실패: " + (out.out || "응답 없음");
   st.retry = "send";
@@ -159,7 +165,8 @@ function handleChatEvent(c) {
   const st = chatState(c.node);
   if (c.kind === "req") {
     const last = st.log[st.log.length - 1];
-    const mine = st.busy && last && last.role === "user" && last.text === c.text;
+    const mine = st.busy && last && last.role === "user" && (last.text === c.text || last.attach);
+    if (mine && last.attach) { last.text = c.text; last.attach = false; }
     if (!mine) {
       commitStream(st);
       st.since = Date.now();

@@ -71,9 +71,11 @@ async function start(cwd, resume) {
 }
 
 // 프롬프트를 보낸다. 도는 중이면 steer 로 끼워 넣는다. 응답(접수)만 기다리고 끝은 기다리지 않는다.
-async function sendPrompt(s, text) {
+// images: omp RPC ImageContent 배열([{ type: "image", data, mimeType }]). 없으면 싣지 않는다.
+async function sendPrompt(s, text, images) {
   const steer = s.busy;
   const cmd = { type: "prompt", message: text };
+  if (images && images.length) cmd.images = images;
   if (steer) cmd.streamingBehavior = "steer";
   else { s.busy = true; s.full = ""; }
   pushChat({ node: s.node, kind: "req", text });
@@ -107,13 +109,13 @@ async function attach(st) {
   return start(st.cwd && fs.existsSync(st.cwd) ? st.cwd : HOME, st.file);
 }
 
-async function newSession(cwd, text) {
+async function newSession(cwd, text, images) {
   const dir = cwd || HOME;
   if (!fs.existsSync(dir)) return { ok: false, out: "폴더 없음: " + dir };
   let s;
   try { s = await start(dir, null); } catch (e) { return { ok: false, out: errText(e) }; }
   if (!text) return { ok: true, node: s.node };
-  const r = await sendPrompt(s, text);
+  const r = await sendPrompt(s, text, images);
   if (!r.ok) stopSession(s.node);
   return r;
 }
@@ -145,9 +147,9 @@ async function acquire(node) {
   return { s };
 }
 
-async function prompt(node, text) {
+async function prompt(node, text, images) {
   const { s, err } = await acquire(node);
-  return err || sendPrompt(s, text);
+  return err || sendPrompt(s, text, images);
 }
 
 async function cancel(node) {

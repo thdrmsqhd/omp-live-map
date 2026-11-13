@@ -61,7 +61,7 @@ async function loadLocalRes() {
   let changed = false;
   for (const L of LOCALS) {
     try {
-      const r = await fetch("/api/res?cwd=" + encodeURIComponent(L.cwd) + "&node=" + encodeURIComponent(L.id));
+      const r = await fetch("/api/res?node=" + encodeURIComponent(L.id));
       const j = await r.json();
       if (JSON.stringify(LOCRES.get(L.id)) !== JSON.stringify(j)) { LOCRES.set(L.id, j); changed = true; }
     } catch { /* ignore */ }

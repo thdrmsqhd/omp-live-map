@@ -1,4 +1,4 @@
-// HTTP 공용 헬퍼: JSON 응답, 요청 가드(Host·Origin·Sec-Fetch-Site·Content-Type), 본문 읽기·JSON 파싱(1MB 상한).
+// HTTP 공용 헬퍼: JSON 응답, 요청 가드(Host·Origin·Sec-Fetch-Site·Content-Type), 본문 읽기·JSON 파싱(기본 1MB 상한).
 "use strict";
 
 const { PORT } = require("./config");
@@ -39,15 +39,15 @@ function tooLarge(req, res) {
   req.resume();
 }
 
-// 본문을 JSON 객체로 읽어 handler(payload)를 부른다. 1MB 초과는 413, 파싱 실패는 BAD_JSON.
-function withJson(req, res, handler) {
-  if (Number(req.headers["content-length"] || 0) > MAX_BODY) return tooLarge(req, res);
+// 본문을 JSON 객체로 읽어 handler(payload)를 부른다. max(기본 1MB) 초과는 413, 파싱 실패는 BAD_JSON.
+function withJson(req, res, handler, max = MAX_BODY) {
+  if (Number(req.headers["content-length"] || 0) > max) return tooLarge(req, res);
   const chunks = [];
   let size = 0, over = false;
   req.on("data", (d) => {
     if (over) return;
     size += d.length;
-    if (size > MAX_BODY) {
+    if (size > max) {
       over = true;
       tooLarge(req, res);
       return;

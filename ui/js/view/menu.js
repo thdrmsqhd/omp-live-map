@@ -123,7 +123,7 @@ function openCardMenu(clientX, clientY, id) {
 function openStageMenu(clientX, clientY) {
   const pt = worldPoint(clientX, clientY);
   showMenu(clientX, clientY, [
-    { label: "+ 새 세션", run: () => openNewSession() },
+    { label: "+ 새 세션", run: () => openNewSession(pt) },
     { label: "+ 새 로컬 카드 (터미널·파일)", hint: "Ctrl+N", run: () => addLocal(pt.x, pt.y) },
     null,
     { label: "전체 보기", hint: "0", run: fit },

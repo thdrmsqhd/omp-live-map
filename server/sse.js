@@ -25,14 +25,14 @@ function pushLive(payload) {
 }
 
 // 세션의 자원 요약: [프로세스 수, round(cpu/10), round(mb/100)].
-// 한 세션의 노드들은 같은 프로세스 트리를 보므로 합치지 않고 가장 큰 값 하나만 쓴다(작은 흔들림으로 방송하지 않게).
+// 노드마다 겹치지 않는 몫(server/attrib.js)을 가지므로 세션 값은 노드 합이다.
 function resSig(s) {
   let proc = 0, cpu = 0, mb = 0;
   for (const n of s.nodes) {
     if (!n.res) continue;
-    proc = Math.max(proc, n.res.proc || 0);
-    cpu = Math.max(cpu, n.res.cpu || 0);
-    mb = Math.max(mb, n.res.mb || 0);
+    proc += n.res.proc || 0;
+    cpu += n.res.cpu || 0;
+    mb += n.res.mb || 0;
   }
   return [proc, Math.round(cpu / 10), Math.round(mb / 100)];
 }

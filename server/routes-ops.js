@@ -4,7 +4,7 @@
 const { HOME } = require("./config");
 const { json, withJson } = require("./http");
 const { exec, treeOf, startBg, bgJobs, bgJob } = require("./shell");
-const { resFor, procState, findProc, reloadProc } = require("./proc");
+const { resFor, releaseSet, procState, findProc, reloadProc } = require("./proc");
 const { sysInfo } = require("./sys");
 const { getInfra, infraAction } = require("./infra");
 const { stateOf } = require("./tail");
@@ -52,7 +52,7 @@ module.exports = {
     const st = stateOf(node);
     if (!st) return json(res, { ok: false, out: "세션 기록 없음" });
     // 소유 omp 본체의 자식(에이전트의 MCP 서버·실행기)은 대상에서 뺀다. 잡과 cwd 로 귀속된 프로세스만 종료한다.
-    const r = resFor(st.cwd, node, false);
+    const r = releaseSet(st.cwd, node);
     const killed = [], skipped = [];
     for (const pid of r.all || []) {
       if (pid <= 0 || pid === process.pid) { skipped.push(pid); continue; }
@@ -67,7 +67,7 @@ module.exports = {
     json(res, { ok: killed.length > 0, killed, skipped, freedMB: killed.length ? r.mb : 0 });
   }),
   "* /api/sys": (req, res) => json(res, sysInfo()),
-  "* /api/res": (req, res, url) => json(res, resFor(url.searchParams.get("cwd"), url.searchParams.get("node") || "")),
+  "* /api/res": (req, res, url) => json(res, resFor(url.searchParams.get("node") || "")),
   "* /api/proc": (req, res) => json(res, procState()),
   // DB 조회: 프로필(user·password 포함)과 SQL 한 문장. 비밀번호는 저장하지 않는다.
   "POST /api/db/query": (req, res) => withJson(req, res, async (p) => {

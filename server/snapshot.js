@@ -61,7 +61,7 @@ function nodeOf(st, now, last) {
     series: st.recent,
     ctx: st.ctx,
     messages: st.messages,
-    res: { ...resFor(st.cwd, st.file), hist: histOf(st.file) },
+    res: { ...resFor(st.file), hist: histOf(st.file) },
     lastUser: st.lastUser,
     lastAssistant: st.lastAssistant,
   };
@@ -85,7 +85,7 @@ function syntheticRoot(id, sub) {
     tokens1h: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, cost: 0, requests: 0 },
     tokPerSec: 0, liveTokPerSec: 0, avgTtft: 0, errors: 0,
     status: sub.status === "live" ? "live" : "done", tools: [], commands: [], files: [],
-    res: { cpu: 0, mb: 0, proc: 0, procs: [], all: [], owner: 0, shared: { cpu: 0, mb: 0, proc: 0 }, hist: [] },
+    res: { cpu: 0, mb: 0, proc: 0, procs: [], all: [], owner: 0, main: true, hist: [] },
   };
 }
 

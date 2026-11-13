@@ -59,13 +59,14 @@ function chatBlock(n) {
     ${chatModelPickerHTML()}
     <div class="crow">
       <button class="cmodel" data-model="1">${esc(chatModelLabel(n))}</button>
-      <textarea class="cin" rows="1" placeholder="에이전트에 프롬프트 전송 (Ctrl+Enter)">${esc(st.draft)}</textarea>
+      <textarea class="cin" rows="1" placeholder="에이전트에 프롬프트 전송 (Ctrl+Enter · 이미지·파일 붙여넣기/끌어 놓기)">${esc(st.draft)}</textarea>
       <button data-send="1">보내기</button>
       <button class="stop" data-cancel="1"${st.busy ? "" : " hidden"}>취소</button>
       <button data-sum="1">요약</button>
       <button data-compact="1"${st.busy || st.compacting ? " disabled" : ""}>${st.compacting ? "압축 중…" : "압축"}</button>
       <button data-clear="1"${st.busy || st.clearing ? " disabled" : ""}>${st.clearing ? "비우는 중…" : "비우기"}</button>
     </div>
+    <div class="achips">${attachChipsHTML(st.files)}</div>
     <div class="csum">${chatSumHTML(st)}</div>
   </div>`;
 }
@@ -121,6 +122,7 @@ function paintChat(id) {
   // 입력 중에는 input 리스너가 draft 를 맞춰 두므로, 값이 다르면 전송·실패 복원 같은 프로그램 변경이다.
   const ta = box.querySelector(".cin");
   if (ta.value !== st.draft) { ta.value = st.draft; fitChatInput(ta); }
+  paintAttachChips(box.querySelector(".achips"), st.files);
   paintChatModel(box, node, st);
 }
 
@@ -131,6 +133,7 @@ function mountChat(blk, n) {
   const ta = box.querySelector(".cin");
   fitChatInput(ta);
   ta.addEventListener("input", () => { st.draft = ta.value; fitChatInput(ta); });
+  wireAttach(box, () => st.files, () => paintChat(id));
   ta.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendChat(id); }
   });

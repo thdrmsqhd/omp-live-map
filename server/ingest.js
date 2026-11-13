@@ -168,6 +168,7 @@ function ingest(st, raw) {
     st.id = e.id || "";
     st.cwd = e.cwd || st.cwd;
     st.startedAt = ts || st.startedAt;
+    st.parentSession = e.parentSession || ""; // /new·핸드오프로 이어진 이전 세션(같은 omp 프로세스가 이어 쓴다)
   } else if (e.type === "model_change" && e.model) {
     // "provider/id" 형식이다. id 에도 / 가 들어갈 수 있어 첫 / 에서만 나눈다.
     const i = e.model.indexOf("/");

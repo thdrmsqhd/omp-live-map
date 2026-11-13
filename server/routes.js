@@ -9,11 +9,13 @@ const { snapshot } = require("./snapshot");
 const { outsFor } = require("./live");
 const { recentFor } = require("./ext-live");
 const { addClient, removeClient } = require("./sse");
+const localfs = require("./routes-localfs");
 
 const ROUTES = {
   ...require("./routes-ops"),
   ...require("./routes-chat"),
   ...require("./routes-context"),
+  ...localfs.routes,
   "* /api/graph": (req, res) => json(res, snapshot()),
   "* /api/events": (req, res) => {
     res.writeHead(200, {
@@ -70,6 +72,7 @@ async function handle(req, res) {
   const url = new URL(req.url, "http://127.0.0.1");
   const route = ROUTES[req.method + " " + url.pathname] || ROUTES["* " + url.pathname];
   if (route) return route(req, res, url);
+  if (url.pathname.startsWith(localfs.PREFIX)) return localfs.serveLocal(req, res, url);
   if (req.method === "GET" && !url.pathname.startsWith("/api/")) return serveStatic(res, url.pathname);
   fail(res, 404, "not found");
 }

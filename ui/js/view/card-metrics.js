@@ -101,25 +101,28 @@ function sessionCtxBlock(n) {
 
 const cpuLevel = (cpu) => (cpu >= 85 ? "cpu-err" : cpu >= 60 ? "cpu-warn" : "cpu-ok");
 
+// 자원 행: 이 노드 몫의 프로세스(서버 attrib.js 가 겹치지 않게 나눔). 서브에이전트는 omp 본체 안에서 돌아
+// 본체 사용량을 나눌 수 없으므로 본체는 메인 카드에만 합산하고, 서브 카드는 자기가 돌리는 명령의 프로세스만 센다.
 function resRow(n, wide) {
   const r = n.res;
   if (!r) return "";
+  const sub = !r.main && r.owner;
   if (!r.proc) {
-    const sh = r.shared || { cpu: 0, mb: 0, proc: 0 };
-    return `<div class="resrow"><span style="color:#5c7186">세션 전용 프로세스 없음 · 공유</span>
-      <span class="rr-cpu" title="공유 프로세스(bash·node·python·wsl·docker 등) CPU 합계">CPU <b>${sh.cpu}%</b></span>
-      <span class="rr-mem" title="공유 프로세스 메모리 합계"><b>${memSize(sh.mb)}</b></span>
-      <span title="공유 프로세스 ${sh.proc}개">${sh.proc}p</span></div>`;
+    const text = sub ? `전용 프로세스 없음 · omp ${r.owner} 공유` : "실행 중 프로세스 없음";
+    const tip = sub ? `이 에이전트는 omp 본체(pid ${r.owner}) 안에서 돈다. 본체 CPU·메모리는 메인 카드에 합산된다.` : "";
+    return `<div class="resrow"><span style="color:#5c7186" title="${esc(tip)}">${text}</span></div>`;
   }
+  const scope = r.main ? (r.owner ? `omp 본체(pid ${r.owner})와 그 자식 프로세스(서브에이전트 몫 제외)` : "세션 프로세스")
+    : sub ? "이 에이전트가 실행 중인 명령의 프로세스(omp 본체 제외)" : "이 카드의 잡 프로세스";
   const procs = r.procs || [];
   const names = procs.map((p) => `${p.name}(${p.pid}) ${p.cpu}% ${memSize(p.mb)}`).join("\n");
   const more = r.proc > procs.length ? `\n… 외 ${r.proc - procs.length}개` : "";
   const trend = miniSpark(r.hist, 44, 10, "#ff9f6b");
   return `<div class="resrow">
-    <span class="rr-cpu" title="세션 프로세스 트리 CPU 합계(코어 합산)">CPU <b>${r.cpu}%</b></span>
+    <span class="rr-cpu" title="${esc(scope)} CPU 합계(코어 합산)">CPU <b>${r.cpu}%</b></span>
     ${trend ? `<span class="rr-hist" title="최근 약 40초 CPU 추세">${trend}</span>` : ""}
     <span class="rbar"><i class="${cpuLevel(r.cpu)}" style="width:${Math.max(2, Math.min(100, r.cpu))}%"></i></span>
-    <span class="rr-mem" title="세션 프로세스 메모리 합계 ${memSize(r.mb)}\n${esc(names)}"><b>${memSize(r.mb)}</b></span>
+    <span class="rr-mem" title="${esc(scope)} 메모리 합계 ${memSize(r.mb)}\n${esc(names)}"><b>${memSize(r.mb)}</b></span>
     <span title="프로세스 ${r.proc}개\n${esc(names + more)}">${r.proc}p</span>
     ${wide ? `<span style="margin-left:auto;color:#5c7186">${procs.map((p) => esc(p.name)).join(" · ")}</span>` : ""}
   </div>`;

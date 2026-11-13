@@ -51,7 +51,25 @@ function assignOwners(mains, procs) {
     owners.set(st.file, pid);
     taken.add(pid);
   }
-  return owners;
+  return followNew(owners, mains, procs);
+}
+
+// 한 omp 프로세스는 /new·핸드오프로 새 세션 파일(parentSession = 이전 파일)을 이어 쓴다.
+// 명령줄의 -r 파일이나 시작 시각으로 잡은 세션에서, 그 프로세스 시작 뒤에 이어진 가장 최근 세션으로 옮긴다.
+function followNew(owners, mains, procs) {
+  const next = new Map();
+  for (const [file, pid] of owners) {
+    const p = procs.find((x) => x.pid === pid);
+    const since = ((p && p.start) || 0) - BEFORE_MS;
+    let cur = file;
+    for (let hop = 0; hop < 20; hop++) {
+      const kids = mains.filter((m) => m.parentSession && norm(m.parentSession) === norm(cur) && m.startedAt >= since && !owners.has(m.file));
+      if (!kids.length) break;
+      cur = kids.reduce((a, b) => (b.startedAt > a.startedAt ? b : a)).file;
+    }
+    next.set(cur, pid);
+  }
+  return next;
 }
 
 module.exports = { assignOwners, isOmpMain };

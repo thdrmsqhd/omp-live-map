@@ -1,4 +1,4 @@
-// 프로세스 관측: Win32 프로세스 목록(PROC)·세션 소유 프로세스·노드별 자원 이력 소유, CPU% 계산, 노드별 자원 귀속.
+// 프로세스 관측: Win32 프로세스 목록(PROC)·세션 소유 프로세스·노드별 프로세스 귀속·자원 이력 소유, CPU% 계산.
 "use strict";
 
 const os = require("os");
@@ -6,6 +6,7 @@ const { spawn } = require("child_process");
 const { bgJobs } = require("./shell");
 const { allStates, stateOf } = require("./tail");
 const { assignOwners } = require("./owner");
+const { attribute } = require("./attrib");
 
 let PROC = { at: 0, list: [], loading: false, error: null, prev: new Map(), atWall: 0 };
 const CORES = Math.max(1, os.cpus().length);
@@ -13,6 +14,7 @@ const HIST_N = 10; // 노드별 자원 표본 수(4초 주기 ≈ 40초)
 const QUIET_MS = 30 * 60_000;
 const hist = new Map(); // file -> [{cpu, mb}] 오래된 것부터
 let owners = new Map(); // 메인 파일 경로 -> omp 본체 pid
+let claims = new Map(); // 노드 파일 -> Set(pid), 노드끼리 겹치지 않는다(server/attrib.js)
 
 function readProcs() {
   return new Promise((resolve) => {
@@ -59,7 +61,9 @@ async function refreshProc() {
     PROC.atWall = now;
     PROC.at = now;
     PROC.error = null;
-    owners = assignOwners([...allStates()].filter((st) => st.depth === 2), PROC.list);
+    const states = [...allStates()];
+    owners = assignOwners(states.filter((st) => st.depth === 2), PROC.list);
+    claims = attribute(PROC.list, owners, states, bgJobs());
   } catch (exc) {
     PROC.error = String(exc).slice(0, 160);
     PROC.at = Date.now();
@@ -77,7 +81,7 @@ function sampleHist() {
       hist.delete(st.file);
       continue;
     }
-    const r = resFor(st.cwd, st.file);
+    const r = resFor(st.file);
     const buf = hist.get(st.file) || [];
     buf.push({ cpu: r.cpu, mb: r.mb });
     if (buf.length > HIST_N) buf.shift();
@@ -101,24 +105,38 @@ function ownerOf(nodeId) {
   return (st && owners.get(st.mainFile)) || 0;
 }
 
-// 노드에 귀속된 프로세스 트리의 자원 합. withOwner=false 면 소유 omp 본체와 그 자식(에이전트의 MCP 서버·
-// 실행기)을 넣지 않는다 — 프로세스 정리(release)는 이 범위만 종료해야 실행 중인 에이전트가 도구를 잃지 않는다.
-function resFor(cwd, nodeId, withOwner = true) {
+// 노드에 귀속된 프로세스의 자원 합(server/attrib.js 가 나눈 몫). 세션 메인 노드는 omp 본체를 포함하고,
+// 서브에이전트 노드는 지금 자기 bash 명령이 띄운 프로세스만 갖는다. owner 는 세션의 omp 본체 pid(서브도 공유).
+function resFor(nodeId) {
+  const pids = claims.get(nodeId) || new Set();
+  let cpu = 0, mb = 0, n = 0;
+  const procs = [];
+  for (const p of PROC.list) {
+    if (!pids.has(p.pid)) continue;
+    cpu += p.cpu;
+    mb += p.mb;
+    n += 1;
+    procs.push({ pid: p.pid, name: p.name, cpu: p.cpu, mb: p.mb });
+  }
+  procs.sort((a, b) => b.mb - a.mb);
+  const st = stateOf(nodeId);
+  return { cpu: +cpu.toFixed(1), mb, proc: n, procs: procs.slice(0, 6), all: [...pids].slice(0, 200),
+    owner: String(nodeId || "").startsWith("local_") ? 0 : ownerOf(nodeId), main: !!st && st.depth === 2 };
+}
+
+// 프로세스 정리(release) 대상: 맵이 띄운 잡과 명령줄에 작업 폴더가 든 프로세스의 트리. omp 본체와 그 자식(에이전트의
+// MCP 서버·실행기)은 넣지 않는다 — 실행 중인 에이전트가 도구를 잃지 않게.
+function releaseSet(cwd, nodeId) {
   const pids = new Set();
   for (const j of bgJobs()) if (j.node === nodeId && !j.done && j.proc && j.proc.pid) pids.add(j.proc.pid);
-  const exactOnly = String(nodeId || "").startsWith("local_");
-  const owner = exactOnly ? 0 : ownerOf(nodeId);
-  if (owner && withOwner) pids.add(owner);
   const needle = String(cwd || "").toLowerCase().replace(/\\/g, "/");
   const leaf = needle.split("/").filter(Boolean).pop() || "";
   const leafRe = leaf.length >= 4 ? new RegExp("[\\\\/]" + leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\\\/]") : null;
-  if (!exactOnly) {
+  if (!String(nodeId || "").startsWith("local_")) {
     for (const p of PROC.list) {
       if (p.pid === 0 || pids.has(p.pid) || !p.cmd) continue;
       const cmd = p.cmd.toLowerCase().replace(/\\/g, "/");
-      const hitCwd = needle.length > 8 && cmd.includes(needle);
-      const hitLeaf = !!leafRe && leafRe.test(cmd);
-      if (hitLeaf || hitCwd) pids.add(p.pid);
+      if ((needle.length > 8 && cmd.includes(needle)) || (!!leafRe && leafRe.test(cmd))) pids.add(p.pid);
     }
   }
   const kids = new Map();
@@ -129,26 +147,11 @@ function resFor(cwd, nodeId, withOwner = true) {
   const queue = [...pids];
   while (queue.length) {
     const pid = queue.pop();
-    for (const child of kids.get(pid) || []) {
-      if (!pids.has(child)) { pids.add(child); queue.push(child); }
-    }
+    for (const child of kids.get(pid) || []) if (!pids.has(child)) { pids.add(child); queue.push(child); }
   }
-  let cpu = 0, mb = 0, n = 0;
-  const procs = [];
-  for (const p of PROC.list) {
-    if (!pids.has(p.pid)) continue;
-    cpu += p.cpu;
-    mb += p.mb;
-    n += 1;
-    if (procs.length < 6) procs.push({ pid: p.pid, name: p.name, cpu: p.cpu, mb: p.mb });
-  }
-  let scpu = 0, smb = 0, sn = 0;
-  for (const p of PROC.list) {
-    if (!/^(bash|node|python|wsl|java|docker|omp|ego)/i.test(p.name)) continue;
-    scpu += p.cpu; smb += p.mb; sn += 1;
-  }
-  return { cpu: +cpu.toFixed(1), mb, proc: n, procs, all: [...pids].slice(0, 200), owner,
-    shared: { cpu: +scpu.toFixed(1), mb: smb, proc: sn } };
+  let mb = 0;
+  for (const p of PROC.list) if (pids.has(p.pid)) mb += p.mb;
+  return { mb, all: [...pids].slice(0, 200) };
 }
 
 function procState() {
@@ -159,4 +162,4 @@ function findProc(pid) {
   return PROC.list.find((x) => x.pid === pid) || null;
 }
 
-module.exports = { refreshProc, reloadProc, resFor, histOf, procState, findProc };
+module.exports = { refreshProc, reloadProc, resFor, releaseSet, histOf, procState, findProc };

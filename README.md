@@ -63,6 +63,7 @@ node extension/install.js
 | Ctrl+N | 로컬 작업 카드 추가 |
 | 터미널 Enter / Shift+Enter / ↑↓ | 실행 / 백그라운드 실행 / 명령 기록 |
 | 채팅 Ctrl+Enter | 그 세션에 프롬프트 전송(`omp -p -r <세션 파일>`) |
+| 채팅·새 세션 입력창 Ctrl+V / 파일 끌어 놓기 | 이미지·파일 첨부(입력창 아래 칩, ×로 빼기). 파일당 20MB, 합계 60MB, 10개까지. 넘으면 칩에 오류를 띄우고 보내지 않음 |
 | 토큰 바 클릭 | 세션 누적 ↔ 최근 1시간 |
 | 툴 칩 클릭 | 대화를 그 툴을 쓴 턴으로 거르기 |
 | 세션 컨텍스트 행 클릭 | 그 에이전트 카드로 이동 |
@@ -82,6 +83,7 @@ server/
   shell.js prompt.js             Git Bash 실행, 백그라운드 잡, omp 프롬프트 전송·취소
   sse.js http.js routes*.js      SSE 방송, 요청 가드, 라우트
   active.js ext-live.js          실시간 방송: 기록 이벤트, 확장 기록(~/.omp/live-map) tail
+  uploads.js                     프롬프트 첨부: 작은 이미지는 rpc `images`, 나머지는 %TEMP%\omp-live-map-uploads\ 에 저장해 경로를 메시지에 붙임
 extension/
   live-map.ts          omp 확장: 세션의 툴 출력·글을 ~/.omp/live-map 으로(설치: install.js)
 ui/
@@ -113,7 +115,7 @@ docs/                  archify 구조 다이어그램(architecture · components
 |---|---|
 | `GET /api/graph` | 스냅샷 `{generatedAt, fx, env, sessions[]}` |
 | `GET /api/events` | SSE. 스냅샷(바뀔 때만)과 `{chat: {node, kind: req\|delta\|done, text, code, cancelled}}` |
-| `POST /api/prompt` `{node, text}` | 세션에 프롬프트 전송. 노드당 1개만 실행(`busy`) |
+| `POST /api/prompt` `{node, text, files?[{name, mimeType, data(base64)}]}` | 세션에 프롬프트 전송. 노드당 1개만 실행(`busy`). PNG·JPEG·GIF·WebP 는 base64 합계 900KB까지 omp rpc `images` 로 싣고(rpc v1 입력 프레임 1MiB), 그 밖의 파일·넘친 이미지는 `%TEMP%\omp-live-map-uploads\<id>\` 에 저장해 메시지 끝에 절대 경로를 붙임. 본문 상한 100MB(다른 API는 1MB). `POST /api/session/new` `{cwd, text, files?}` 도 같음 |
 | `POST /api/prompt/cancel` `{node}` | 실행 중인 프롬프트의 프로세스 트리를 끝냄. 대기 중인 `/api/prompt` 응답과 SSE가 `code 130, cancelled`로 끝남 |
 | `POST /api/session/models` `{node}` | 사용 가능한 모델 목록과 현재 모델 `{ok, models[{provider,id,name}], current, busy}`. 맵 세션이 아니면 이어 붙이고, 터미널이 쥔 세션은 `{ok:false, held:true}` |
 | `POST /api/session/model` `{node, provider, id}` | 모델 변경(omp rpc `set_model`). 응답 `{ok, model, busy}`. 도는 중이면 다음 턴부터 적용 |
