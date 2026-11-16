@@ -89,6 +89,12 @@ function open({ cwd, resume }) {
 
   const onEvent = (fn) => { listeners.push(fn); };
 
+  // id 상관 없이 프레임을 그대로 보낸다(extension_ui_response 는 응답 프레임이 오지 않는다).
+  const sendRaw = (frame) => {
+    if (dead || !child.stdin) return false;
+    try { child.stdin.write(JSON.stringify(frame) + "\n"); return true; } catch { return false; }
+  };
+
   // stdin 을 닫으면 omp 가 스스로 정리하고 끝난다. 5초 뒤에도 살아 있으면 트리째 죽인다.
   const close = () => {
     if (dead) return;
@@ -97,7 +103,7 @@ function open({ cwd, resume }) {
     child.once("close", () => clearTimeout(timer));
   };
 
-  return { child, send, onEvent, close };
+  return { child, send, sendRaw, onEvent, close };
 }
 
 module.exports = { open };

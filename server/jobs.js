@@ -93,9 +93,11 @@ function toolResult(st, e, m, ts) {
   }
   const bg = text.match(/Backgrounded[^]*?job (bg_\d+)/);
   if (bg) addJob(st, bg[1], st.toolCmds.get(id) || "", ts, id);
-  // wait 같은 도구 결과에는 잡 상태 목록이 구조화되어 실린다.
-  for (const j of (m.details && m.details.jobs) || []) {
-    if (j && j.id && j.status && j.status !== "running") endJob(st, j.id, j.status === "completed" ? "completed" : "failed", ts);
+  // wait 같은 도구 결과에는 잡 상태 목록이 구조화되어 실린다. proc://bg_N/kill 결과는 details.proc.jobs 에 실린다.
+  const d = m.details || {};
+  for (const j of [...(d.jobs || []), ...((d.proc && d.proc.jobs) || [])]) {
+    if (!j || !j.id || !j.status || j.status === "running") continue;
+    endJob(st, j.id, j.status === "completed" || j.status === "cancelled" ? j.status : "failed", ts);
   }
 }
 

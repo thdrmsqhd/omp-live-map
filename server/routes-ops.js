@@ -51,8 +51,8 @@ module.exports = {
     const node = String(p.node || "");
     const st = stateOf(node);
     if (!st) return json(res, { ok: false, out: "세션 기록 없음" });
-    // 소유 omp 본체의 자식(에이전트의 MCP 서버·실행기)은 대상에서 뺀다. 잡과 cwd 로 귀속된 프로세스만 종료한다.
-    const r = releaseSet(st.cwd, node);
+    // 맵이 이 노드에서 직접 띄운 백그라운드 잡만 정리한다.
+    const r = releaseSet(node);
     const killed = [], skipped = [];
     for (const pid of r.all || []) {
       if (pid <= 0 || pid === process.pid) { skipped.push(pid); continue; }

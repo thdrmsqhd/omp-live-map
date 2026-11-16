@@ -90,6 +90,7 @@ function mountBrowser(box, n) {
 
 // 블록을 더한 직후: 작은 카드는 열고, 큰 카드는 BROWSER_FIT 까지 키운다(이미 충분하면 그대로).
 // 블록을 고정 높이로 바꾸며 늘어난 만큼 카드도 늘려 다른 블록 자리는 그대로 둔다.
+// 키운 양은 u.fit.browser 에 남겨 블록을 뺄 때 unfitBrowserCard 가 되돌린다.
 function fitBrowserCard(id) {
   if (!openIds.has(id)) openNode(id);
   const u = cardUI(id);
@@ -103,7 +104,9 @@ function fitBrowserCard(id) {
   const grow = Math.max(0, Math.ceil(BROWSER_FIT.blockH - cur));
   const w = Math.max(box.w || BIG_W, Math.ceil((box.w || BIG_W) + BROWSER_FIT.blockW - r.width / k));
   const h = (box.h || BIG_H) + grow;
-  if (grow) { u.h.browser = BROWSER_FIT.blockH; saveCardUI(); }
+  if (grow) { u.h.browser = BROWSER_FIT.blockH; }
+  u.fit.browser = { w: w - (box.w || BIG_W), h: grow };
+  saveCardUI();
   if (w !== box.w || h !== box.h) {
     pushHistory(layoutSnapshot({ big: [id] }));
     BIGPOS.set(id, { ...box, w, h });
@@ -112,4 +115,18 @@ function fitBrowserCard(id) {
   if (grow || w !== box.w) renderMap(false, true);
 }
 
-registerBlock({ type: "browser", slot: "main", flex: 0.8, render: browserBlock, mount: mountBrowser, onAdd: fitBrowserCard });
+// 블록을 뺄 때: fitBrowserCard 가 키운 만큼만 줄이고 고정 높이를 지운다. 기록이 없으면 크기는 그대로 둔다.
+function unfitBrowserCard(id) {
+  const u = cardUI(id);
+  const f = u.fit.browser;
+  delete u.h.browser;
+  delete u.fit.browser;
+  saveCardUI();
+  const box = BIGPOS.get(id);
+  if (!box || !f || (!f.w && !f.h)) return;
+  pushHistory(layoutSnapshot({ big: [id] }));
+  BIGPOS.set(id, { ...box, w: Math.max(BIG_W, (box.w || BIG_W) - f.w), h: Math.max(BIG_H, (box.h || BIG_H) - f.h) });
+  saveOpenCards();
+}
+
+registerBlock({ type: "browser", slot: "main", flex: 0.8, render: browserBlock, mount: mountBrowser, onAdd: fitBrowserCard, onRemove: unfitBrowserCard });

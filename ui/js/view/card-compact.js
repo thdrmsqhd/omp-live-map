@@ -30,12 +30,43 @@ function localCard(n, base) {
   </div>`;
 }
 
-function infraCard(n, base) {
+// 진행 중인 조작의 버튼 글자. wide 는 큰 카드 쪽 긴 문구다.
+const PENDING_LABEL = {
+  "container-start": "시작 중…", "container-stop": "중지 중…", "container-restart": "재시작 중…",
+  "distro-start": "부팅 중…", "distro-stop": "종료 중…", "project-start": "기동 중…",
+};
+const PENDING_LABEL_WIDE = {
+  "distro-start": "WSL 부팅 중…", "distro-stop": "WSL 종료 중…", "project-start": "Compose 기동 중…",
+};
+
+// 인프라 카드(압축·큰 카드 공용)의 조작 버튼. 요청이 도는 동안에는 같은 자리에 잠긴 상태 버튼을 둔다.
+function infraActions(n, wide) {
+  const kind = PENDING.get(n.id);
+  if (kind) {
+    const label = (wide && PENDING_LABEL_WIDE[kind]) || PENDING_LABEL[kind] || "진행 중…";
+    return `<button class="booting" disabled aria-busy="true">${esc(label)}</button>`;
+  }
   if (n.kind === "container") {
-    const acts = n.state === "running"
-      ? `<button class="stop" data-act="container-stop" data-t="${esc(n.id.slice(4))}">stop</button>
-         <button data-act="container-restart" data-t="${esc(n.id.slice(4))}">restart</button>`
-      : `<button class="go" data-act="container-start" data-t="${esc(n.id.slice(4))}">start</button>`;
+    const target = n.id.slice(4);
+    return n.state === "running"
+      ? `<button class="stop" data-act="container-stop" data-t="${esc(target)}">stop</button>
+         <button data-act="container-restart" data-t="${esc(target)}">restart</button>`
+      : `<button class="go" data-act="container-start" data-t="${esc(target)}">start</button>`;
+  }
+  if (n.kind === "distro") {
+    return n.status === "live"
+      ? `<button class="stop" data-act="distro-stop" data-t="${esc(n.name)}">shutdown${wide ? " WSL" : ""}</button>`
+      : `<button class="go" data-act="distro-start" data-t="${esc(n.name)}">boot${wide ? " WSL" : ""}</button>`;
+  }
+  if (n.kind === "project" && n.compose) {
+    return `<button class="go" data-act="project-start" data-t="${esc(n.name)}" title="docker compose up -d ${esc(n.name)}">compose up</button>`;
+  }
+  return "";
+}
+
+function infraCard(n, base) {
+  const acts = infraActions(n, false);
+  if (n.kind === "container") {
     return `<div class="node container ${n.status}" data-id="${esc(n.id)}" style="${base}">
       <div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(n.name)}</span></div>
       <div class="sub-t" style="margin-top:1px">${esc(modelShort(n.image))}</div>
@@ -47,9 +78,7 @@ function infraCard(n, base) {
     <div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(n.name)}</span></div>
     <div class="sub-t" style="margin-top:1px">${esc(n.meta1)}</div>
     <div class="kv" style="margin-top:2px">${esc(n.meta2)}</div>
-    ${n.kind === "distro" ? `<div class="hd" style="margin-top:5px">${n.status === "live"
-      ? `<button class="stop" data-act="distro-stop" data-t="${esc(n.name)}">shutdown</button>`
-      : `<button class="go" data-act="distro-start" data-t="${esc(n.name)}">boot</button>`}</div>` : ""}
+    ${acts ? `<div class="hd" style="margin-top:5px">${acts}</div>` : ""}
   </div>`;
 }
 
@@ -76,6 +105,7 @@ function smallCard(n) {
   const prof = profileChip(n); // 좁은 카드라 프로필이 있으면 모델 글자 대신 칩을 둔다(모델은 칩 title 에).
   return `<div class="node ${n.kind} ${n.status}${SUBSIZE.has(n.id) ? " sized" : ""}" data-id="${esc(n.id)}" style="${base}">
     <div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i><span class="nm">${esc(displayName(n))}</span>
+      ${askBadge(n.id)}
       ${ctxChip(n)}${prof || `<span class="mod" title="${esc(n.provider ? n.provider + " · " : "")}${esc(n.model || "?")}">${esc(modelShort(n.model))}</span>`}<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">닫기</button></div>
     <div class="sub-t" title="${esc(subText)}">${esc(subText)}</div>
     ${nowLine(n)}
@@ -91,7 +121,7 @@ function smallCard(n) {
       ${spark(n.series || [], 208, 24, "#2fbf9b", true)}
     </div>
     ${resRow(n, false)}
-    ${n.kind === "sub" ? resizeGrip() : ""}
+    ${resizeGrip()}
   </div>`;
 }
 

@@ -6,6 +6,8 @@ const os = require("os");
 
 const HOME = os.homedir();
 const SESSIONS = path.join(HOME, ".omp", "agent", "sessions");
+const BLOBS = path.join(HOME, ".omp", "agent", "blobs"); // 세션 이미지 blob:sha256:<hash> 실체
+const UPLOADS = path.join(os.tmpdir(), "omp-live-map-uploads"); // 프롬프트 첨부 저장소(신뢰 루트)
 const ROOT = path.join(__dirname, "..");
 const UI_DIR = path.join(ROOT, "ui");
 const MIME = {
@@ -38,4 +40,4 @@ const MSG_KEEP = 120; // 노드당 보존 메시지 수
 const MSG_BUDGET = 200_000; // 응답 전체 messages 바이트 상한
 const USD_KRW = Number(process.env.OMP_USD_KRW || 1390);
 
-module.exports = { HOME, SESSIONS, ROOT, UI_DIR, MIME, BASH, PORT, HOURS, ACTIVE_MS, MSG_KEEP, MSG_BUDGET, USD_KRW };
+module.exports = { HOME, SESSIONS, BLOBS, UPLOADS, ROOT, UI_DIR, MIME, BASH, PORT, HOURS, ACTIVE_MS, MSG_KEEP, MSG_BUDGET, USD_KRW };

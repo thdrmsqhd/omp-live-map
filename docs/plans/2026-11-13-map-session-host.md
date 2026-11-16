@@ -83,9 +83,21 @@
 - [x] 중복 제거: 잡 출력은 잡 카드에만. live 블록은 `잡 bg_N 띄움` 한 줄, bg 블록은 기본 블록 목록에서 뺐다(블록 메뉴로는 추가 가능).
 - 남은 한계: TUI 세션의 실행 중 출력은 원천이 없어 볼 수 없다(끝난 뒤 꼬리만). 잡 중지는 rpc 명령이 `abort`(턴 취소)뿐이라 구현하지 않았다.
 
+## 5단계: 질문에 답하기 (완료 2026-11-16)
+- [x] 서버: `server/ui-requests.js`가 세션 노드별 대기 요청(ask·select·confirm·input·editor)을 소유한다. `server/sessions.js`의 `start()`가 `bind(s)`로 잇고, 세션 ready 직후 rpc 명령 `{type:"set_ask_dialog", enabled:true}`를 보낸다(이 명령 없이는 ask가 오지 않는다).
+  - `cancel`(targetId)은 그 질문 카드만 닫고, `notify`는 활동 한 줄(`live` 이벤트 `kind:"notify"`)로만 보이며, `setStatus`·`setWidget`·`setTitle`·`openUrl` 등은 무시한다.
+  - 답은 stdin `{type:"extension_ui_response", id, …}`로 보낸다(`server/rpc.js` `sendRaw`). method별 화이트리스트(ask=`answers[{id, selectedOptions, customInput?}]`, select·input·editor=`value`, confirm=`confirmed`, 취소=`cancelled`)만 통과시킨다.
+- [x] 방송·복원: `server/sse.js` `pushAsk`가 `{ask:{node, kind:"add"|"del", request|id}}`를 보내고, `/api/events` 접속 시 `routes.js`가 `asksFor(node)`로 대기 질문을 되살린다. 답 라우트는 `POST /api/chat/answer {node, id, response}`이며 없는 id·이미 해소된 id는 409. 턴 종료(`agent_end`)·프로세스 종료·세션 rekey 시 대기 질문을 닫는다.
+- [x] 화면: `ui/js/viewmodel/chat-ask.js`(대기 상태·답 조립·전송)와 `ui/js/view/chat-ask.js`(카드 렌더·이벤트 배선)를 추가하고 `ui/index.html`의 classic script 순서(core→model→viewmodel→view→app)에 넣었다.
+  - 대화 블록 `.casks`에 카드가 뜬다: ask(여러 문항, 라디오/체크박스, 추천 표시, 자유 입력), select, confirm, input(secret은 password), editor(prefill).
+  - 다시 그릴 때(`paintChaAsk`) 질문 구성이 그대로면 DOM을 건드리지 않고, 입력값은 상태에 있어 스트리밍 중에도 포커스·글자가 유지된다. 스크롤은 `overflow-anchor: none`과 scrollTop 복원으로 지킨다.
+  - 큰 카드·작은 카드 헤더에 "답 대기" 배지(`askBadge`).
+- [x] 검증(가짜 omp, 포트 7808 — 7806은 다른 프로세스가 점유 중): 실제 포인터 클릭으로 카드에 답했고 `%TEMP%/asktest/responses.log`의 응답이 계약과 일치했다. 새로고침 후 복원, ✕ 취소(`cancelled:true`), 해소된 id 409, 스트리밍 중 입력 포커스 유지를 확인했다.
+- 남은 한계: `select`의 `selectionMarker:"checkbox"` 답은 `value`가 문자열 하나뿐이라 고른 label을 `", "`로 이어 보낸다(omp 계약 확인 필요). 시한 초과(timeout)는 omp가 recommended로 스스로 처리하며, 화면 카드는 턴이 끝날 때 함께 닫힌다.
+
 ## 그다음 (이 계획 밖)
 - 3단계: 서브에이전트 개별 멈춤·직접 지시
-- 5단계: 질문에 답하기, 파일 첨부
+- 5단계: 질문에 답하기(완료 2026-11-16), 파일 첨부
 - 6단계: 전체 합계 줄, 금액 기준
 
 ## 위험

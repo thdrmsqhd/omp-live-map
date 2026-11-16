@@ -2,6 +2,8 @@
 
 const ATTACH_MAX = 20 * 1024 * 1024; // 파일당
 const ATTACH_TOTAL = 60 * 1024 * 1024; // 한 번에 보내는 합계(서버 본문 상한 100MB 안쪽)
+// 대화 말풍선에 그릴 수 있는 이미지. 서버 uploads.js 의 INLINE_MIME 과 같다.
+const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 let attachSeq = 0;
 
 const readBase64 = (file) => new Promise((ok, no) => {
@@ -38,10 +40,16 @@ function removeAttachment(list, id) {
   if (it.url) URL.revokeObjectURL(it.url);
 }
 
-function clearAttachments(list) {
-  for (const it of list) if (it.url) URL.revokeObjectURL(it.url);
+// keep 에 든 objectURL 은 대화 말풍선이 아직 그리는 중일 수 있으므로 해제하지 않는다.
+function clearAttachments(list, keep) {
+  for (const it of list) if (it.url && !(keep && keep.has(it.url))) URL.revokeObjectURL(it.url);
   list.length = 0;
 }
+
+// 대화 말풍선용 이미지: 다 읽었고 오류가 없는 이미지 첨부만 {mime, data(base64)} 로.
+const attachImages = (list) => list
+  .filter((it) => !it.err && !it.reading && IMAGE_MIMES.has(it.mime) && it.data)
+  .map((it) => ({ mime: it.mime, data: it.data }));
 
 // 보내면 안 되는 이유. 없으면 "".
 function attachProblem(list) {

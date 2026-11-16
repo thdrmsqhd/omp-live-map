@@ -42,6 +42,7 @@ async function boot() {
     const data = JSON.parse(ev.data);
     if (data.live) handleLiveEvent(data.live);
     else if (data.chat) handleChatEvent(data.chat);
+    else if (data.ask) handleAskEvent(data.ask);
     else apply(data);
   };
 

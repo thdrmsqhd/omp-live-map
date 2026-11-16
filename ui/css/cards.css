@@ -3,6 +3,7 @@
   .dot.live { background: var(--live); box-shadow: 0 0 0 3px #2fbf9b22; animation: pulse 1.8s infinite; }
   .dot.idle { background: var(--idle); }
   .dot.done { background: var(--done); }
+  .node button.booting { color: #ffe0a3; border-color: #b8792d; background: #49321d; cursor: wait; opacity: 1; }
   .cluster { position: absolute; z-index: 1; border-radius: 14px; background: #0f1620; border: 1px solid #1b2734; pointer-events: none; }
   .cluster.sel { outline: 1px solid #4aa8ff; outline-offset: 2px; }
   .cluster.live { border-color: #1f5b4f; background: #0f1a1c; }

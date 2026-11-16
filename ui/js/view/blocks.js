@@ -7,6 +7,7 @@
 //   mount(box, n)   바디가 새로 생긴 직후 1회. 리스너 배선과 첫 스크롤 위치.
 //   paint(box, n)   바디 DOM 을 유지한 채 스냅샷이 바뀌었을 때. 바뀐 부분만 갱신한다.
 //   onAdd(nodeId)   (선택) 블록 메뉴로 카드에 더해 다시 그린 직후 1회. 카드 크기 맞추기 등.
+//   onRemove(nodeId) (선택) 블록 메뉴로 카드에서 뺀 직후, 다시 그리기 전에 1회. onAdd 가 키운 크기 되돌리기 등.
 //
 // 블록 접기·순서·높이는 CARD_UI(nodeId) 에 저장한다(조작 배선: block-controls.js).
 
@@ -35,11 +36,10 @@ function cardBlockTypes(n) {
   return [...new Set(list)].filter((t) => BLOCKS.has(t));
 }
 
-const BLOCK_H_MIN = 80, BLOCK_H_MAX = 1080;
-
 function cardUI(nodeId) {
   let u = CARD_UI.get(nodeId);
-  if (!u) { u = { collapsed: {}, order: { main: [], side: [] }, h: {} }; CARD_UI.set(nodeId, u); }
+  if (!u) { u = { collapsed: {}, order: { main: [], side: [] }, h: {}, fit: {} }; CARD_UI.set(nodeId, u); }
+  if (!u.fit) u.fit = {};
   return u;
 }
 
@@ -106,7 +106,8 @@ function toggleBlock(nodeId, type) {
   const base = BLOCK_DEFAULTS(node);
   CARD_BLOCKS.set(nodeId, { add: cur.filter((t) => !base.includes(t)), remove: base.filter((t) => !cur.includes(t)) });
   saveBlocks();
-  renderMap(false, true);
   const def = BLOCKS.get(type);
+  if (i >= 0 && def && def.onRemove) def.onRemove(nodeId);
+  renderMap(false, true);
   if (i < 0 && def && def.onAdd) def.onAdd(nodeId);
 }

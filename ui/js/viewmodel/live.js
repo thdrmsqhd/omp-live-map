@@ -86,6 +86,8 @@ function handleLiveEvent(ev) {
     t.error = !!ev.error;
   } else if (ev.kind === "sub") {
     livePush(list, { kind: "sub", name: String(ev.name ?? ""), status: String(ev.status ?? "") });
+  } else if (ev.kind === "notify") {
+    livePush(list, { kind: "notify", text: String(ev.text ?? "") });
   } else if (ev.kind === "turn_end") {
     // 턴이 끝났는데 닫히지 않은 툴은 더 돌지 않는 것으로 본다(백그라운드로 넘어간 출력은 계속 반영된다).
     for (const it of list) if (it.kind === "tool") it.done = true;

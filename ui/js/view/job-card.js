@@ -19,8 +19,8 @@ function jobCard(j, c) {
   const lines = liveLines(j);
   const from = j.ts || j.startedAt || 0;
   const took = (live ? Date.now() : j.endedAt || Date.now()) - from;
-  const st = live ? "실행 중" : j.status === "failed" ? "실패" : "종료됨";
-  return `<div class="jcard${live ? " run" : ""}${open ? " open" : ""}" data-job="${esc(key)}"
+  const st = live ? "실행 중" : j.status === "failed" ? "실패" : j.status === "cancelled" ? "취소됨" : "종료됨";
+  return `<div class="jcard${live ? " run" : ""}${open ? " open" : ""}" data-job="${esc(key)}" data-owner="${esc(j.owner || "")}"
       title="${open ? "눌러서 접기" : "눌러서 출력 보기"}"
       style="left:${j.x - c.x}px;top:${j.y - c.y}px;width:${j.w}px;height:${open ? JOB.OPENH : j.h}px">
     <div class="jh"><i class="dot ${live ? "live" : "done"}"></i><span class="jid">${esc(j.id)}</span>

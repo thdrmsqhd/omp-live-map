@@ -116,7 +116,8 @@ for (const [id, v] of Object.entries(readJSON("omp-map-blocks", {}))) {
 
 const saveBlocks = () => writeJSON("omp-map-blocks", Object.fromEntries(CARD_BLOCKS));
 
-// nodeId -> { collapsed: {type: true}, order: {main: [], side: []}, h: {type: px} }
+// nodeId -> { collapsed: {type: true}, order: {main: [], side: []}, h: {type: px}, fit: {type: {w, h}} }
+// fit = 블록을 더하며 카드를 키운 양. 블록을 빼면 그만큼 되돌린다(block-browser.js).
 const CARD_UI = new Map();
 
 for (const [id, v] of Object.entries(readJSON("omp-map-cardui", {}))) {
@@ -125,10 +126,14 @@ for (const [id, v] of Object.entries(readJSON("omp-map-cardui", {}))) {
   for (const [t, on] of Object.entries(v.collapsed || {})) if (on === true) collapsed[t] = true;
   const h = {};
   for (const [t, px] of Object.entries(v.h || {})) {
-    if (Number.isFinite(px)) h[t] = Math.round(Math.min(400, Math.max(80, px)));
+    if (Number.isFinite(px)) h[t] = Math.round(Math.min(BLOCK_H_MAX, Math.max(BLOCK_H_MIN, px)));
+  }
+  const fit = {};
+  for (const [t, f] of Object.entries(v.fit || {})) {
+    if (f && Number.isFinite(f.w) && Number.isFinite(f.h)) fit[t] = { w: Math.max(0, f.w), h: Math.max(0, f.h) };
   }
   const order = { main: strList(v.order && v.order.main), side: strList(v.order && v.order.side) };
-  CARD_UI.set(id, { collapsed, order, h });
+  CARD_UI.set(id, { collapsed, order, h, fit });
 }
 
 const saveCardUI = () => writeJSON("omp-map-cardui", Object.fromEntries(CARD_UI));

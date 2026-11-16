@@ -3,10 +3,10 @@
 "use strict";
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
+const { UPLOADS } = require("./config");
 
-const DIR = path.join(os.tmpdir(), "omp-live-map-uploads");
+const DIR = UPLOADS;
 const MAX_FILE = 20 * 1024 * 1024; // 파일당
 const MAX_FILES = 10;
 const MAX_BODY = 100 * 1024 * 1024; // 첨부가 실린 요청 본문(base64 로 4/3 배가 된다)

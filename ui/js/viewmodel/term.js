@@ -90,21 +90,41 @@ async function loadBgAll() {
   } catch { /* ignore */ }
 }
 
+// 인프라 조작의 표시 문구. 진행 중인 조작은 state.PENDING(nodeId -> kind)에 남는다.
+const INFRA_CMD = {
+  "container-start": "docker start", "container-stop": "docker stop", "container-restart": "docker restart",
+  "distro-start": "wsl boot", "distro-stop": "wsl shutdown", "project-start": "docker compose up -d",
+};
+const INFRA_NAME = {
+  "container-start": "컨테이너 시작", "container-stop": "컨테이너 중지", "container-restart": "컨테이너 재시작",
+  "distro-start": "WSL 부팅", "distro-stop": "WSL 종료", "project-start": "Compose 프로젝트 기동",
+};
+
 async function infraAction(kind, target, nodeId) {
+  if (nodeId && PENDING.has(nodeId)) return;   // 요청이 도는 동안 같은 카드의 재클릭은 막는다.
   if (kind === "container-stop" || kind === "distro-stop") {
     const what = kind === "distro-stop" ? `WSL '${target}' 전체를 종료` : `컨테이너 ${target.slice(0, 12)} 중지`;
     if (!confirm(`${what}할까요?`)) return;
   }
+  if (nodeId) { PENDING.set(nodeId, kind); renderMap(false, true); }
   const log = (lines) => { if (nodeId && openIds.has(nodeId)) termLog(nodeId, lines); };
   try {
     const res = await postJSON("/api/infra/action", { kind, target });
     const out = await res.json();
-    const lines = [{ t: `$ wsl ${kind} ${target.slice(0, 12)}`, c: "cmd" }];
+    const lines = [{ t: `$ ${INFRA_CMD[kind] || kind} ${target.slice(0, 24)}`, c: "cmd" }];
     if (out.out) lines.push({ t: out.out });
-    if (!out.ok) lines.push({ t: `[exit ${out.code}]`, c: "err" });
+    if (!out.ok) {
+      lines.push({ t: `[exit ${out.code}]`, c: "err" });
+      // 압축 카드에는 터미널이 없으므로 실패는 어느 카드에서 눌렀든 알린다.
+      alert(`${INFRA_NAME[kind] || kind} 실패: ${out.out || `exit ${out.code ?? "unknown"}`}`);
+    }
     log(lines);
     await loadInfra();
   } catch (err) {
-    log([{ t: "실행 실패: " + err.message, c: "err" }]);
+    const msg = `${INFRA_NAME[kind] || kind} 요청 실패: ${err.message}`;
+    log([{ t: msg, c: "err" }]);
+    alert(msg);
+  } finally {
+    if (nodeId) { PENDING.delete(nodeId); renderMap(false, true); }
   }
 }

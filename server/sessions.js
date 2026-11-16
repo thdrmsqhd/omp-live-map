@@ -9,6 +9,7 @@ const { open } = require("./rpc");
 const { stateOf } = require("./tail");
 const { pushChat } = require("./sse");
 const live = require("./live");
+const uiReq = require("./ui-requests");
 
 const sessions = new Map(); // node(세션 파일 경로) -> { rpc, node, busy, running, cancelled, closing, full }
 const opening = new Map(); // node -> 이어 붙이는 중인 Promise (같은 세션을 두 번 띄우지 않는다)
@@ -63,6 +64,7 @@ async function start(cwd, resume) {
     throw e;
   }
   sessions.set(s.node, s);
+  uiReq.bind(s);
   rpc.child.on("close", () => {
     if (sessions.get(s.node) === s) sessions.delete(s.node);
     finish(s, 1);
@@ -185,6 +187,7 @@ function list() {
 function rekey(s, next) {
   if (!s || !next || next === s.node) return;
   if (sessions.get(s.node) === s) sessions.delete(s.node);
+  uiReq.drop(s.node);
   s.node = next;
   sessions.set(next, s);
 }

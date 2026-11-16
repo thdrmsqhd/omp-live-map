@@ -28,7 +28,8 @@ function infraNodes() {
     const pid = "proj:" + proj;
     nodes.push({ id: pid, kind: "project", name: proj, parent: "wsl:" + running.name, startedAt: 0,
       status: list.some((c) => c.state === "running") ? "live" : "done",
-      meta1: list.filter((c) => c.state === "running").length + "/" + list.length + " up", meta2: "", image: "" });
+      meta1: list.filter((c) => c.state === "running").length + "/" + list.length + " up", meta2: "", image: "",
+      compose: (INFRA.projects || []).some((p) => p.name === proj && p.compose) });
     for (const c of list) {
       nodes.push({ id: "ctr:" + c.id, kind: "container", name: c.name, parent: pid, startedAt: 0,
         status: c.state === "running" ? "live" : c.state === "exited" ? "done" : "idle",
@@ -125,7 +126,7 @@ function termState(n) {
 }
 
 function chatState(id) {
-  if (!CHAT.has(id)) CHAT.set(id, { draft: "", summary: "", busy: false, log: [], stream: "", files: [] });
+  if (!CHAT.has(id)) CHAT.set(id, { draft: "", summary: "", busy: false, log: [], stream: "", files: [], previews: new Map() });
   return CHAT.get(id);
 }
 

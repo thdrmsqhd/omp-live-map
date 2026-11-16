@@ -6,11 +6,55 @@ const chatText = (t) => {
   return /^[.·,\s]*$/.test(raw.trim()) ? "" : raw;
 };
 
+// blob 미리보기: 기록 메시지 ts -> URL 목록. 스냅샷이 이미지 실린 메시지를 매번 새 객체로 만들므로
+// 객체가 아니라 ts 로 둔다. 로컬 표시분이 기록 메시지로 바뀌어도 화면에서 미리보기가 바로 사라지지 않는다.
+function revokePreviews(list) {
+  for (const url of list || []) URL.revokeObjectURL(url);
+}
+
+// 기록에서 사라졌거나 images(URL·base64)로 대체된 미리보기는 해제한다. 스냅샷이 잠깐 비는 동안
+// 아직 그릴 수 있는 미리보기를 잃지 않도록 최근 것은 조금 더 들고 있는다.
+function prunePreviews(st, msgs) {
+  const map = st.previews;
+  if (!map || !map.size) return;
+  const now = Date.now();
+  const alive = new Set(msgs.filter((m) => !(m.images && m.images.length)).map((m) => m.ts));
+  const replaced = new Set(msgs.filter((m) => m.images && m.images.length).map((m) => m.ts));
+  for (const [ts, urls] of map) {
+    if (alive.has(ts)) continue;
+    if (!replaced.has(ts) && now - ts < 120_000) continue;
+    revokePreviews(urls);
+    map.delete(ts);
+  }
+}
+
+// 기록 메시지 ts 에 넘겨 둔 blob 미리보기. 없으면 null.
+const chatPreviews = (st, ts) => (st.previews && ts ? st.previews.get(ts) || null : null);
+
 // st.log 는 세션 기록에 아직 안 올라온 로컬 표시분이다. 기록이 따라오면 지운다.
 function syncChatLog(node, st) {
   const msgs = node.messages || [];
-  st.log = st.log.filter((e) => !msgs.some((m) => m.role === e.role && (m.ts || 0) >= e.since - 1500
-    && (m.role === "user" || chatText(m.text))));
+  const used = new Set();
+  prunePreviews(st, msgs);
+  st.log = st.log.filter((e) => {
+    const hit = msgs.find((m) => !used.has(m) && m.role === e.role && (m.ts || 0) >= e.since - 1500
+      && (m.role === "user" || chatText(m.text)));
+    if (!hit) return true;
+    used.add(hit);
+    // 기록 메시지가 images 를 실었으면 blob 미리보기는 필요 없다. 아니면 ts 로 넘겨 계속 그린다.
+    if (e.previews && e.previews.length) {
+      const ts = typeof hit.ts === "number" ? hit.ts : Date.parse(hit.ts || "");
+      if ((hit.images && hit.images.length) || !ts) revokePreviews(e.previews);
+      else {
+        st.previews = st.previews || new Map();
+        const prev = st.previews.get(ts);
+        if (prev && prev !== e.previews) revokePreviews(prev);
+        st.previews.set(ts, e.previews);
+      }
+    }
+    e.previews = null;
+    return false;
+  });
 }
 
 // 흘러나오던 답변을 대화에 확정한다. 추가 지시가 끼어들면 그 앞까지가 한 덩어리다.
@@ -31,8 +75,13 @@ async function sendChat(id) {
   if (bad) { st.error = bad; st.retry = ""; paintChat(id); return; }
   commitStream(st);
   const since = Date.now();
+  // 사용자가 붙인 이미지는 보내는 즉시 말풍선에 그린다. 서버 기록이 올라오기 전까지는 blob 미리보기를,
+  // 기록이 따라오면 images(지연 URL·base64) 또는 넘겨받은 미리보기를 그린다.
+  const images = attachImages(files);
+  const previews = files.filter((it) => it.url && !it.err && IMAGE_MIMES.has(it.mime) && it.data).map((it) => it.url);
   // 첨부가 있으면 서버가 저장 경로를 붙인 글을 SSE req 로 돌려주므로(handleChatEvent) 그때 바꿔 단다.
-  const entry = { role: "user", text: text || "(첨부 " + files.map((f) => f.name).join(", ") + ")", ts: since, since, attach: files.length > 0 };
+  const entry = { role: "user", text: text || "(첨부 " + files.map((f) => f.name).join(", ") + ")", ts: since, since,
+    attach: files.length > 0, images, previews };
   // 모델 변경 안내는 새 턴이 시작되면 끝난 이야기다(도는 중 추가 지시는 같은 턴).
   if (!st.busy) st.modelNote = "";
   Object.assign(st, { busy: true, draft: "", files: [], error: "", retry: "", lastText: text, since });
@@ -45,7 +94,7 @@ async function sendChat(id) {
   } catch (err) {
     out = { ok: false, out: err.message };
   }
-  if (out.ok) { clearAttachments(files); return; }
+  if (out.ok) { clearAttachments(files, new Set(previews)); return; }
   // 전달되지 않은 입력은 대화 목록에서 빼고 입력창에 되돌려 다시 시도할 수 있게 한다.
   const i = st.log.indexOf(entry);
   if (i >= 0) st.log.splice(i, 1);
@@ -166,7 +215,11 @@ function handleChatEvent(c) {
   if (c.kind === "req") {
     const last = st.log[st.log.length - 1];
     const mine = st.busy && last && last.role === "user" && (last.text === c.text || last.attach);
-    if (mine && last.attach) { last.text = c.text; last.attach = false; }
+    if (mine && last.attach) {
+      last.text = c.text;
+      last.attach = false;
+      if (Array.isArray(c.images) && c.images.length) last.images = c.images;
+    }
     if (!mine) {
       commitStream(st);
       st.since = Date.now();
@@ -183,7 +236,13 @@ function handleChatEvent(c) {
     if (c.cancelled) { st.error = "응답 생성을 취소했습니다"; st.retry = "send"; }
     else if (c.code) st.error = `omp 가 코드 ${c.code}로 끝났습니다`;
   }
-  if (st.log.length > 8) st.log = st.log.slice(-8);
+  // 기록으로 옮겨간 미리보기를 먼저 넘기고, 화면에 남지 않게 밀려난 항목의 미리보기는 해제한다.
+  const node = nodeById(c.node);
+  if (node) syncChatLog(node, st);
+  if (st.log.length > 8) {
+    for (const e of st.log.slice(0, -8)) if (e.previews) revokePreviews(e.previews);
+    st.log = st.log.slice(-8);
+  }
   if (openIds.has(c.node)) paintChat(c.node);
 }
 

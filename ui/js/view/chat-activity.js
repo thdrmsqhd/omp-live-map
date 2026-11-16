@@ -1,7 +1,7 @@
 /* omp-live-map · view · chat 블록 끝에 붙는 마지막 턴 활동(생각·툴·서브에이전트) */
 
 const LIVE_TAIL = 12;   // 접힌 툴 출력에 보이는 줄 수
-const LIVE_LABEL = { think: "생각", text: "답변", sub: "서브에이전트" };
+const LIVE_LABEL = { think: "생각", text: "답변", sub: "서브에이전트", notify: "알림" };
 const LIVE_RUNNING = /^(running|live|started|spawned|active|pending|queued)$/i;
 
 function liveItemHTML(it) {
@@ -43,7 +43,7 @@ function actRange(list) {
 function actItems(nodeId) {
   const { items, running } = actRange(liveItems(nodeId));
   return {
-    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || (running && it.kind === "text"))
+    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || it.kind === "notify" || (running && it.kind === "text"))
       && (it.kind !== "sub" || !HIDE_DONE_SUBS || !it.status || LIVE_RUNNING.test(it.status))),
     running,
   };

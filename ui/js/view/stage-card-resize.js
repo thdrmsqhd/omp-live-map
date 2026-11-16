@@ -1,5 +1,5 @@
-/* omp-live-map · view · 서브카드 크기 조절 (오른쪽 아래 손잡이, 카드별 저장) */
-// 작은 서브카드 크기는 SUBSIZE, 열린 서브카드 크기는 BIGPOS w/h 에 저장한다. 메인 카드는 손잡이가 없다.
+/* omp-live-map · view · 세션 카드 크기 조절 (오른쪽 아래 손잡이, 카드별 저장) */
+// 작은 카드 크기는 SUBSIZE, 열린 카드 크기는 BIGPOS w/h 에 저장한다. 메인·서브 카드 모두 손잡이가 있다.
 
 const SUB_MIN = { w: 180, h: 96 };
 const SUB_BIG_MIN = { w: 380, h: 280 };

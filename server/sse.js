@@ -24,6 +24,11 @@ function pushLive(payload) {
   for (const res of clients) { try { res.write(frame); } catch {} }
 }
 
+function pushAsk(payload) {
+  const frame = `data: ${JSON.stringify({ ask: payload })}\n\n`;
+  for (const res of clients) { try { res.write(frame); } catch {} }
+}
+
 // 세션의 자원 요약: [프로세스 수, round(cpu/10), round(mb/100)].
 // 노드마다 겹치지 않는 몫(server/attrib.js)을 가지므로 세션 값은 노드 합이다.
 function resSig(s) {
@@ -50,4 +55,4 @@ function broadcast() {
   for (const res of clients) res.write(frame);
 }
 
-module.exports = { addClient, removeClient, pushChat, pushLive, broadcast };
+module.exports = { addClient, removeClient, pushChat, pushLive, pushAsk, broadcast };

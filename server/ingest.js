@@ -5,6 +5,7 @@ const path = require("path");
 const { SESSIONS } = require("./config");
 const { recordUser, recordAssistant, noteHourly } = require("./turns");
 const { toolStart, toolResult, noteText } = require("./jobs");
+const { imageRef, textRefs } = require("./images");
 
 function newFileState(file) {
   const rel = path.relative(SESSIONS, file).split(path.sep);
@@ -97,13 +98,20 @@ function notePath(st, value) {
 }
 
 function onUser(st, m, ts) {
+  const blocks = Array.isArray(m.content) ? m.content : [];
   const text = typeof m.content === "string" ? m.content
-    : Array.isArray(m.content) ? m.content.map((c) => c.text || "").join(" ") : "";
-  if (!st.firstUser && text) st.firstUser = text.replace(/\s+/g, " ").slice(0, 120);
-  if (text) {
-    st.lastUser = text.replace(/\s+/g, " ").slice(0, 300);
-    recordUser(st, text, ts);
+    : blocks.map((c) => (c && c.text) || "").join(" ");
+  const imgs = [];
+  for (const c of blocks) {
+    const ref = imageRef(c);
+    if (ref) imgs.push(ref);
   }
+  // 큰 이미지는 uploads.js 가 본문 끝에 파일 경로로 붙인다. 신뢰 루트 안 이미지 경로만 싣는다.
+  for (const ref of textRefs(text)) imgs.push(ref);
+  if (!st.firstUser && text) st.firstUser = text.replace(/\s+/g, " ").slice(0, 120);
+  if (text) st.lastUser = text.replace(/\s+/g, " ").slice(0, 300);
+  // 본문이 없어도 이미지가 있으면 사용자 턴을 기록한다.
+  if (text || imgs.length) recordUser(st, text, ts, imgs);
   noteText(st, text, ts);
 }
 

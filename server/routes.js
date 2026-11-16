@@ -7,9 +7,11 @@ const { UI_DIR, MIME } = require("./config");
 const { json, fail, guardStatus } = require("./http");
 const { snapshot } = require("./snapshot");
 const { outsFor } = require("./live");
+const { asksFor } = require("./ui-requests");
 const { recentFor } = require("./ext-live");
 const { addClient, removeClient } = require("./sse");
 const localfs = require("./routes-localfs");
+const images = require("./routes-images");
 
 const ROUTES = {
   ...require("./routes-ops"),
@@ -34,6 +36,8 @@ const ROUTES = {
         }
         // 확장(실시간 기록)이 흘려보낸 최근 활동도 되살린다.
         for (const ev of recentFor(n.id)) res.write(`data: ${JSON.stringify({ live: ev })}\n\n`);
+        // 아직 답하지 않은 질문도 화면이 되살릴 수 있게 함께 보낸다.
+        for (const request of asksFor(n.id)) res.write(`data: ${JSON.stringify({ ask: { node: n.id, kind: "add", request } })}\n\n`);
       }
     }
     // 도는 잡의 툴은 "잡 띄움" 한 줄로 접는다(출력은 잡 카드만 보여준다).
@@ -73,6 +77,7 @@ async function handle(req, res) {
   const route = ROUTES[req.method + " " + url.pathname] || ROUTES["* " + url.pathname];
   if (route) return route(req, res, url);
   if (url.pathname.startsWith(localfs.PREFIX)) return localfs.serveLocal(req, res, url);
+  if (url.pathname.startsWith(images.PREFIX)) return images.serve(req, res, url);
   if (req.method === "GET" && !url.pathname.startsWith("/api/")) return serveStatic(res, url.pathname);
   fail(res, 404, "not found");
 }

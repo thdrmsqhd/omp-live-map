@@ -31,6 +31,7 @@ function sessionChrome(n) {
   const maxOut = series.length ? Math.max(...series.map((s) => s.out || 0)) : 0;
   return `<div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i>
       ${nameField(n)}
+      ${askBadge(n.id)}
       ${!isLocal && n.startedAt ? `<span class="since" title="시작 ${esc(new Date(n.startedAt).toLocaleString("ko-KR"))}">시작 ${ago(n.startedAt)}</span>` : ""}
       <button class="x" data-rename="${esc(n.id)}" title="이름 변경${isLocal ? "" : " (비우면 원래 이름)"}">✎</button>
       ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제">🗑</button>` : `<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">세션 닫기</button>`}
@@ -51,16 +52,7 @@ function sessionChrome(n) {
 
 function infraChrome(n) {
   const c = n.kind === "container" ? INFRA.containers.find((x) => "ctr:" + x.id === n.id) : null;
-  const acts = c
-    ? (c.state === "running"
-      ? `<button class="stop" data-act="container-stop" data-t="${esc(c.id)}">stop</button>
-         <button data-act="container-restart" data-t="${esc(c.id)}">restart</button>`
-      : `<button class="go" data-act="container-start" data-t="${esc(c.id)}">start</button>`)
-    : n.kind === "distro"
-      ? (n.status === "live"
-        ? `<button class="stop" data-act="distro-stop" data-t="${esc(n.name)}">shutdown WSL</button>`
-        : `<button class="go" data-act="distro-start" data-t="${esc(n.name)}">boot WSL</button>`)
-      : "";
+  const acts = infraActions(n, true);
   return `<div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(n.name)}</span>
       <span class="mod">${esc(n.kind)}</span>
       <button class="x" data-close="1" title="닫기 (Esc)">✕</button></div>
@@ -84,7 +76,7 @@ function bigCard(n) {
       <div class="col-main">${renderBlocks(n, "main")}</div>
       ${side ? `<div class="col-tree">${side}</div>` : ""}
     </div>
-    ${n.kind === "sub" ? resizeGrip() : ""}
+    ${resizeGrip()}
   </div>`;
 }
 

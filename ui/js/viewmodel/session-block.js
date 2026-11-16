@@ -11,11 +11,11 @@ function sessionBlock(s, PAD, HEAD) {
     .sort((a, b) => b.tok - a.tok);
   const ctxTotal = ctxParts.reduce((a, b) => a + b.tok, 0);
   // 열린 카드의 잡은 카드 안 bg 블록이 보여주므로 스테이지 잡 카드에서는 뺀다.
-  const appJobs = (s.nodes || []).filter((n) => !openIds.has(n.id)).flatMap((n) => (BGALL.get(n.id) || []))
-    .filter(jobVisible)
-    .map((j) => ({ id: j.id, cmd: j.cmd, ts: j.startedAt, endedAt: j.endedAt, done: j.done, status: j.code ? "failed" : "completed", tail: j.tail, app: true }));
-  // 끝난 잡도 10분은 남긴다(출력 꼬리를 볼 수 있게).
-  const jobs = [...appJobs, ...(s.jobs || []).filter(jobVisible)].slice(0, JOB.MAX);
+  const appJobs = (s.nodes || []).filter((n) => !openIds.has(n.id))
+    .flatMap((n) => (BGALL.get(n.id) || []).filter(jobVisible)
+      .map((j) => ({ id: j.id, cmd: j.cmd, ts: j.startedAt, endedAt: j.endedAt, done: j.done, status: j.code ? "failed" : "completed", tail: j.tail, app: true, file: n.id })));
+  // 기록에서 추정한 세션 잡은 끝 기록이 빠질 수 있어 30분 지나면 감춘다(jobLive).
+  const jobs = [...appJobs, ...(s.jobs || []).filter(jobLive)].slice(0, JOB.MAX);
   const jobRows = Math.ceil(jobs.length / JOB.COLS);
   const JOB_DROP = jobs.length ? 34 : 0; // 카드-잡 연결선이 지나갈 간격
   const jobsH = jobs.length ? jobRows * (JOB.H + JOB.GAPY) + 10 + (JOB_DROP - 8) : 0;
@@ -41,12 +41,29 @@ function sessionBlock(s, PAD, HEAD) {
         title: s.title, folder: s.folder, live: s.live, lastTs: s.lastTs,
         agents: nodes.length, hiddenDoneSubs, tokens: s.totals, cost: s.totals.cost,
         ctxTotal, ctxParts,
-        jobs: jobs.map((j, i) => ({ ...j, x: x + PAD + (i % JOB.COLS) * (JOB.W + JOB.GAPX), y: jobTop + Math.floor(i / JOB.COLS) * (JOB.H + JOB.GAPY), w: JOB.W, h: JOB.H })),
+        jobs: LAYOUT_V2 && jobs.length ? jobsUnderOwners(jobs, [...t.pos.keys()], nodes)
+          : jobs.map((j, i) => ({ ...j, x: x + PAD + (i % JOB.COLS) * (JOB.W + JOB.GAPX), y: jobTop + Math.floor(i / JOB.COLS) * (JOB.H + JOB.GAPY), w: JOB.W, h: JOB.H })),
         jobTotal: jobs.length,
       };
       fitCluster(c);
       CLUSTERS.push(c);
     },
   };
+}
+
+// 잡 카드는 띄운 카드(j.file) 바로 아래에 세로로 쌓는다. 띄운 카드가 안 보이면 main 카드 아래.
+// 다른 카드나 먼저 놓은 잡과 겹치면 한 칸씩 내려간다.
+function jobsUnderOwners(jobs, ids, nodes) {
+  const main = (nodes.find((n) => n.kind === "main") || {}).id || ids[0];
+  const cards = ids.map((id) => geo.get(id)).filter(Boolean);
+  const placed = [];
+  return jobs.map((j) => {
+    const owner = ids.includes(j.file) && geo.get(j.file) ? j.file : main;
+    const g = geo.get(owner) || cards[0];
+    const b = { x: g.x, y: g.y + g.h + 24, w: JOB.W, h: JOB.H };
+    for (let k = 0; k < 40 && [...cards, ...placed].some((o) => rectsOverlap(b, o)); k++) b.y += JOB.H + JOB.GAPY;
+    placed.push(b);
+    return { ...j, ...b, owner };
+  });
 }
 

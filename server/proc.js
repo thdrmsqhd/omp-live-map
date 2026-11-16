@@ -124,21 +124,11 @@ function resFor(nodeId) {
     owner: String(nodeId || "").startsWith("local_") ? 0 : ownerOf(nodeId), main: !!st && st.depth === 2 };
 }
 
-// 프로세스 정리(release) 대상: 맵이 띄운 잡과 명령줄에 작업 폴더가 든 프로세스의 트리. omp 본체와 그 자식(에이전트의
-// MCP 서버·실행기)은 넣지 않는다 — 실행 중인 에이전트가 도구를 잃지 않게.
-function releaseSet(cwd, nodeId) {
+// 맵이 이 노드에서 띄운 백그라운드 잡과 그 자식만 정리한다.
+// 작업 폴더가 같다는 이유만으로 다른 터미널이나 세션을 종료하지 않는다.
+function releaseSet(nodeId) {
   const pids = new Set();
   for (const j of bgJobs()) if (j.node === nodeId && !j.done && j.proc && j.proc.pid) pids.add(j.proc.pid);
-  const needle = String(cwd || "").toLowerCase().replace(/\\/g, "/");
-  const leaf = needle.split("/").filter(Boolean).pop() || "";
-  const leafRe = leaf.length >= 4 ? new RegExp("[\\\\/]" + leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\\\/]") : null;
-  if (!String(nodeId || "").startsWith("local_")) {
-    for (const p of PROC.list) {
-      if (p.pid === 0 || pids.has(p.pid) || !p.cmd) continue;
-      const cmd = p.cmd.toLowerCase().replace(/\\/g, "/");
-      if ((needle.length > 8 && cmd.includes(needle)) || (!!leafRe && leafRe.test(cmd))) pids.add(p.pid);
-    }
-  }
   const kids = new Map();
   for (const p of PROC.list) {
     if (!kids.has(p.ppid)) kids.set(p.ppid, []);

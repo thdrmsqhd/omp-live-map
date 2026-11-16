@@ -8,6 +8,7 @@ const { resFor, histOf } = require("./proc");
 const { ctxWindowOf } = require("./models");
 const { profileOf } = require("./profiles");
 const { sumHourly } = require("./turns");
+const { attachImages } = require("./images");
 
 function tokPerSec(st) {
   if (!st.durationSum) return 0;
@@ -60,7 +61,7 @@ function nodeOf(st, now, last) {
     files: st.files,
     series: st.recent,
     ctx: st.ctx,
-    messages: st.messages,
+    messages: st.messages.map((m) => (m._imgs ? { ...m } : m)),
     res: { ...resFor(st.file), hist: histOf(st.file) },
     lastUser: st.lastUser,
     lastAssistant: st.lastAssistant,
@@ -156,6 +157,7 @@ function snapshot() {
   const list = [...sessions.values()].sort((a, b) => b.lastTs - a.lastTs);
   for (const s of list) finishSession(s);
   capMessages(list);
+  attachImages(list);
   return {
     generatedAt: now,
     fx: { usdKrw: USD_KRW },

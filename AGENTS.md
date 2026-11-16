@@ -39,3 +39,12 @@ re-read whole files.
 After big code changes, refresh the graph with `graft build` (deterministic,
 no API key, $0).
 <!-- graft:end -->
+<!-- AUTO:START -->
+# omp-live-map: Node.js 22+ 로컬 OMP 세션 관제 화면
+실행: `node server.js --port 7800 --hours 24`. UI 변경은 새로고침, 서버 변경은 재시작합니다. 상세: [README.md](README.md).
+하위 지침: [server](server/AGENTS.md) · [ui](ui/AGENTS.md) · [extension](extension/AGENTS.md).
+<!-- AUTO:END -->
+<!-- MANUAL:START -->
+<!-- MANUAL:END -->
+<!-- AUTO:START -->
+<!-- AUTO:END -->

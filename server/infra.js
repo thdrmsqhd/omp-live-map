@@ -2,6 +2,7 @@
 "use strict";
 
 const { spawn } = require("child_process");
+const { startComposeProject } = require("./infra-compose");
 
 let INFRA = { at: 0, distros: [], projects: [], error: null, loading: false };
 
@@ -91,6 +92,8 @@ async function refreshInfra() {
         name,
         up: items.filter((c) => c.state === "running").length,
         total: items.length,
+        // 서비스 라벨은 compose가 만든 컨테이너에만 있다. 합성된 'standalone' 묶음은 false.
+        compose: items.some((c) => c.service),
       })),
       error,
       loading: false,
@@ -107,8 +110,19 @@ async function getInfra() {
   return INFRA;
 }
 
-// POST /api/infra/action: 알려진 컨테이너/배포판에만 동작을 허용한다.
+// POST /api/infra/action: 알려진 컨테이너/배포판/Compose 프로젝트에만 동작을 허용한다.
 async function infraAction(target, kind) {
+  // Compose 프로젝트 시작은 합성 묶음이 아니라 실제 compose 라벨을 확인한 뒤에만 실행한다.
+  if (kind === "project-start") {
+    await getInfra();
+    const members = (INFRA.containers || []).filter((c) => c.project === target);
+    const result = members.length
+      ? await startComposeProject(target, members, wslRun)
+      : { ok: false, out: (INFRA.error ? `Docker 인벤토리 조회 실패: ${INFRA.error}\n` : "") + "Compose 프로젝트를 찾을 수 없음: " + target };
+    INFRA.at = 0;
+    await refreshInfra();
+    return result;
+  }
   const known =
     (INFRA.containers || []).some((c) => c.id === target) || INFRA.distros.some((d) => d.name === target);
   if (!known) return { ok: false, out: "알 수 없는 대상: " + target };

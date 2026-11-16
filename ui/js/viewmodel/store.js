@@ -23,7 +23,7 @@ async function reloadGraph() {
 async function fetchInfra() {
   const res = await fetch("/api/infra");
   const data = await res.json();
-  const sig = (v) => JSON.stringify((v.containers || []).map((c) => [c.id, c.state]).concat((v.distros || []).map((d) => [d.name, d.state])));
+  const sig = (v) => JSON.stringify((v.containers || []).map((c) => [c.id, c.state]).concat((v.distros || []).map((d) => [d.name, d.state]), (v.projects || []).map((p) => [p.name, p.compose])));
   const changed = sig(data) !== sig(INFRA);
   INFRA = { distros: [], containers: [], projects: [], ...data };
   return changed;

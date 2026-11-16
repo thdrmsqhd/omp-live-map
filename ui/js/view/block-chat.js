@@ -32,8 +32,11 @@ function chatListHTML(st, shown, tool, act) {
     const ts = typeof m.ts === "number" ? m.ts : Date.parse(m.ts || "");
     const cts = ts ? `<span class="cts" data-ts="${ts}" title="${esc(new Date(ts).toLocaleString("ko-KR"))}"></span>` : "";
     const label = toolOnly ? `도구 호출 ${m.n || 1}회${names ? " · " + names : ""}` : body;
+    const imgs = m.role === "user" ? chatImagesHTML(m, m.previews || chatPreviews(st, ts)) : "";
+    // 이미지를 실은 턴의 "(이미지 첨부)" 자리 표시 글은 같은 그림이 이미 있어 숨긴다.
+    const text = imgs && /^\(이미지 첨부\)$/.test(label) ? "" : label;
     return `<div class="cmsg ${m.role === "user" ? "u" : "a"}"${!toolOnly && names ? ` title="사용 도구: ${esc(names)}"` : ""}>
-      <span class="who">${m.role === "user" ? "user" : "ai"}</span><div class="tx${toolOnly ? " dim" : ""}">${m.role === "user" || toolOnly ? chatBodyHTML(label) : mdHTML(label)}</div>
+      <span class="who">${m.role === "user" ? "user" : "ai"}</span><div class="tx${toolOnly ? " dim" : ""}">${imgs}${m.role === "user" || toolOnly ? chatBodyHTML(text) : mdHTML(label)}</div>
       <span class="cact">${cts}${toolOnly ? "" : `<button class="ccopy" data-copy="${i}">복사</button>`}</span></div>`;
   }).join("");
   // 도는 중인 활동에 답변 글이 있으면 같은 글을 말풍선으로 또 그리지 않는다.
@@ -55,6 +58,8 @@ function chatBlock(n) {
     <div class="cfilter"${tool ? "" : " hidden"}><span>${esc(tool)} 사용 턴만 표시 중</span><button data-unfilter="1">해제</button></div>
     <button class="cmore" data-more="1"${all.length > CHAT_SHOW ? "" : " hidden"}>${esc(chatMoreText(st, all))}</button>
     <div class="cmsgs">${chatListHTML(st, shown, tool, chatActivityHTML(n.id, st))}</div>
+    <div class="casks"></div>
+    <div class="cworking" role="status" aria-live="polite"${st.busy || actItems(n.id).running ? "" : " hidden"}><span class="cworking-dot" aria-hidden="true"></span>응답 생성·작업 중</div>
     <div class="cmnote" hidden></div>
     ${chatModelPickerHTML()}
     <div class="crow">
@@ -110,6 +115,8 @@ function paintChat(id) {
   const sum = box.querySelector(".csum");
   const sumHTML = chatSumHTML(st);
   if (sum.__html !== sumHTML) { sum.__html = sumHTML; sum.innerHTML = sumHTML; }
+  paintChatAsk(box, id);
+  box.querySelector(".cworking").hidden = !(st.busy || actItems(id).running);
   // 도는 중에도 보내기는 열려 있다(추가 지시). 취소는 도는 동안만 보인다.
   box.querySelector("button[data-cancel]").hidden = !st.busy;
   // 압축·비우기는 진행 중이거나 에이전트가 도는 동안 눌러지지 않는다.
@@ -175,6 +182,8 @@ function mountChat(blk, n) {
   list.scrollTop = list.scrollHeight;
   mountChatModel(box, id);
   paintChatModel(box, n, st);
+  mountChatAsk(box);
+  paintChatAsk(box, id);
 }
 
 registerBlock({ type: "chat", slot: "main", flex: 7.4, render: chatBlock, mount: mountChat, paint: (box, n) => paintChat(n.id) });

@@ -19,7 +19,7 @@ function edgeScene() {
       const js = el.querySelectorAll(".jcard");
       if (!js.length) continue;
       const cx = styleNum(el, "left"), cy = styleNum(el, "top");
-      const list = [...js].map((j) => styleRect(j, cx, cy));
+      const list = [...js].map((j) => ({ ...styleRect(j, cx, cy), owner: j.dataset.owner }));
       jobs.set(el.dataset.ckey, { list, cx, cy });
       rects.push(...list);
       continue;
@@ -33,13 +33,14 @@ function edgeScene() {
   return { rects, card, big, jobs };
 }
 
-// 세션의 main 카드에서 각 잡 카드로 내려가는 줄기.
+// 잡을 띄운 카드(없으면 세션의 main 카드)에서 각 잡 카드로 내려가는 줄기.
 function jobSpines(c, S) {
   const J = S.jobs.get(clusterKeyOf(c));
   if (!J) return "";
   const mainId = (c.members || []).find((id) => { const n = nodeById(id); return n && n.kind === "main"; }) || (c.members || [])[0];
-  const a = (mainId && S.card.get(mainId)) || { x: J.cx + 40, y: J.cy + 56, w: 0, h: 0 };
+  const fallback = (mainId && S.card.get(mainId)) || { x: J.cx + 40, y: J.cy + 56, w: 0, h: 0 };
   return J.list.map((j) => {
+    const a = (j.owner && S.card.get(j.owner)) || fallback;
     const r = routeEdge(a, j, S.rects, { prefer: "v", spine: true });
     if (!r) return "";
     return `<g class="jobspine"><path d="${r.d}" fill="none" stroke="#35506b" stroke-width="1.3" stroke-dasharray="4 3"/>

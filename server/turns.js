@@ -14,8 +14,14 @@ function pushMessage(st, msg) {
   if (st.messages.length > MSG_KEEP) st.messages = st.messages.slice(-MSG_KEEP);
 }
 
-function recordUser(st, text, ts) {
-  pushMessage(st, { role: "user", text: keepText(text), ts });
+function recordUser(st, text, ts, images) {
+  const t = keepText(text);
+  const imgs = Array.isArray(images) ? images : [];
+  // 이미지만 있는 메시지도 대화 기록에 남긴다.
+  if (!t && !imgs.length) return;
+  const msg = { role: "user", text: t, ts };
+  if (imgs.length) msg._imgs = imgs; // 스냅샷에서 images [{mime,url}] 로 바뀐다.
+  pushMessage(st, msg);
 }
 
 // said: 본문 텍스트, tools: 이 턴의 toolCall 이름(중복 제거됨).

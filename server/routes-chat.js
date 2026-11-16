@@ -7,6 +7,7 @@ const { newSession, stopSession, prompt, cancel, list } = require("./sessions");
 const { apiChat } = require("./models");
 const { listModels, setModel } = require("./session-model");
 const { prepare, MAX_BODY: UPLOAD_BODY } = require("./uploads");
+const { answer } = require("./ui-requests");
 
 // 본문 { text, files } 를 omp 에 보낼 메시지와 images 로 바꾼다. 실패하면 { error }.
 const promptOf = (p) => prepare(String(p.text || "").trim(), p.files);
@@ -30,6 +31,13 @@ module.exports = {
     json(res, await setModel(String(p.node || ""), String(p.provider || ""), String(p.id || "")));
   }),
   "POST /api/prompt/cancel": (req, res) => withJson(req, res, async (p) => json(res, await cancel(String(p.node || "")))),
+  // 확장 UI 질문(ask·select·confirm·input·editor)에 답한다. 없는 id·이미 해소된 id 는 409.
+  "POST /api/chat/answer": (req, res) => withJson(req, res, (p) => {
+    const out = answer(String(p.node || ""), String(p.id || ""), p.response);
+    if (out.ok) return json(res, out);
+    res.writeHead(409, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(JSON.stringify(out));
+  }),
   "POST /api/summary": (req, res) => withJson(req, res, async (p) => {
     const st = stateOf(String(p.node || ""));
     if (!st) return json(res, { ok: false, out: "세션 기록 없음" });

@@ -8,6 +8,8 @@ let DATA = { sessions: [] };
 let ENV = { home: "", localCwd: "" };
 
 let INFRA = { distros: [], containers: [], projects: [], error: null };
+// 진행 중인 인프라 조작: nodeId -> kind. 렌더가 다시 그려져도 버튼이 잠긴 채로 남는다.
+const PENDING = new Map();
 
 let FILTER = "live";
 
@@ -62,6 +64,9 @@ const AG = { W: 232, H: 138, GAPX: 40, GAPY: 12, ROWMAX: 3 };
 const IF = { W: 200, H: 112, GAPX: 56, GAPY: 20, COLS: 4 };
 
 const JOB = { W: 232, H: 56, OPENH: 190, GAPX: 16, GAPY: 10, COLS: 2, MAX: 6 };
+
+// 블록 고정 높이 범위. 저장값을 읽을 때(persist.js)와 끌어서 조절할 때(block-controls.js) 같은 값을 쓴다.
+const BLOCK_H_MIN = 80, BLOCK_H_MAX = 1080;
 
 const HOST = { W: 196, H: 92, GAPX: 14, HEAD: 20 };
 

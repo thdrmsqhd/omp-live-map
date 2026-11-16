@@ -1,0 +1,21 @@
+{
+  "name": "ui-all",
+  "steps": [
+    {
+      "id": "u-select",
+      "method": "select",
+      "title": "배포 환경",
+      "options": ["로컬", "스테이징", "운영"],
+      "optionDetails": [{ "description": "이 PC" }, { "description": "검증망" }, { "description": "실서버" }],
+      "initialIndex": 0,
+      "selectionMarker": "radio",
+      "timeout": 120000,
+      "wait": false
+    },
+    { "method": "cancel", "targetId": "u-select" },
+    { "method": "confirm", "id": "u-confirm", "title": "계속할까요?", "message": "파일을 고치기 전에 확인합니다.", "timeout": 120000 },
+    { "method": "input", "id": "u-input", "title": "메모", "placeholder": "짧은 메모", "secret": false, "timeout": 120000 },
+    { "method": "editor", "id": "u-editor", "title": "설명 편집", "prefill": "초안 텍스트", "promptStyle": "plain", "timeout": 120000 },
+    { "method": "notify", "title": "알림", "message": "가짜 omp 시나리오 완료" }
+  ]
+}

@@ -65,9 +65,9 @@ function layoutTree(nodes, P) {
 
 const jobLive = (j) => !j.done && Date.now() - (j.ts || 0) < 30 * 60e3;
 
-// 끝난 잡은 10분만 보여준다. 스테이지 잡 카드와 카드 안 bg 블록이 같은 규칙을 쓴다.
-const JOB_TTL = 10 * 60e3;
-const jobVisible = (j) => !j.done || Date.now() - (j.endedAt || j.ts || 0) < JOB_TTL;
+// 끝난 잡은 바로 감춘다. 스테이지 잡 카드와 카드 안 bg 블록이 같은 규칙을 쓴다.
+// 앱 잡(BGS/BGALL)은 서버가 실제 프로세스 상태를 주므로 done 만 본다.
+const jobVisible = (j) => !j.done;
 
 const activeJobs = (s) => (s.jobs || []).filter(jobLive).slice(0, JOB.MAX);
 
