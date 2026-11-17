@@ -8,6 +8,7 @@ const { resFor, releaseSet, procState, findProc, reloadProc } = require("./proc"
 const { sysInfo } = require("./sys");
 const { getInfra, infraAction } = require("./infra");
 const { stateOf } = require("./tail");
+const lineage = require("./lineage");
 const { queryDb } = require("./db");
 
 module.exports = {
@@ -49,7 +50,7 @@ module.exports = {
   },
   "POST /api/release": (req, res) => withJson(req, res, (p) => {
     const node = String(p.node || "");
-    const st = stateOf(node);
+    const st = stateOf(lineage.resolve(node));
     if (!st) return json(res, { ok: false, out: "세션 기록 없음" });
     // 맵이 이 노드에서 직접 띄운 백그라운드 잡만 정리한다.
     const r = releaseSet(node);
@@ -67,7 +68,7 @@ module.exports = {
     json(res, { ok: killed.length > 0, killed, skipped, freedMB: killed.length ? r.mb : 0 });
   }),
   "* /api/sys": (req, res) => json(res, sysInfo()),
-  "* /api/res": (req, res, url) => json(res, resFor(url.searchParams.get("node") || "")),
+  "* /api/res": (req, res, url) => json(res, resFor(lineage.resolve(url.searchParams.get("node") || ""))),
   "* /api/proc": (req, res) => json(res, procState()),
   // DB 조회: 프로필(user·password 포함)과 SQL 한 문장. 비밀번호는 저장하지 않는다.
   "POST /api/db/query": (req, res) => withJson(req, res, async (p) => {

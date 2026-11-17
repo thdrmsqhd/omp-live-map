@@ -2,9 +2,17 @@
 "use strict";
 
 const { snapshot } = require("./snapshot");
+const lineage = require("./lineage");
 
 const clients = new Set();
 let lastSig = "";
+
+// 화면은 카드 id 로만 노드를 찾는다. 실제 파일로 온 이벤트는 계보를 거쳐 카드 id 로 바꿔 보낸다.
+function remap(payload) {
+  if (!payload || !payload.node) return payload;
+  const card = lineage.cardOf(payload.node);
+  return card && card !== payload.node ? { ...payload, node: card } : payload;
+}
 
 function addClient(res) {
   clients.add(res);
@@ -15,17 +23,17 @@ function removeClient(res) {
 }
 
 function pushChat(payload) {
-  const frame = `data: ${JSON.stringify({ chat: payload })}\n\n`;
+  const frame = `data: ${JSON.stringify({ chat: remap(payload) })}\n\n`;
   for (const res of clients) { try { res.write(frame); } catch {} }
 }
 
 function pushLive(payload) {
-  const frame = `data: ${JSON.stringify({ live: payload })}\n\n`;
+  const frame = `data: ${JSON.stringify({ live: remap(payload) })}\n\n`;
   for (const res of clients) { try { res.write(frame); } catch {} }
 }
 
 function pushAsk(payload) {
-  const frame = `data: ${JSON.stringify({ ask: payload })}\n\n`;
+  const frame = `data: ${JSON.stringify({ ask: remap(payload) })}\n\n`;
   for (const res of clients) { try { res.write(frame); } catch {} }
 }
 

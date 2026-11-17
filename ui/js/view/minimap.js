@@ -13,7 +13,10 @@ function paintMinimap() {
   const st = $("stage").getBoundingClientRect();
   svg.innerHTML = [
     ...CLUSTERS.map((c) => R(c, "mm-cl")),
-    ...[...geo.values()].map((g) => R(g, "mm-c")),
+    ...[...geo.entries()].map(([id, g]) => {
+      const rec = typeof ATTN !== "undefined" ? ATTN.get(id) : null;
+      return R(g, "mm-c" + (rec ? (rec.kind === "ask" ? " mm-ask" : " mm-done") : ""));
+    }),
     ...[...SATS.values()].map((box) => R(box, "mm-sat")),
     R({ x: -view.x / view.k, y: -view.y / view.k, w: st.width / view.k, h: st.height / view.k }, "mm-view"),
   ].join("");

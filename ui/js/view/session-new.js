@@ -26,6 +26,7 @@ function openNewSession(at) {
   const err = box.querySelector(".nserr");
   const go = box.querySelector("button[data-open]");
   cwd.value = ENV.localCwd || "";
+  installCwdSuggest(box, cwd);
   const files = box.__files = [];
   const chips = box.querySelector(".achips");
   wireAttach(box, () => files, () => paintAttachChips(chips, files));
@@ -40,6 +41,8 @@ function openNewSession(at) {
     go.disabled = true;
     go.textContent = "여는 중…";
     err.textContent = "";
+    // 카드가 아직 없으므로 요청한 지도 좌표(없으면 화면 중앙)에 '여는 중' 자리표시를 띄운다.
+    const pend = addPending(at, cwd.value.trim());
     let out;
     try {
       const res = await postJSON("/api/session/new", { cwd: cwd.value.trim(), text, files: attachPayload(files) });
@@ -47,9 +50,11 @@ function openNewSession(at) {
     } catch (e) {
       out = { ok: false, out: e.message };
     }
-    // 기다리는 사이 창을 닫았으면 결과를 그릴 곳이 없다.
+    settlePending(pend, out);
+    // 기다리는 사이 창을 닫았으면 결과를 그릴 곳이 없다(자리표시가 오류를 보여 준다).
     if (!box.isConnected) return;
     if (out.ok) {
+      rememberCwd(cwd.value.trim());
       // 스냅샷이 응답보다 먼저 와서 카드가 자동 자리에 그려졌을 수 있으므로 바로 다시 그린다.
       if (at && out.node) { MANUAL["card:" + out.node] = { x: at.x, y: at.y }; saveManual(); renderMap(false, true); }
       closeNewSession();
@@ -62,6 +67,8 @@ function openNewSession(at) {
 
   // 캡처 단계에서 받아 카드 닫기 같은 전역 단축키보다 먼저 처리한다.
   box.__key = (e) => {
+    // 열린 폴더 자동완성이 먹은 키(↑↓·Tab·Enter·Escape)는 창 조작으로 넘기지 않는다.
+    if (box.__sugKey && box.__sugKey(e)) return;
     const send = e.key === "Enter" && (e.ctrlKey || e.metaKey);
     if (e.key !== "Escape" && !send) return;
     e.preventDefault();

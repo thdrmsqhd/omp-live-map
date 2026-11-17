@@ -106,6 +106,7 @@ function askResponse(r) {
 }
 
 async function askPost(node, id, response) {
+  if (typeof attnClear === "function") attnClear(liveNodeId(node) || node);   // 답을 보냈으면 선택 필요는 끝난다
   const r = askFind(node, id);
   if (r) r._err = "";
   let out = {};

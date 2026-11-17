@@ -3,6 +3,7 @@
 
 const { json, withJson } = require("./http");
 const { stateOf } = require("./tail");
+const lineage = require("./lineage");
 const { newSession, stopSession, prompt, cancel, list } = require("./sessions");
 const { apiChat } = require("./models");
 const { listModels, setModel } = require("./session-model");
@@ -39,7 +40,7 @@ module.exports = {
     res.end(JSON.stringify(out));
   }),
   "POST /api/summary": (req, res) => withJson(req, res, async (p) => {
-    const st = stateOf(String(p.node || ""));
+    const st = stateOf(lineage.resolve(String(p.node || "")));
     if (!st) return json(res, { ok: false, out: "세션 기록 없음" });
     const convo = (st.messages || []).slice(-10).map((m) => (m.role === "user" ? "사용자: " : "에이전트: ") + m.text).join("\n");
     const ctx = st.ctx ? `context ${st.ctx.promptTokens} tokens, 압축 ${st.ctx.compactionEpoch}회` : "context 정보 없음";

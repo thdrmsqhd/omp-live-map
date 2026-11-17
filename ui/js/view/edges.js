@@ -65,7 +65,7 @@ function drawEdges(nodes) {
     return `<path d="${r.d}" fill="none" stroke="#4aa8ff" stroke-width="1.8" stroke-dasharray="5 4" opacity="0.9"/>
     <circle cx="${r.P.x}" cy="${r.P.y}" r="3" fill="#4aa8ff"/><circle cx="${r.Q.x}" cy="${r.Q.y}" r="3" fill="#4aa8ff"/>`;
   }).join("");
-  $("edges").innerHTML = tree + spine + big;
+  $("edges").innerHTML = tree + spine + big + (typeof dockEdgeHTML === "function" ? dockEdgeHTML(S) : "");
 }
 
 // 끌기·크기 조절 중 한 프레임에 한 번만 다시 그린다.

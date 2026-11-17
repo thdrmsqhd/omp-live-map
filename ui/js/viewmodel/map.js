@@ -151,6 +151,7 @@ function sessionKeyOfNode(id) {
 function closeCard(id) {
   if (!id) id = [...openIds].at(-1);
   if (!id) return;
+  if (typeof dockOnClose === "function") dockOnClose(id);   // 메인이면 연결 서브도 함께, 서브면 자동 열림 끄기
   openIds.delete(id);
   SATS.delete(id);
   saveOpenCards();

@@ -3,15 +3,25 @@
 // 카드 = 블록 목록. 새 블록은 view/block-*.js 에서 registerBlock 으로 등록하고,
 // BLOCK_DEFAULTS 나 CARD_BLOCKS(nodeId) 오버라이드에 넣으면 큰 카드 바디에 붙는다.
 //
-//   render(n)       블록 안쪽 마크업(문자열). 큰 카드 바디를 새로 만들 때만 불린다.
-//   mount(box, n)   바디가 새로 생긴 직후 1회. 리스너 배선과 첫 스크롤 위치.
+//   render(n, key)  블록 안쪽 마크업(문자열). 큰 카드 바디를 새로 만들 때만 불린다.
+//   mount(box, n)   바디가 새로 생긴 직후 1회. 리스너 배선과 첫 스크롤 위치(인스턴스 키: box.dataset.bkey).
 //   paint(box, n)   바디 DOM 을 유지한 채 스냅샷이 바뀌었을 때. 바뀐 부분만 갱신한다.
-//   onAdd(nodeId)   (선택) 블록 메뉴로 카드에 더해 다시 그린 직후 1회. 카드 크기 맞추기 등.
-//   onRemove(nodeId) (선택) 블록 메뉴로 카드에서 뺀 직후, 다시 그리기 전에 1회. onAdd 가 키운 크기 되돌리기 등.
+//   onAdd(nodeId, key)   (선택) 블록 메뉴로 카드에 더해 다시 그린 직후 1회. 카드 크기 맞추기 등.
+//   onRemove(nodeId, key) (선택) 블록 메뉴로 카드에서 뺀 직후, 다시 그리기 전에 1회. onAdd 가 키운 크기 되돌리기 등.
 //
 // 블록 접기·순서·높이는 CARD_UI(nodeId) 에 저장한다(조작 배선: block-controls.js).
+//
+// 블록 키는 타입이고, 같은 타입을 두 번 붙이는 블록은 두 번째부터 "browser#2" 처럼 인스턴스 키를 쓴다.
+// 상태·순서·높이는 인스턴스 키로 저장하고, 정의 조회는 기본 타입(blockBase)으로 한다.
 
 const BLOCKS = new Map();
+
+// 카드당 허용 인스턴스 수. 여기 없는 타입은 1개.
+const BLOCK_MAX = { browser: 2 };
+
+const blockBase = (key) => String(key).split("#")[0];
+const blockMax = (key) => BLOCK_MAX[blockBase(key)] || 1;
+const blockInstances = (list, base) => list.filter((k) => blockBase(k) === base);
 
 function registerBlock(def) {
   if (!def || !def.type || typeof def.render !== "function") throw new Error("block needs type + render");
@@ -19,7 +29,9 @@ function registerBlock(def) {
 }
 
 // 잡은 스테이지 잡 카드가 보여주므로 bg 블록은 기본으로 넣지 않는다(블록 메뉴에서 더할 수 있다).
-const BLOCK_DEFAULTS = (n) => (agentKind(n.kind) ? ["chat", "terminal", "files"]
+// 서브에이전트 카드는 chat 만 기본: 터미널·파일 트리는 블록 메뉴로 직접 더한다.
+const BLOCK_DEFAULTS = (n) => (n.kind === "sub" ? ["chat"]
+  : n.kind === "main" ? ["chat", "terminal", "files"]
   : n.kind === "local" ? ["terminal", "files"] : ["terminal"]);
 
 function cardBlockTypes(n) {
@@ -31,9 +43,17 @@ function cardBlockTypes(n) {
     : ov
       ? [...base.filter((t) => !(ov.remove || []).includes(t)), ...(ov.add || [])]
       : base;
-  // 상태가 nodeId 로 키잉되므로 같은 타입 블록은 카드당 1개만 허용한다.
+  // 같은 키는 한 번만, 같은 타입은 blockMax(기본 1)개까지만 허용한다.
   // 저장된 설정에 남은 옛 타입(예: "live")은 등록된 블록만 남겨 조용히 버린다.
-  return [...new Set(list)].filter((t) => BLOCKS.has(t));
+  const out = [];
+  const count = {};
+  for (const key of list) {
+    const base = blockBase(key);
+    if (!BLOCKS.has(base) || out.includes(key)) continue;
+    if ((count[base] = (count[base] || 0) + 1) > blockMax(base)) continue;
+    out.push(key);
+  }
+  return out;
 }
 
 function cardUI(nodeId) {
@@ -43,41 +63,43 @@ function cardUI(nodeId) {
   return u;
 }
 
-// 한 슬롯에 그릴 블록 정의를 저장된 순서대로 돌려준다. 순서에 없는 블록은 기본 순서대로 뒤에 붙는다.
+// 한 슬롯에 그릴 블록을 저장된 순서대로 돌려준다. 순서에 없는 블록은 기본 순서대로 뒤에 붙는다.
+// 반환: [{ b: 정의, key: 인스턴스 키 }]
 function slotBlocks(n, slot) {
   const ui = CARD_UI.get(n.id);
   const order = (ui && ui.order[slot]) || [];
   const rank = (t, i) => { const k = order.indexOf(t); return k >= 0 ? k : order.length + i; };
   return cardBlockTypes(n)
-    .map((t) => BLOCKS.get(t))
-    .filter((b) => b && b.slot === slot)
-    .map((b, i) => ({ b, r: rank(b.type, i) }))
+    .map((key) => ({ b: BLOCKS.get(blockBase(key)), key }))
+    .filter((x) => x.b && x.b.slot === slot)
+    .map((x, i) => ({ ...x, r: rank(x.key, i) }))
     .sort((a, z) => a.r - z.r)
-    .map(({ b }) => b);
+    .map(({ b, key }) => ({ b, key }));
 }
 
 function renderBlocks(n, slot) {
   const ui = CARD_UI.get(n.id);
-  return slotBlocks(n, slot).map((b) => blockShell(n, b, ui)).join("");
+  return slotBlocks(n, slot).map(({ b, key }) => blockShell(n, b, key, ui)).join("");
 }
 
 // 바디의 블록 구성 서명. 같으면 바디 DOM 을 다시 만들지 않는다.
 function blockSig(n) {
   const ui = CARD_UI.get(n.id);
-  const one = (b) => b.type + (ui && ui.collapsed[b.type] ? "-" : "") + ((ui && ui.h[b.type]) || "");
-  return ["main", "side"].map((slot) => slotBlocks(n, slot).map(one).join(",")).join("|");
+  const one = (key) => key + (ui && ui.collapsed[key] ? "-" : "") + ((ui && ui.h[key]) || "");
+  return ["main", "side"].map((slot) => slotBlocks(n, slot).map((x) => one(x.key)).join(",")).join("|");
 }
 
-function blockShell(n, b, ui) {
-  const t = esc(b.type);
-  const collapsed = !!(ui && ui.collapsed[b.type]);
-  const h = ui && ui.h[b.type];
+function blockShell(n, b, key, ui) {
+  const base = esc(b.type);
+  const k = esc(key);
+  const collapsed = !!(ui && ui.collapsed[key]);
+  const h = ui && ui.h[key];
   const style = collapsed ? "flex:0 0 auto" : h ? `flex:0 0 auto;height:${h}px` : `flex:${b.flex ?? 1}`;
   const cls = "blk" + (collapsed ? " collapsed" : h ? " sized" : "");
-  return `<div class="${cls}" data-blk="${t}" data-slot="${esc(b.slot)}" style="${style}">
-    <div class="bctl"><button class="bgrip" data-bgrip="${t}" title="끌어서 순서 변경">⋮⋮</button><button class="bchev" data-bchev="${t}" title="${collapsed ? "펼치기" : "접기"}">${collapsed ? "▸" : "▾"}</button></div>
-    ${b.render(n)}
-    <button class="bresize" data-bresize="${t}" title="끌어서 높이 조절 · 더블클릭으로 원래대로"></button>
+  return `<div class="${cls}" data-blk="${base}" data-bkey="${k}" data-slot="${esc(b.slot)}" style="${style}">
+    <div class="bctl"><button class="bgrip" data-bgrip="${k}" title="끌어서 순서 변경">⋮⋮</button><button class="bchev" data-bchev="${k}" title="${collapsed ? "펼치기" : "접기"}">${collapsed ? "▸" : "▾"}</button></div>
+    ${b.render(n, key)}
+    <button class="bresize" data-bresize="${k}" title="끌어서 높이 조절 · 더블클릭으로 원래대로"></button>
   </div>`;
 }
 
@@ -94,20 +116,24 @@ function mountBlocks(n, el) {
   }
 }
 
-function toggleBlock(nodeId, type) {
+// key: 인스턴스 키("browser", "browser#2" …). 있으면 빼고 없으면 더한다.
+function toggleBlock(nodeId, key) {
   const node = nodeById(nodeId);
   if (!node) return;
   const cur = cardBlockTypes(node).slice();
-  const i = cur.indexOf(type);
+  const i = cur.indexOf(key);
   if (i >= 0) {
     if (cur.length <= 1) return;   // 카드에 블록이 하나도 없으면 안 된다.
     cur.splice(i, 1);
-  } else cur.push(type);
+  } else {
+    if (blockInstances(cur, blockBase(key)).length >= blockMax(key)) return;
+    cur.push(key);
+  }
   const base = BLOCK_DEFAULTS(node);
   CARD_BLOCKS.set(nodeId, { add: cur.filter((t) => !base.includes(t)), remove: base.filter((t) => !cur.includes(t)) });
   saveBlocks();
-  const def = BLOCKS.get(type);
-  if (i >= 0 && def && def.onRemove) def.onRemove(nodeId);
+  const def = BLOCKS.get(blockBase(key));
+  if (i >= 0 && def && def.onRemove) def.onRemove(nodeId, key);
   renderMap(false, true);
-  if (i < 0 && def && def.onAdd) def.onAdd(nodeId);
+  if (i < 0 && def && def.onAdd) def.onAdd(nodeId, key);
 }

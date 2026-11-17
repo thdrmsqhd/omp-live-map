@@ -2,6 +2,7 @@
 "use strict";
 
 const { pushAsk, pushLive } = require("./sse");
+const lineage = require("./lineage");
 
 const ASKS = ["ask", "select", "confirm", "input", "editor"]; // 화면에 카드로 보여 주는 method
 const pending = new Map(); // node 키 -> Map(요청 id -> { node, request, s })
@@ -124,7 +125,7 @@ function bind(s) {
 
 // 화면이 보낸 답. 없는 id·이미 해소된 id 는 거절한다.
 function answer(node, id, response) {
-  const entry = take(node, id);
+  const entry = take(lineage.resolve(node), id); // 카드 id 로 온 답을 지금 실제 파일의 질문으로
   if (!entry) return { ok: false, out: "없거나 이미 해소된 질문입니다" };
   const frame = { type: "extension_ui_response", id: entry.request.id, ...responseFor(entry.request.method, response) };
   const sent = entry.s.rpc.sendRaw(frame);

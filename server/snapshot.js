@@ -2,13 +2,15 @@
 "use strict";
 
 const path = require("path");
-const { HOME, ROOT, SESSIONS, HOURS, ACTIVE_MS, MSG_BUDGET, USD_KRW } = require("./config");
+const { HOME, ROOT, SESSIONS, HOURS, ACTIVE_MS, USD_KRW } = require("./config");
 const { allStates, stateOf } = require("./tail");
+const lineage = require("./lineage");
 const { resFor, histOf } = require("./proc");
 const { ctxWindowOf } = require("./models");
 const { profileOf } = require("./profiles");
 const { sumHourly } = require("./turns");
 const { attachImages } = require("./images");
+const { capMessages } = require("./msg-cap");
 
 function tokPerSec(st) {
   if (!st.durationSum) return 0;
@@ -24,14 +26,16 @@ function recentTokPerSec(st) {
 }
 
 function nodeOf(st, now, last) {
+  const card = lineage.cardOf(st.file);
   return {
-    id: st.file,
+    id: card || st.file,
+    file: st.file, // 지금 실제 기록 파일(카드 id 와 다를 수 있다)
     name: st.name,
     kind: st.kind,
     agent: "", // 서브에이전트가 쓴 프로필 이름. finishSession 이 부모 task 툴 호출에서 채운다.
     agentModel: "", // 그 프로필 정의의 첫 모델
     agentThinking: "", // 그 프로필 정의의 thinking-level
-    parent: st.parent, // 세션 안에 없는 부모는 finishSession에서 정리한다.
+    parent: lineage.cardOf(st.parent) || st.parent, // 세션 안에 없는 부모는 finishSession에서 정리한다.
     title: st.title,
     firstUser: st.firstUser,
     model: st.model,
@@ -118,7 +122,7 @@ function finishSession(s) {
   // 서브 기록 파일명(<Name>)은 부모 task 툴 호출의 tasks[].name 과 같다. 부모 상태에서 프로필 이름을 찾는다.
   for (const n of s.nodes) {
     if (n.kind !== "sub") continue;
-    const pst = stateOf(n.parent);
+    const pst = stateOf(lineage.resolve(n.parent));
     const map = pst && pst.taskProfiles;
     if (!map || !map.has(n.name)) continue;
     n.agent = map.get(n.name);
@@ -130,7 +134,7 @@ function finishSession(s) {
   }
   s.jobs = [];
   for (const n of s.nodes) {
-    const st = stateOf(n.id);
+    const st = stateOf(n.file || n.id);
     if (!st) continue;
     for (const j of st.jobs) s.jobs.push({ ...j, file: n.id, session: s.key, sessionTitle: s.title, node: n.name, cwd: n.cwd });
   }
@@ -145,11 +149,22 @@ function snapshot() {
     if (!st.lastTs && !st.startedAt) continue;
     const last = st.lastTs || st.startedAt;
     if (last < cutoff) continue;
+    // 비우기 전 기록(그 세션의 서브 기록 포함)은 맵에 따로 그리지 않는다. 같은 카드가 새 파일을 보여 준다.
+    if (lineage.isHidden(st.file) || lineage.isHidden(st.mainFile)) continue;
     const node = nodeOf(st, now, last);
-    let s = sessions.get(st.sessionKey);
+    // 비운 카드도 이름(첫 요청·제목)은 처음 기록 그대로 남긴다.
+    if (node.id !== st.file) {
+      const origin = stateOf(node.id);
+      if (origin) {
+        if (!node.title) node.title = origin.title;
+        if (!node.firstUser) node.firstUser = origin.firstUser;
+      }
+    }
+    const key = lineage.sessionKeyOf(st.mainFile) || st.sessionKey;
+    let s = sessions.get(key);
     if (!s) {
-      s = { key: st.sessionKey, folder: path.basename(path.dirname(st.file)).replace(/--/g, ""), nodes: [], lastTs: 0 };
-      sessions.set(st.sessionKey, s);
+      s = { key, folder: path.basename(path.dirname(st.file)).replace(/--/g, ""), nodes: [], lastTs: 0 };
+      sessions.set(key, s);
     }
     s.nodes.push(node);
     s.lastTs = Math.max(s.lastTs, last);
@@ -164,35 +179,6 @@ function snapshot() {
     env: { home: HOME, localCwd: process.env.OMP_MAP_CWD || path.dirname(ROOT) },
     sessions: list,
   };
-}
-
-// 응답 전체의 messages를 MSG_BUDGET 바이트 이하로 자른다(전 노드 통틀어 최근 메시지 우선).
-function capMessages(list) {
-  const all = [];
-  for (const s of list) {
-    for (const n of s.nodes) {
-      if (!n.messages) continue;
-      n.messages.forEach((m, i) => all.push({ n, i, ts: m.ts || 0, size: Buffer.byteLength(JSON.stringify(m)) + 1 }));
-    }
-  }
-  let total = all.reduce((acc, x) => acc + x.size, 0);
-  if (total <= MSG_BUDGET) return;
-  all.sort((a, b) => b.ts - a.ts || b.i - a.i);
-  const keep = new Map(); // node -> Set(index)
-  total = 0;
-  for (const x of all) {
-    if (total + x.size > MSG_BUDGET) break;
-    total += x.size;
-    if (!keep.has(x.n)) keep.set(x.n, new Set());
-    keep.get(x.n).add(x.i);
-  }
-  for (const s of list) {
-    for (const n of s.nodes) {
-      if (!n.messages) continue;
-      const k = keep.get(n);
-      n.messages = k ? n.messages.filter((_, i) => k.has(i)) : [];
-    }
-  }
 }
 
 module.exports = { snapshot, statusOf };

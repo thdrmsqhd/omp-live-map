@@ -5,7 +5,7 @@ function ghostCard(n) {
   const g = geo.get(n.id);
   const name = agentKind(n.kind) ? displayName(n) : n.name;
   return `<div class="node ghost ${n.kind} ${n.status}" data-ghost="${esc(n.id)}" style="left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h - 3}px">
-    <div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(name)}</span><span class="mod">열림</span></div></div>`;
+    <div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(name)}</span><span class="attn-badge"></span><span class="mod">열림</span></div></div>`;
 }
 
 function ctxChip(n) {
@@ -105,7 +105,7 @@ function smallCard(n) {
   const prof = profileChip(n); // 좁은 카드라 프로필이 있으면 모델 글자 대신 칩을 둔다(모델은 칩 title 에).
   return `<div class="node ${n.kind} ${n.status}${SUBSIZE.has(n.id) ? " sized" : ""}" data-id="${esc(n.id)}" style="${base}">
     <div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i><span class="nm">${esc(displayName(n))}</span>
-      ${askBadge(n.id)}
+      ${askBadge(n.id)}<span class="attn-badge"></span>
       ${ctxChip(n)}${prof || `<span class="mod" title="${esc(n.provider ? n.provider + " · " : "")}${esc(n.model || "?")}">${esc(modelShort(n.model))}</span>`}<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">닫기</button></div>
     <div class="sub-t" title="${esc(subText)}">${esc(subText)}</div>
     ${nowLine(n)}

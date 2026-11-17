@@ -138,6 +138,13 @@ for (const [id, v] of Object.entries(readJSON("omp-map-cardui", {}))) {
 
 const saveCardUI = () => writeJSON("omp-map-cardui", Object.fromEntries(CARD_UI));
 
+// 브라우저 블록 주소(nodeId·두 번째 인스턴스는 nodeId#browser#2 -> {url, local}).
+for (const [k, v] of Object.entries(readJSON("omp-map-burls", {}))) {
+  if (v && typeof v === "object") BURL.set(k, { url: String(v.url || ""), local: v.local === true });
+}
+
+const saveBrowserUrls = () => writeJSON("omp-map-burls", Object.fromEntries(BURL));
+
 // DB 연결 프로필(nodeId -> [{name,type,host,port,database,user,path}]). 비밀번호는 저장하지 않는다.
 const DBPROF = new Map();
 

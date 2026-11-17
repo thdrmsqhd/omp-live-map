@@ -31,11 +31,11 @@ function sessionChrome(n) {
   const maxOut = series.length ? Math.max(...series.map((s) => s.out || 0)) : 0;
   return `<div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i>
       ${nameField(n)}
-      ${askBadge(n.id)}
+      ${askBadge(n.id)}<span class="attn-badge"></span>
       ${!isLocal && n.startedAt ? `<span class="since" title="시작 ${esc(new Date(n.startedAt).toLocaleString("ko-KR"))}">시작 ${ago(n.startedAt)}</span>` : ""}
       <button class="x" data-rename="${esc(n.id)}" title="이름 변경${isLocal ? "" : " (비우면 원래 이름)"}">✎</button>
       ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제">🗑</button>` : `<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">세션 닫기</button>`}
-      ${profileChip(n)}${isLocal ? `<span class="mod">local</span>` : cardBlockTypes(n).includes("chat") ? "" : `<span class="mod" title="${esc(n.provider || "provider 미상")} · ${esc(n.model || "?")}">${esc(modelShort(n.model))}</span>`}
+      ${profileChip(n)}${typeof dockTag === "function" ? dockTag(n) : ""}${isLocal ? `<span class="mod">local</span>` : cardBlockTypes(n).includes("chat") ? "" : `<span class="mod" title="${esc(n.provider || "provider 미상")} · ${esc(n.model || "?")}">${esc(modelShort(n.model))}</span>`}
       <button class="x" data-close="1" title="큰 카드 축소 (Esc)" aria-label="큰 카드 축소">−</button></div>
     <div class="sub-t${SUB_OPEN.has(n.id) ? " open" : ""}" data-subtoggle="${esc(n.id)}" title="${esc(subtitleFull(n, isLocal))}">${esc(subtitleOf(n, isLocal))}</div>
     ${isLocal ? resRow(n, true) : `${tokenSection(n)}
@@ -70,7 +70,8 @@ function bigCard(n) {
   const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px`;
   const chrome = agentKind(n.kind) || n.kind === "local" ? sessionChrome(n) : infraChrome(n);
   const side = renderBlocks(n, "side");
-  return `<div class="node big ${n.kind} ${n.status}" data-id="${esc(n.id)}" style="${style}">
+  const dock = typeof dockClassOf === "function" ? dockClassOf(n.id) : "";
+  return `<div class="node big ${n.kind} ${n.status}${dock ? " " + dock : ""}" data-id="${esc(n.id)}" style="${style}">
     <div class="chrome">${chrome}</div>
     <div class="body" data-sig="${esc(blockSig(n))}">
       <div class="col-main">${renderBlocks(n, "main")}</div>

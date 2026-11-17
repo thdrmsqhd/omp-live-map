@@ -1,0 +1,27 @@
+/* omp-live-map · view · 카드 하이라이트(답변 완료 · 선택 필요)와 미니맵 강조 */
+  /* 답변 완료: 차분한 초록 테두리 */
+  .node.attn-done { border-color: #2f9f72; box-shadow: 0 0 0 1px #2f9f7266, 0 6px 22px #2f9f7244; }
+  .node.attn-done.big { box-shadow: 0 18px 48px #000a, 0 0 0 1px #2f9f7288, 0 0 26px #2f9f7255; }
+  /* 선택 필요: 주황 테두리 펄스 */
+  .node.attn-ask { border-color: #d99a2b; animation: attnAsk 1.6s ease-in-out infinite; }
+  @keyframes attnAsk {
+    0%, 100% { box-shadow: 0 0 0 1px #d99a2b55, 0 0 10px #d99a2b33; }
+    50% { box-shadow: 0 0 0 2px #e7b04cbb, 0 0 22px #d99a2b88; }
+  }
+  .node.attn-ask.big { animation-name: attnAskBig; }
+  @keyframes attnAskBig {
+    0%, 100% { box-shadow: 0 18px 48px #000a, 0 0 0 1px #d99a2b66, 0 0 12px #d99a2b44; }
+    50% { box-shadow: 0 18px 48px #000a, 0 0 0 2px #e7b04cbb, 0 0 26px #d99a2b99; }
+  }
+  /* 카드 헤더의 작은 배지. 마크업의 .attn-badge 는 늘 있고 클래스가 붙을 때만 보인다. */
+  .node .attn-badge { display: none; flex: none; font-size: 9px; font-weight: 700; line-height: 14px;
+    padding: 0 4px; border-radius: 4px; letter-spacing: .2px; white-space: nowrap; }
+  .node.attn-done .attn-badge { display: inline-block; color: #7ef0b8; background: #16352a; border: 1px solid #23543f; }
+  .node.attn-done .attn-badge::before { content: "답변 완료"; }
+  .node.attn-ask .attn-badge { display: inline-block; color: #ffd489; background: #3a2c13; border: 1px solid #6b5223; }
+  .node.attn-ask .attn-badge::before { content: "선택 필요"; }
+  /* 기존 "답 대기" 배지와 겹치지 않게, 선택 필요 표시 중에는 숨긴다(확인해서 해제되면 다시 보인다). */
+  .node.attn-ask .cask-badge { display: none; }
+  /* 미니맵 해당 점 강조 */
+  #minimap .mm-c.mm-done { fill: #2f9f72; stroke: #7ef0b8; }
+  #minimap .mm-c.mm-ask { fill: #d99a2b; stroke: #ffd489; }

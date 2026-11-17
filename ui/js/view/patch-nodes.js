@@ -50,6 +50,7 @@ function onNodesClick(ev) {
   }
   if (el.dataset.metric) return selectOnly(clusterByKey("host:host"));
   const id = el.dataset.id || el.dataset.ghost;
+  if (typeof attnClear === "function") attnClear(id);   // 그 카드를 열어 본 것으로 보고 주의를 해제한다
   const hit = (sel) => ev.target.closest(sel);
   // 큰 카드의 미러도 실제 작은 카드다. 닫기 버튼은 동작시키고, 나머지 클릭만 선택으로 쓴다.
   if (hit("button[data-dismiss]")) return closeSession(id);

@@ -1,0 +1,27 @@
+/* omp-live-map · 세션 알림 toast(미니맵 바로 아래, 같은 right 정렬) */
+  #attnToast { position: absolute; right: 14px; top: 196px; width: 204px; z-index: 41;
+    display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+  .attn-toast { pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 6px 7px;
+    border-radius: 8px; border: 1px solid var(--border); background: #0d151de8; color: var(--fg);
+    box-shadow: 0 8px 20px #0009; font-size: 11.5px; cursor: pointer; backdrop-filter: blur(2px);
+    animation: attn-in .16s ease-out; }
+  .attn-toast:hover { border-color: #2f5d85; background: #101c26f0; }
+  @keyframes attn-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+  .attn-toast .ico { flex: none; width: 16px; height: 16px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+  .attn-toast .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .attn-toast .txt b { font-size: 10.5px; letter-spacing: .2px; }
+  .attn-toast .ttl { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attn-toast .x { flex: none; border: 0; background: transparent; color: var(--dim); font-size: 11px;
+    padding: 2px 3px; border-radius: 4px; cursor: pointer; }
+  .attn-toast .x:hover { background: #1b2836; color: var(--fg); }
+  /* 답변 완료: 차분한 초록 */
+  .attn-toast.done .ico { background: #16352a; color: #6ee7a8; border: 1px solid #23543f; }
+  .attn-toast.done b { color: #6ee7a8; }
+  /* 선택 필요: 더 눈에 띄게(주황 테두리·은은한 맥동) */
+  .attn-toast.ask { border-color: #8a5a1e; background: #24190de8;
+    animation: attn-in .16s ease-out, attn-pulse 1.6s ease-in-out 2; }
+  .attn-toast.ask:hover { border-color: #c08430; }
+  .attn-toast.ask .ico { background: #3a2710; color: #ffc46b; border: 1px solid #8a5a1e; }
+  .attn-toast.ask b { color: #ffc46b; }
+  @keyframes attn-pulse { 0%, 100% { box-shadow: 0 8px 20px #0009; } 50% { box-shadow: 0 0 0 1px #c0843080, 0 8px 20px #0009; } }

@@ -1,0 +1,13 @@
+/* omp-live-map · view · 새 세션 창 작업 폴더 자동완성 드롭다운 */
+  #newsess .cwdwarn { font-size: 10px; color: #ffb35c; }
+  #newsess .cwdwarn:empty { display: none; }
+  #newsess .cwdpop { position: fixed; z-index: 95; max-height: 218px; overflow-y: auto; padding: 3px;
+    background: #0f1722; border: 1px solid #294057; border-radius: 7px; box-shadow: 0 12px 28px #000a; }
+  #newsess .cwdpop[hidden] { display: none; }
+  #newsess .cdh { font-size: 9px; letter-spacing: .04em; color: var(--dim); padding: 4px 6px 2px; }
+  #newsess .cdi { display: flex; align-items: baseline; gap: 8px; padding: 4px 7px; border-radius: 5px;
+    cursor: pointer; font-family: var(--mono); font-size: 10.5px; }
+  #newsess .cdi.on { background: #1b2f42; }
+  #newsess .cdi .cdn { color: var(--fg); white-space: nowrap; }
+  #newsess .cdi .cdp { color: var(--dim); font-size: 9.5px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; margin-left: auto; }

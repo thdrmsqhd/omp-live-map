@@ -40,30 +40,53 @@ function deleteLocal(id) {
   if (DBPROF.has(id)) saveDbProfiles(id, []);
   if (CARD_BLOCKS.delete(id)) saveBlocks();
   if (CARD_UI.delete(id)) saveCardUI();
+  const burls = [...BURL.keys()].filter((k) => k === id || k.startsWith(id + "#"));
+  if (burls.length) { for (const k of burls) BURL.delete(k); saveBrowserUrls(); }
   if (openIds.has(id)) closeCard(id);
   if (BIGPOS.delete(id)) saveOpenCards();
   if (renamingId === id) renamingId = null;
   renderMap(false, true);
 }
 
-const BLOCK_LABELS = { chat: "채팅", context: "컨텍스트", terminal: "터미널", bg: "백그라운드 잡", files: "파일 트리", browser: "브라우저", db: "DB 조회" };
+const BLOCK_LABELS = { chat: "채팅", context: "컨텍스트", terminal: "터미널", bg: "백그라운드 잡", files: "파일 트리", browser: "브라우저", db: "DB 조회", memo: "메모" };
 
 // 카드 종류별로 붙일 수 있는 블록. 로컬 카드는 세션이 아니라 채팅이 없고, 인프라 카드는 사이드 컬럼(파일)을 쓰지 않는다.
 const blockChoices = (n) => (agentKind(n.kind) ? Object.keys(BLOCK_LABELS)
-  : n.kind === "local" ? ["terminal", "bg", "files", "browser", "db"] : ["terminal", "bg", "browser"]);
+  : n.kind === "local" ? ["terminal", "bg", "files", "browser", "db", "memo"] : ["terminal", "bg", "browser"]);
+
+// 브라우저는 카드당 2개까지: 남은 자리 하나에 '추가' 항목, 인스턴스마다 '제거' 항목을 낸다.
+function browserMenuItems(n, cur) {
+  const inst = blockInstances(cur, "browser");
+  const items = [];
+  if (inst.length < blockMax("browser")) {
+    const key = inst.includes("browser") ? "browser#2" : "browser";
+    items.push({ label: `브라우저 블록 추가${inst.length ? " (2번째)" : ""}`, run: () => toggleBlock(n.id, key) });
+  } else {
+    items.push({ label: "브라우저 블록 추가", disabled: true, title: "브라우저 블록은 카드당 2개까지입니다" });
+  }
+  for (const key of inst) {
+    const last = cur.length <= 1;
+    const url = (BURL.get(burlKey(n.id, key)) || {}).url || "";
+    items.push({
+      label: `브라우저 블록 제거${inst.length > 1 ? " " + (inst.indexOf(key) + 1) : ""}`,
+      hint: url ? url.replace(/^https?:\/\//, "").slice(0, 24) : "",
+      disabled: last, title: last ? "마지막 블록은 제거할 수 없습니다" : "",
+      run: () => toggleBlock(n.id, key),
+    });
+  }
+  return items;
+}
 
 function blockMenuItems(n) {
   const cur = cardBlockTypes(n);
-  return blockChoices(n).map((t) => {
-    const on = cur.includes(t);
-    const last = on && cur.length <= 1;
-    return {
-      label: `${BLOCK_LABELS[t]} 블록 ${on ? "제거" : "추가"}`,
-      hint: t === "bg" && on && !(BGS.get(n.id) || []).some(jobVisible) ? "잡 없음" : "",
-      disabled: last, title: last ? "마지막 블록은 제거할 수 없습니다" : "",
-      run: () => toggleBlock(n.id, t),
-    };
-  });
+  // 순서는 BLOCK_LABELS(=blockChoices) 를 따르고, browser 자리에서 인스턴스 항목들로 펼친다.
+  return blockChoices(n).flatMap((t) => (t === "browser" ? browserMenuItems(n, cur) : [{
+    label: `${BLOCK_LABELS[t]} 블록 ${cur.includes(t) ? "제거" : "추가"}`,
+    hint: t === "bg" && cur.includes(t) && !(BGS.get(n.id) || []).some(jobVisible) ? "잡 없음" : "",
+    disabled: cur.includes(t) && cur.length <= 1,
+    title: cur.includes(t) && cur.length <= 1 ? "마지막 블록은 제거할 수 없습니다" : "",
+    run: () => toggleBlock(n.id, t),
+  }]));
 }
 
 function hideSession(id, key = sessionKeyOfNode(id)) {

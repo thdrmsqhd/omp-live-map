@@ -23,7 +23,7 @@ function dragBlockOrder(e, grip) {
     blk.classList.remove("bmoving");
     const u = cardUI(card.dataset.id);
     const slot = blk.dataset.slot === "side" ? "side" : "main";
-    const now = [...col.children].filter((x) => x.classList.contains("blk")).map((x) => x.dataset.blk);
+    const now = [...col.children].filter((x) => x.classList.contains("blk")).map((x) => x.dataset.bkey || x.dataset.blk);
     // 이 카드에서 빠진 블록의 예전 순서는 뒤에 보존한다.
     u.order[slot] = [...now, ...u.order[slot].filter((t) => !now.includes(t))];
     saveCardUI();
@@ -58,7 +58,7 @@ function dragBlockHeight(e, bar) {
     bar.removeEventListener("pointerup", done);
     bar.removeEventListener("pointercancel", done);
     if (!h) return;   // 움직임 없는 클릭(더블클릭의 일부)은 저장하지 않는다.
-    cardUI(card.dataset.id).h[blk.dataset.blk] = h;
+    cardUI(card.dataset.id).h[blk.dataset.bkey || blk.dataset.blk] = h;
     saveCardUI();
     // 끌면서 맞춘 인라인 스타일이 저장값과 같다. 서명만 맞춰 바디를 유지한다.
     syncBodySig(card);

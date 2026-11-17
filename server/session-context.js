@@ -5,21 +5,24 @@
 
 const path = require("path");
 const { readContext, compactInstructions, safeFile } = require("./context");
-const { acquire, prompt, list, rekey } = require("./sessions");
+const { acquire, prompt, list } = require("./sessions");
+const { scan } = require("./tail");
+const lineage = require("./lineage");
 
 const COMPACT_MS = 300000; // 압축은 요약 모델 호출이 끝나야 응답이 온다
 const errText = (e) => String((e && e.message) || e);
 
 // 노드 하나의 지금 컨텍스트. 기록을 읽기만 하므로 어떤 세션이든 볼 수 있다.
 function view(node) {
-  const file = safeFile(node);
+  const card = lineage.cardOf(node) || node;
+  const file = safeFile(lineage.resolve(card));
   if (!file) return { ok: false, out: "세션 기록 경로가 아닙니다" };
   let data;
   try { data = readContext(file); } catch (e) { return { ok: false, out: "기록 읽기 실패: " + errText(e) }; }
   return {
-    ok: true, node: file,
+    ok: true, node: card, file,
     items: data.items, count: data.items.length, totalTokens: data.totalTokens,
-    owned: list().some((s) => s.node === file), // 맵이 띄운 프로세스가 쥐고 있는지(= 압축 편집 가능)
+    owned: list().some((s) => s.node === card), // 맵이 띄운 프로세스가 쥐고 있는지(= 압축 편집 가능)
   };
 }
 
@@ -36,7 +39,7 @@ async function compact(node, text, omit) {
   const { s, err } = await acquire(node);
   if (err) return err;
   let data;
-  try { data = readContext(safeFile(node)); } catch (e) { return { ok: false, out: "기록 읽기 실패: " + errText(e) }; }
+  try { data = readContext(safeFile(lineage.resolve(node))); } catch (e) { return { ok: false, out: "기록 읽기 실패: " + errText(e) }; }
   const instructions = compactInstructions(text, omit, data.items);
   const cmd = { type: "compact" };
   if (instructions) cmd.customInstructions = instructions;
@@ -49,12 +52,13 @@ async function compact(node, text, omit) {
   }
 }
 
-// (c) 비우기: omp 의 new_session 으로 컨텍스트 없이 이어 간다. 맵은 세션을 기록 파일 경로로 추적하므로
-// 새 sessionFile 을 다시 읽어 등록부 키를 옮긴다(그래야 다음 프롬프트·카드가 새 세션을 따라간다).
+// (c) 비우기: omp 의 new_session 으로 컨텍스트 없이 이어 간다. 카드 id 는 처음 파일로 고정하고
+// 실제 기록 파일만 계보(lineage)에 적어, 같은 카드에서 대화만 빈 상태로 이어진다.
 async function clear(node) {
   const { s, err } = await acquire(node);
   if (err) return err;
   if (s.busy) return { ok: false, out: "에이전트가 도는 중입니다" };
+  const card = s.card || node;
   try {
     const r = await s.rpc.send({ type: "new_session", parentSession: s.node });
     if (!r.success) throw new Error(r.error || "omp 가 새 세션을 시작하지 않았습니다");
@@ -63,8 +67,13 @@ async function clear(node) {
     const file = st.success && st.data && st.data.sessionFile;
     if (!file) throw new Error("omp 가 새 세션 파일을 알려 주지 않았습니다");
     const next = path.normalize(file);
-    rekey(s, next);
-    return { ok: true, mode: "clear", node: next, out: "대화 컨텍스트를 비웠습니다" };
+    if (next !== s.node) {
+      const key = lineage.sessionKeyOf(card);
+      lineage.record(card, next, key || undefined);
+      s.node = next;
+    }
+    scan(); // 새 파일을 바로 읽어 스냅샷이 같은 카드로 그리게 한다
+    return { ok: true, mode: "clear", node: card, file: next, out: "대화 컨텍스트를 비웠습니다" };
   } catch (e) {
     return { ok: false, out: errText(e) };
   }

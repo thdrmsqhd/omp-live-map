@@ -1,0 +1,16 @@
+/* omp-live-map · view · 새 세션 자리표시 카드 */
+  .pendcard {
+    position: absolute; z-index: 4; border-radius: 10px; padding: 8px 10px; overflow: hidden;
+    border: 1px dashed #4aa8ff88; background: linear-gradient(180deg, #16212d, #111a24);
+    box-shadow: 0 6px 18px #0006, 0 0 0 1px #4aa8ff22; animation: pendin .18s ease-out;
+  }
+  .pendcard .pt { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 620; color: #cfe3f5; white-space: nowrap; }
+  .pendcard .sp { width: 11px; height: 11px; flex: none; border-radius: 50%; border: 2px solid var(--live, #2fbf9b); border-right-color: transparent; animation: pendspin .8s linear infinite; }
+  .pendcard .px { width: 13px; height: 13px; flex: none; border-radius: 50%; background: #e3564f; color: #fff; font-size: 9px; font-style: normal; line-height: 13px; text-align: center; }
+  .pendcard .pcwd { margin-top: 5px; color: #7d95aa; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pendcard .phint { margin-top: 4px; color: #4e657a; font-size: 10px; }
+  .pendcard .perr { margin-top: 5px; color: #ff8d86; font-size: 10.5px; }
+  .pendcard.err { border-style: solid; border-color: #e3564f99; animation: none; cursor: pointer; }
+  .pendcard.err:hover { border-color: #e3564f; }
+  @keyframes pendspin { to { transform: rotate(360deg); } }
+  @keyframes pendin { from { opacity: 0; transform: scale(.96); } }

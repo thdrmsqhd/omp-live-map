@@ -7,6 +7,8 @@ const path = require("path");
 
 const iso = (ms) => new Date(ms).toISOString();
 
+let seq = 0; // 같은 ms 에 두 세션을 만들어도 파일명이 겹치지 않게
+
 function write(file, obj) {
   try {
     fs.appendFileSync(file, JSON.stringify(obj) + "\n");
@@ -25,7 +27,7 @@ function makeSession(resumePath, cwd) {
   const dir = path.join(home, ".omp", "agent", "sessions", "--C--fake--");
   fs.mkdirSync(dir, { recursive: true });
   const now = Date.now();
-  const id = "fake-" + now;
+  const id = "fake-" + now + "-" + ++seq;
   const file = path.join(dir, iso(now).replace(/[:.]/g, "-") + "_" + id + ".jsonl");
   const lines = [
     { type: "session", id, cwd, timestamp: iso(now) },

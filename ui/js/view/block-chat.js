@@ -54,7 +54,9 @@ const chatSumHTML = (st) => esc(st.summary)
 function chatBlock(n) {
   const st = chatState(n.id);
   const { all, shown, tool } = chatMsgs(n, st);
-  return `<div class="chat">
+  const ro = typeof dockReadOnly === "function" && dockReadOnly(n.id);
+  return `<div class="chat${ro ? " ro" : ""}">
+    ${ro ? '<div class="rodock">메인 카드에 연결된 서브에이전트 — 대화는 읽기 전용입니다</div>' : ""}
     <div class="cfilter"${tool ? "" : " hidden"}><span>${esc(tool)} 사용 턴만 표시 중</span><button data-unfilter="1">해제</button></div>
     <button class="cmore" data-more="1"${all.length > CHAT_SHOW ? "" : " hidden"}>${esc(chatMoreText(st, all))}</button>
     <div class="cmsgs">${chatListHTML(st, shown, tool, chatActivityHTML(n.id, st))}</div>

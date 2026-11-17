@@ -7,12 +7,14 @@ const { execFile } = require("child_process");
 const { HOME } = require("./config");
 const { open } = require("./rpc");
 const { stateOf } = require("./tail");
+const lineage = require("./lineage");
 const { pushChat } = require("./sse");
 const live = require("./live");
 const uiReq = require("./ui-requests");
 
-const sessions = new Map(); // node(세션 파일 경로) -> { rpc, node, busy, running, cancelled, closing, full }
-const opening = new Map(); // node -> 이어 붙이는 중인 Promise (같은 세션을 두 번 띄우지 않는다)
+// card(맵 카드 id, 비우기 전 처음 파일) -> { rpc, node(지금 실제 파일), busy, ... }
+const sessions = new Map();
+const opening = new Map(); // card -> 이어 붙이는 중인 Promise (같은 세션을 두 번 띄우지 않는다)
 
 const errText = (e) => String((e && e.message) || e);
 
@@ -49,7 +51,7 @@ function onFrame(s, e) {
 // omp 를 띄워 등록한다. resume 이 없으면 get_state 의 sessionFile 이 node 가 된다.
 async function start(cwd, resume) {
   const rpc = open({ cwd, resume });
-  const s = { rpc, node: resume || "", busy: false, running: false, cancelled: false, closing: false, full: "" };
+  const s = { rpc, node: resume || "", card: resume || "", busy: false, running: false, cancelled: false, closing: false, full: "" };
   rpc.onEvent((e) => onFrame(s, e));
   try {
     const [, st] = await Promise.all([
@@ -63,10 +65,11 @@ async function start(cwd, resume) {
     rpc.close();
     throw e;
   }
-  sessions.set(s.node, s);
+  s.card = lineage.cardOf(s.node) || s.node;
+  sessions.set(s.card, s);
   uiReq.bind(s);
   rpc.child.on("close", () => {
-    if (sessions.get(s.node) === s) sessions.delete(s.node);
+    if (sessions.get(s.card) === s) sessions.delete(s.card);
     finish(s, 1);
   });
   return s;
@@ -123,7 +126,7 @@ async function newSession(cwd, text, images) {
 }
 
 function stopSession(node) {
-  const s = sessions.get(node);
+  const s = sessions.get(lineage.cardOf(node) || node);
   if (!s) return { ok: false, out: "맵이 띄운 세션이 아닙니다" };
   s.closing = true;
   if (s.busy) s.cancelled = true;
@@ -133,14 +136,15 @@ function stopSession(node) {
 
 // 맵이 쥔 세션을 돌려준다. 없으면 기존 기록에 이어 붙인다. 실패하면 { err: 응답 본문 }.
 async function acquire(node) {
-  let s = sessions.get(node);
+  const card = lineage.cardOf(node) || node;
+  let s = sessions.get(card);
   if (!s) {
-    const st = stateOf(node);
+    const st = stateOf(lineage.resolve(card));
     if (!st) return { err: { ok: false, out: "세션 기록 없음" } };
-    let p = opening.get(node);
+    let p = opening.get(card);
     if (!p) {
-      p = attach(st).finally(() => opening.delete(node));
-      opening.set(node, p);
+      p = attach(st).finally(() => opening.delete(card));
+      opening.set(card, p);
     }
     try { s = await p; } catch (e) { return { err: { ok: false, out: errText(e) } }; }
     if (!s) return { err: { ok: false, held: true, out: "터미널에서 사용 중인 세션입니다" } };
@@ -155,7 +159,7 @@ async function prompt(node, text, images) {
 }
 
 async function cancel(node) {
-  const s = sessions.get(node);
+  const s = sessions.get(lineage.cardOf(node) || node);
   if (!s || !s.busy) return { ok: false, out: "실행 중인 프롬프트 없음" };
   s.cancelled = true;
   try {
@@ -173,23 +177,11 @@ async function cancel(node) {
 // 이 세션 파일을 맵이 띄운 rpc 프로세스가 잡고 있는가(그러면 실시간 이벤트는 rpc 프레임이 원천이다).
 function has(node) {
   if (!node) return false;
-  if (sessions.has(node)) return true;
-  const key = String(node).replace(/\\/g, "/").toLowerCase();
-  for (const k of sessions.keys()) if (String(k).replace(/\\/g, "/").toLowerCase() === key) return true;
-  return false;
+  return sessions.has(lineage.cardOf(node) || node);
 }
 
 function list() {
-  return [...sessions.values()].map((s) => ({ node: s.node, pid: s.rpc.child.pid, busy: s.busy }));
+  return [...sessions.values()].map((s) => ({ node: s.card, file: s.node, pid: s.rpc.child.pid, busy: s.busy }));
 }
 
-// omp 의 new_session 처럼 프로세스가 새 기록 파일로 옮겨 가면 등록부 키도 함께 옮긴다.
-function rekey(s, next) {
-  if (!s || !next || next === s.node) return;
-  if (sessions.get(s.node) === s) sessions.delete(s.node);
-  uiReq.drop(s.node);
-  s.node = next;
-  sessions.set(next, s);
-}
-
-module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has, rekey };
+module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has };

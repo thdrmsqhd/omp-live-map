@@ -67,6 +67,7 @@ function commitStream(st, fallback) {
 // 서버는 받자마자 ok 를 돌려준다. 답변 확정과 busy 해제는 SSE done(handleChatEvent)이 맡는다. 도는 중이면 추가 지시로 간다.
 // 첨부(st.files)는 함께 보내고, 실패하면 입력창 아래로 되돌린다.
 async function sendChat(id) {
+  if (typeof attnClear === "function") attnClear(id);   // 프롬프트를 보내면 그 카드의 주의는 끝난다
   const st = chatState(id);
   const text = (st.draft || "").trim();
   const files = st.files;
@@ -159,12 +160,12 @@ async function compactChat(id) {
   paintChat(id);
 }
 
-// 비우기: omp 의 new_session 으로 컨텍스트 없는 새 세션을 연다. 맵은 세션 파일 경로로 카드를 추적하므로
-// 새 node 로 열린 카드·자리를 넘기고, 새 기록이 스냅샷에 들어올 때까지 그래프를 다시 받는다.
+// 비우기: omp 가 새 세션 파일로 이어 가도 카드 id·자리·이름·메모는 그대로 두고 대화만 빈다.
+// 서버가 계보로 카드 id 를 고정하므로 이 카드의 화면 상태만 버리고 새 기록을 다시 받는다.
 async function clearChat(id) {
   const st = chatState(id);
   if (st.clearing || st.busy) return;
-  if (!confirm("대화 컨텍스트를 비우고 새 세션으로 이어갑니다")) return;
+  if (!confirm("지금까지 대화 기억을 비울까요? 카드와 메모는 그대로 남습니다")) return;
   st.clearing = true;
   st.summary = "";
   st.error = "";
@@ -183,19 +184,12 @@ async function clearChat(id) {
     paintChat(id);
     return;
   }
-  adoptOpenCard(id, out.node);
-  let found = false;
-  for (let i = 0; i < 10 && !found; i++) {
-    await reloadGraph();
-    found = DATA.sessions.some((s) => (s.nodes || []).some((n) => n.id === out.node));
-    if (!found) await new Promise((done) => setTimeout(done, 300));
-  }
-  // 새 기록이 아직 스냅샷에 없으면 없는 노드를 열어 둘 수 없으므로 카드를 접고 알린다.
-  if (!found) {
-    closeCard(out.node);
-    alert("새 세션 기록을 찾지 못했습니다: " + out.node);
-  }
+  CHAT.delete(id);        // 비우기 전 로컬 표시분·요약을 버린다
+  CTX.delete(id);         // 컨텍스트 블록 캐시도 새 기록 기준으로 다시 읽는다
+  CHAT_TOOL.delete(id);
+  await reloadGraph();
   renderMap(false, true);
+  paintChat(id);
 }
 
 // 오류 줄의 "다시 시도": 마지막 전송 입력 또는 요약을 그대로 다시 요청한다.

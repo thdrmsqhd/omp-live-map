@@ -142,6 +142,17 @@ function handle(line) {
     if (askEnabled) for (const r of askWaiters.splice(0)) r();
     return;
   }
+  if (c.type === "new_session") {
+    // 컨텍스트 없는 새 세션 파일로 갈아탄다(진짜 omp 와 같은 의미: 이전 파일은 그대로 남는다).
+    const prev = process.env.FAKE_OMP_NEW_SESSION === "fail" ? null : makeSession(null, process.cwd());
+    if (!prev) {
+      out({ type: "response", id: c.id, command: c.type, success: false, error: "시나리오: 새 세션 거부" });
+      return;
+    }
+    session = prev;
+    ok(c.id, c.type, { sessionId: prev.id, cancelled: false });
+    return;
+  }
   if (c.type === "abort") {
     aborted = true;
     ok(c.id, c.type);

@@ -76,7 +76,8 @@ function startCardDrag(e) {
     d.rect = geo.get(id);
     d.skip = (o) => o === c;
   } else if (mode === "big") {
-    d.items = d.restore = [itemOf(el)];
+    const docked = typeof dockDragExtras === "function" && id ? dockDragExtras(id) : [];
+    d.items = d.restore = [itemOf(el), ...docked];
     d.rect = SATS.get(id);
   } else {
     // 포인터 시작 시 대상을 고정한다. 이동 중 새로 생긴 카드는 합류시키지 않는다.
@@ -130,6 +131,7 @@ function finishCardDrag() {
     if (g) MANUAL[cardManualKeyOf(d.id)] = { x: g.x + d.dx, y: g.y + d.dy };
   } else if (d.mode === "big") {
     BIGPOS.set(d.id, { x: d.rect.x + d.dx, y: d.rect.y + d.dy, w: d.rect.w, h: d.rect.h });
+    if (typeof dockOnMoved === "function") dockOnMoved(d.id);   // 서브를 직접 끌면 도킹 해제(연결선은 유지)
   } else moveClusters(d.list, d.dx, d.dy);
   saveLocals();
   saveManual();

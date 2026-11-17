@@ -53,6 +53,9 @@ const IGNORE = new Set(["node_modules", ".git", "__pycache__", ".venv", "venv", 
 
 function treeOf(dir, depth) {
   const root = path.resolve(dir);
+  // 폴더 자동완성이 없는 경로를 알 수 있게 존재 여부를 함께 준다.
+  let exists = false;
+  try { exists = fs.statSync(root).isDirectory(); } catch {}
   const walk = (d, left) => {
     let ents;
     try {
@@ -77,7 +80,7 @@ function treeOf(dir, depth) {
     if (left > 1) for (const it of items) if (it.dir) it.children = walk(it.path, left - 1);
     return items;
   };
-  return { path: root, entries: walk(root, Math.max(1, Math.min(3, depth))) };
+  return { path: root, exists, entries: walk(root, Math.max(1, Math.min(3, depth))) };
 }
 
 const BG = new Map();

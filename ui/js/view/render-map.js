@@ -34,6 +34,7 @@ function placeLocals() {
 // 큰 카드 자리: 처음 열 때 클러스터 옆 빈 곳에 놓고 카드별로 고정한다.
 function placeBigCards() {
   SATS = new Map();
+  if (typeof syncSubDocks === "function") syncSubDocks();   // 열린 메인에 실행 중 서브 카드를 자동으로 연다
   let changed = false;
   for (const id of openIds) {
     if (!geo.has(id)) continue;
@@ -45,6 +46,7 @@ function placeBigCards() {
     }
     SATS.set(id, { x: box.x, y: box.y, w: box.w || BIG_W, h: box.h || BIG_H });
   }
+  if (typeof placeDocked === "function" && placeDocked()) changed = true;   // 도킹 서브는 메인 오른쪽에 붙인다
   if (changed) saveOpenCards();
 }
 
@@ -80,6 +82,7 @@ function renderMap(resetView, force) {
   const box = $("nodes");
   const pieces = CLUSTERS.map((c) => ({ key: "c:" + clusterKeyOf(c), html: clusterHTML(c) }));
   pieces.push(...hostCards());
+  pieces.push(...pendingPieces());
   for (const n of NODES) {
     if (!openIds.has(n.id)) { pieces.push({ key: "n:" + n.id, html: smallCard(n) }); continue; }
     pieces.push({ key: "g:" + n.id, html: ghostCard(n) });
@@ -92,5 +95,6 @@ function renderMap(resetView, force) {
   for (const id of openIds) mountBlocks(nodeById(id), ELS.get(id));
   box.querySelectorAll("input.rename").forEach(wireRename);
   paintSelection();
+  if (typeof paintAttention === "function") paintAttention();
   if (resetView) fit(); else paintMinimap();
 }

@@ -30,14 +30,15 @@ const ROUTES = {
     // 이미 지나간 출력도 붙자마자 보이게 한다(맵 rpc 세션의 툴 출력).
     for (const s of data.sessions) {
       for (const n of s.nodes) {
-        for (const out of outsFor(n.id)) {
+        const file = n.file || n.id; // 실시간 기록은 지금 실제 파일로 색인된다
+        for (const out of outsFor(file)) {
           if (out.name) res.write(`data: ${JSON.stringify({ live: { node: n.id, kind: "tool", id: out.id, name: out.name, args: out.args } })}\n\n`);
           res.write(`data: ${JSON.stringify({ live: { node: n.id, kind: "out", id: out.id, text: out.text } })}\n\n`);
         }
         // 확장(실시간 기록)이 흘려보낸 최근 활동도 되살린다.
-        for (const ev of recentFor(n.id)) res.write(`data: ${JSON.stringify({ live: ev })}\n\n`);
+        for (const ev of recentFor(file)) res.write(`data: ${JSON.stringify({ live: { ...ev, node: n.id } })}\n\n`);
         // 아직 답하지 않은 질문도 화면이 되살릴 수 있게 함께 보낸다.
-        for (const request of asksFor(n.id)) res.write(`data: ${JSON.stringify({ ask: { node: n.id, kind: "add", request } })}\n\n`);
+        for (const request of asksFor(file)) res.write(`data: ${JSON.stringify({ ask: { node: n.id, kind: "add", request } })}\n\n`);
       }
     }
     // 도는 잡의 툴은 "잡 띄움" 한 줄로 접는다(출력은 잡 카드만 보여준다).

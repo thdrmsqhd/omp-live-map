@@ -237,3 +237,9 @@
   #newsess .nserr:empty { display: none; }
   #newsess .nsrow { display: flex; justify-content: flex-end; gap: 6px; }
   #newsess .nsrow button:disabled { opacity: .5; cursor: progress; }
+
+  /* 연결 서브 카드(도킹)의 대화는 읽기 전용: 입력·전송·비우기·압축을 숨긴다 */
+  .chat .rodock { display: none; }
+  .chat.ro .crow, .chat.ro .achips, .chat.ro .csum, .chat.ro .cmodel { display: none; }
+  .chat.ro .rodock { display: block; margin: 4px 0 2px; padding: 5px 8px; border: 1px dashed #35506b; border-radius: 6px;
+    font-size: 10.5px; color: var(--muted); }

@@ -1,0 +1,33 @@
+/* omp-live-map · view · memo 블록 (카드 메모 목록·추가 폼) */
+  .node.big .blk[data-blk="memo"] .memo { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 4px;
+    padding: 3px 6px 2px; }
+  .memo .mtop { display: flex; align-items: center; justify-content: space-between; padding-right: 38px;
+    font-family: var(--mono); font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+  .memo .mtop button { padding: 0 8px; font-size: 11px; line-height: 16px; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  .memo .mtop button:hover { color: var(--fg); border-color: #2f5d85; }
+
+  .memo .mlist { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 3px; }
+  .memo .mempty { font-family: var(--mono); font-size: 10px; color: var(--dim); padding: 2px 0; }
+  .memo .mitem { display: flex; align-items: flex-start; gap: 4px; padding: 2px 4px;
+    background: #0a1017; border: 1px solid #182533; border-radius: 5px; }
+  .memo .mitem:hover { border-color: #2f5d85; }
+  .memo .mtext { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; cursor: copy;
+    font-family: var(--mono); font-size: 11px; line-height: 1.4; color: #cfdae6;
+    user-select: text; -webkit-user-select: text; }
+  .memo .macts { flex: none; display: flex; gap: 1px; opacity: .35; transition: opacity .12s; }
+  .memo .mitem:hover .macts { opacity: 1; }
+  .memo .macts button { padding: 0 4px; font-size: 10px; line-height: 15px; color: var(--dim);
+    background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+  .memo .macts button:hover { background: #1d2936; color: var(--fg); }
+
+  .memo .mform { display: flex; flex-direction: column; gap: 3px; }
+  .memo .mform[hidden] { display: none; }
+  .memo .minput { width: 100%; height: 54px; min-height: 36px; resize: vertical; padding: 3px 5px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.4; color: var(--fg);
+    background: #0a1017; border: 1px solid #1c2a39; border-radius: 5px; }
+  .memo .minput:focus { border-color: #2f5d85; outline: none; }
+  .memo .mrow { display: flex; gap: 4px; }
+  .memo .mrow button { padding: 1px 8px; font-size: 10px; color: var(--muted); background: #14202c;
+    border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  .memo .mrow button:hover { color: var(--fg); border-color: #2f5d85; }
