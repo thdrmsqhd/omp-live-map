@@ -15,6 +15,10 @@ function openNewSession(at) {
   box.id = "newsess";
   box.innerHTML = `<div class="nsbox">
     <div class="nst">새 세션</div>
+    <label>하네스<select class="nshz">
+      <option value="omp">omp (기본)</option>
+      <option value="claude">Claude Code</option>
+    </select></label>
     <label>작업 폴더<input class="nscwd" spellcheck="false"></label>
     <label>첫 지시<textarea class="nstext" rows="4" placeholder="에이전트에 줄 첫 지시 (Ctrl+Enter · 이미지·파일 붙여넣기/끌어 놓기)"></textarea></label>
     <div class="achips"></div>
@@ -24,7 +28,10 @@ function openNewSession(at) {
   const cwd = box.querySelector(".nscwd");
   const ta = box.querySelector(".nstext");
   const err = box.querySelector(".nserr");
+  const hz = box.querySelector(".nshz");
   const go = box.querySelector("button[data-open]");
+  hz.value = NEW_HARNESS === "claude" ? "claude" : "omp";
+  hz.addEventListener("change", () => saveNewHarness(hz.value));
   cwd.value = ENV.localCwd || "";
   installCwdSuggest(box, cwd);
   const files = box.__files = [];
@@ -45,7 +52,7 @@ function openNewSession(at) {
     const pend = addPending(at, cwd.value.trim());
     let out;
     try {
-      const res = await postJSON("/api/session/new", { cwd: cwd.value.trim(), text, files: attachPayload(files) });
+      const res = await postJSON("/api/session/new", { cwd: cwd.value.trim(), text, files: attachPayload(files), harness: hz.value });
       out = await res.json().catch(() => ({ ok: false, out: "HTTP " + res.status }));
     } catch (e) {
       out = { ok: false, out: e.message };

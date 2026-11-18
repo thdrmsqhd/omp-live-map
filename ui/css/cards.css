@@ -159,3 +159,8 @@
   #edges .dockedge.live { stroke-dasharray: 7 5; animation: dockflow 1s linear infinite; }
   @keyframes dockflow { to { stroke-dashoffset: -24; } }
   @media (prefers-reduced-motion: reduce) { #edges .dockedge.live { animation: none; } }
+
+  /* 하네스 칩: 이 카드의 세션을 만든 실행기(omp / Claude). 모델 칩과 구분되는 색을 쓴다. */
+  .node .hz { font-size: 9.5px; line-height: normal; padding: 1px 6px; border-radius: 8px; flex: none; white-space: nowrap;
+    color: #9ecbff; background: #16273a; border: 1px solid #2a4a6b; }
+  .node .hz.cl { color: #ffc79e; background: #3a2517; border-color: #6b4a2a; }

@@ -8,12 +8,16 @@ const { readContext, compactInstructions, safeFile } = require("./context");
 const { acquire, prompt, list } = require("./sessions");
 const { scan } = require("./tail");
 const lineage = require("./lineage");
+const harness = require("./harness");
+const claudeRun = require("./harness/claude-ops");
 
 const COMPACT_MS = 300000; // 압축은 요약 모델 호출이 끝나야 응답이 온다
 const errText = (e) => String((e && e.message) || e);
+const NO_CTX = { ok: false, out: "Claude Code는 컨텍스트 구성 조회를 지원하지 않습니다" }; // 압축·비우기는 claude-run 이 맡는다
 
 // 노드 하나의 지금 컨텍스트. 기록을 읽기만 하므로 어떤 세션이든 볼 수 있다.
 function view(node) {
+  if (harness.of(node) === "claude") return NO_CTX;
   const card = lineage.cardOf(node) || node;
   const file = safeFile(lineage.resolve(card));
   if (!file) return { ok: false, out: "세션 기록 경로가 아닙니다" };
@@ -36,6 +40,7 @@ async function guide(node, text) {
 
 // (b) 압축: 남길 항목을 고르고 가이드를 지시문으로 넘긴다. 고른 항목은 "요약에서 빼라"로 들어간다.
 async function compact(node, text, omit) {
+  if (harness.of(node) === "claude") return claudeRun.compact(node, text);
   const { s, err } = await acquire(node);
   if (err) return err;
   let data;
@@ -55,6 +60,7 @@ async function compact(node, text, omit) {
 // (c) 비우기: omp 의 new_session 으로 컨텍스트 없이 이어 간다. 카드 id 는 처음 파일로 고정하고
 // 실제 기록 파일만 계보(lineage)에 적어, 같은 카드에서 대화만 빈 상태로 이어진다.
 async function clear(node) {
+  if (harness.of(node) === "claude") return claudeRun.clear(node);
   const { s, err } = await acquire(node);
   if (err) return err;
   if (s.busy) return { ok: false, out: "에이전트가 도는 중입니다" };

@@ -14,6 +14,7 @@ const fs = require("fs");
 const http = require("http");
 const { SESSIONS, PORT } = require("./server/config");
 const { scan } = require("./server/tail");
+const claude = require("./server/harness/claude");
 const { refreshProc } = require("./server/proc");
 const { broadcast } = require("./server/sse");
 const { handle } = require("./server/routes");
@@ -26,12 +27,14 @@ const server = http.createServer((req, res) => {
 });
 
 scan();
+claude.scan();
 refreshProc();
 require("./server/active").start();
 require("./server/ext-live").start();
 setInterval(() => { refreshProc(); }, 4000);
 setInterval(() => {
   scan();
+  claude.scan();
   broadcast();
 }, 2000);
 

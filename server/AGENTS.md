@@ -14,6 +14,7 @@
 - `server.js`는 세션 파일을 2초마다 스캔하고 파일 감시 이벤트도 사용한다. `proc.js`는 4초마다 프로세스를 갱신한다. `active.js`, `ext-live.js`도 시작된다.
 - `routes.js`가 공통 가드 뒤 라우트 표와 `ui/` 정적 파일을 분기한다. `routes-ops.js`는 셸·잡·프로세스·인프라·DB, `routes-chat.js`는 세션·프롬프트·모델, `routes-context.js`는 맥락 API를 맡는다.
 - `sse.js`는 `/api/events` 구독자에 스냅샷과 `{chat: ...}`, `{live: ...}` 이벤트를 방송한다. 접속 시 `routes.js`가 스냅샷과 최근 출력을 재생한다. `live.js`는 RPC 프레임을 변환하고, `ext-live.js`는 확장 JSONL을 따로 읽되 맵 RPC 세션과 중복하지 않는다.
+- 하네스 경계는 `harness.js`(omp·claude 기능 플래그와 경로 판별), `harness/claude.js`(메인 기록), `harness/claude-sub.js`(subagents 기록·meta), `harness/claude-merge.js`(스냅샷 병합), `harness/claude-run.js`(claude CLI 실행·ask), `harness/claude-ops.js`(압축·비우기), `harness/claude-model.js`(카드별 모델), `harness/switch.js`(요약 이어받기 하네스 전환)다. 요약은 `summary.js`, omp lease 확인은 `omp-lease.js`. 스냅샷 노드의 `harness` 필드가 UI 계약이고, 세션 키는 `claude|` 접두사로 omp 키와 겹치지 않는다. 전환 뒤에도 카드 id 는 계보로 유지되며, 하네스 판정은 항상 `lineage.resolve` 한 실제 파일 기준이다. `~/.claude` 파일은 읽기 전용이며, 새 하네스는 이 경계에 어댑터 하나로 더한다.
 
 ## 변경 시 주의
 - `http.js`의 Host·Origin·Sec-Fetch-Site·JSON Content-Type 검사와 본문 크기 제한을 유지한다. 비 API GET은 Host만 검사하므로 경계 변경 시 예외를 함께 살핀다.

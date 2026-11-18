@@ -77,6 +77,14 @@ HIDE_DONE_SUBS = readJSON("omp-map-hide-done-subs", true) !== false;
 
 const saveDoneSubs = () => writeJSON("omp-map-hide-done-subs", HIDE_DONE_SUBS);
 
+// 새 세션 창에서 마지막으로 고른 하네스("omp" 기본 / "claude").
+let NEW_HARNESS = localStorage.getItem("omp-map-new-harness") || "omp";
+
+const saveNewHarness = (h) => {
+  NEW_HARNESS = h === "claude" ? "claude" : "omp";
+  localStorage.setItem("omp-map-new-harness", NEW_HARNESS);
+};
+
 for (const [id, name] of Object.entries(readJSON("omp-map-alias", {}))) {
   if (typeof name === "string" && name) ALIAS.set(id, name);
 }

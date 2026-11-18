@@ -19,7 +19,8 @@ let seq = 0;
 const safeName = (n) => String(n || "").replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").replace(/^[.\s]+|[.\s]+$/g, "").slice(0, 120) || "file";
 
 // files: [{ name, mimeType, data(base64) }]. 반환: { message, images } 또는 { error }.
-function prepare(text, files) {
+// mode "claude" 면 저장한 일반 파일을 Claude 의 @경로 참조로 적는다.
+function prepare(text, files, mode) {
   const list = Array.isArray(files) ? files : [];
   if (list.length > MAX_FILES) return { error: `첨부는 ${MAX_FILES}개까지입니다` };
   const items = [];
@@ -53,7 +54,10 @@ function prepare(text, files) {
     return { error: "첨부 저장 실패: " + String((e && e.message) || e) };
   }
   let message = text;
-  if (saved.length) message = (text ? text + "\n\n" : "") + "첨부 파일(read 로 읽을 것):\n" + saved.map((p) => "- " + p).join("\n");
+  if (saved.length) {
+    message = (text ? text + "\n\n" : "") + (mode === "claude" ? "첨부 파일:\n" + saved.map((p) => "@" + p).join("\n")
+      : "첨부 파일(read 로 읽을 것):\n" + saved.map((p) => "- " + p).join("\n"));
+  }
   // omp 는 빈 메시지를 받지 않으므로 이미지만 보낼 때 자리 표시 글을 둔다.
   if (!message && images.length) message = "(이미지 첨부)";
   return { message, images };

@@ -92,6 +92,13 @@ function drop(node) {
   for (const id of m.keys()) pushAsk({ node, kind: "del", id });
 }
 
+// omp rpc 밖에서 만든 질문(Claude AskUserQuestion): 화면에 띄우고 답은 reply(response) 로 넘긴다.
+function ask(node, request, reply) {
+  if (!request || !request.id) return;
+  mapOf(node).set(request.id, { node, request, reply });
+  pushAsk({ node, kind: "add", request });
+}
+
 // rpc 프레임을 받아 대기 목록을 갱신한다. start() 직후 bind 로 한 번 잇는다.
 function onRequest(s, e) {
   const node = s.node;
@@ -125,11 +132,12 @@ function bind(s) {
 
 // 화면이 보낸 답. 없는 id·이미 해소된 id 는 거절한다.
 function answer(node, id, response) {
-  const entry = take(lineage.resolve(node), id); // 카드 id 로 온 답을 지금 실제 파일의 질문으로
+  const entry = take(node, id) || take(lineage.resolve(node), id); // 카드 id·지금 실제 파일 양쪽으로 찾는다
   if (!entry) return { ok: false, out: "없거나 이미 해소된 질문입니다" };
+  pushAsk({ node: entry.node, kind: "del", id: entry.request.id });
+  if (entry.reply) return entry.reply(response) || { ok: true };
   const frame = { type: "extension_ui_response", id: entry.request.id, ...responseFor(entry.request.method, response) };
   const sent = entry.s.rpc.sendRaw(frame);
-  pushAsk({ node: entry.node, kind: "del", id: entry.request.id });
   return sent ? { ok: true } : { ok: false, out: "omp 프로세스에 답을 보내지 못했습니다" };
 }
 
@@ -145,4 +153,4 @@ function allAsks() {
   return out;
 }
 
-module.exports = { bind, answer, asksFor, allAsks, drop };
+module.exports = { bind, ask, answer, asksFor, allAsks, drop };

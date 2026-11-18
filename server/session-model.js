@@ -2,6 +2,8 @@
 "use strict";
 
 const { acquire } = require("./sessions");
+const harness = require("./harness");
+const claudeModel = require("./harness/claude-model");
 
 const errText = (e) => String((e && e.message) || e);
 const slim = (m) => (m ? { provider: m.provider || "", id: m.id || "", name: m.name || m.id || "" } : null);
@@ -15,6 +17,7 @@ async function call(s, cmd) {
 
 // 사용 가능한 모델 목록과 지금 모델. 맵이 쥐지 않은 세션은 이어 붙인다(터미널이 쥐면 거부).
 async function listModels(node) {
+  if (harness.of(node) === "claude") return claudeModel.list(node);
   const { s, err } = await acquire(node);
   if (err) return err;
   try {
@@ -27,6 +30,7 @@ async function listModels(node) {
 
 // 모델을 바꾼다. 에이전트가 도는 중이면 omp 는 다음 요청부터 새 모델을 쓴다.
 async function setModel(node, provider, id) {
+  if (harness.of(node) === "claude") return claudeModel.set(node, id);
   if (!provider || !id) return { ok: false, out: "provider·id 가 필요합니다" };
   const { s, err } = await acquire(node);
   if (err) return err;

@@ -53,6 +53,7 @@ const chatSumHTML = (st) => esc(st.summary)
 
 function chatBlock(n) {
   const st = chatState(n.id);
+  const caps = capsOf(n);
   const { all, shown, tool } = chatMsgs(n, st);
   const ro = typeof dockReadOnly === "function" && dockReadOnly(n.id);
   return `<div class="chat${ro ? " ro" : ""}">
@@ -65,13 +66,13 @@ function chatBlock(n) {
     <div class="cmnote" hidden></div>
     ${chatModelPickerHTML()}
     <div class="crow">
-      <button class="cmodel" data-model="1">${esc(chatModelLabel(n))}</button>
+      <button class="cmodel" data-model="1"${caps.model ? "" : ` disabled title="Claude Code는 대화 중 모델 변경을 지원하지 않습니다"`}>${esc(chatModelLabel(n))}</button>
       <textarea class="cin" rows="1" placeholder="에이전트에 프롬프트 전송 (Ctrl+Enter · 이미지·파일 붙여넣기/끌어 놓기)">${esc(st.draft)}</textarea>
       <button data-send="1">보내기</button>
       <button class="stop" data-cancel="1"${st.busy ? "" : " hidden"}>취소</button>
       <button data-sum="1">요약</button>
-      <button data-compact="1"${st.busy || st.compacting ? " disabled" : ""}>${st.compacting ? "압축 중…" : "압축"}</button>
-      <button data-clear="1"${st.busy || st.clearing ? " disabled" : ""}>${st.clearing ? "비우는 중…" : "비우기"}</button>
+      <button data-compact="1"${caps.compact ? "" : ` disabled title="Claude Code는 컨텍스트 압축을 지원하지 않습니다"`}>${st.compacting ? "압축 중…" : "압축"}</button>
+      <button data-clear="1"${caps.clear ? "" : ` disabled title="Claude Code는 대화 비우기를 지원하지 않습니다"`}>${st.clearing ? "비우는 중…" : "비우기"}</button>
     </div>
     <div class="achips">${attachChipsHTML(st.files)}</div>
     <div class="csum">${chatSumHTML(st)}</div>
@@ -121,12 +122,15 @@ function paintChat(id) {
   box.querySelector(".cworking").hidden = !(st.busy || actItems(id).running);
   // 도는 중에도 보내기는 열려 있다(추가 지시). 취소는 도는 동안만 보인다.
   box.querySelector("button[data-cancel]").hidden = !st.busy;
-  // 압축·비우기는 진행 중이거나 에이전트가 도는 동안 눌러지지 않는다.
+  // 압축·비우기는 진행 중이거나 에이전트가 도는 동안 눌러지지 않는다. Claude Code 는 둘 다 지원하지 않는다.
+  const caps = capsOf(node);
   const compact = box.querySelector("button[data-compact]");
-  compact.disabled = !!(st.busy || st.compacting);
+  compact.disabled = !caps.compact || !!(st.busy || st.compacting);
+  compact.title = caps.compact ? "" : "Claude Code는 컨텍스트 압축을 지원하지 않습니다";
   compact.textContent = st.compacting ? "압축 중…" : "압축";
   const clr = box.querySelector("button[data-clear]");
-  clr.disabled = !!(st.busy || st.clearing);
+  clr.disabled = !caps.clear || !!(st.busy || st.clearing);
+  clr.title = caps.clear ? "" : "Claude Code는 대화 비우기를 지원하지 않습니다";
   clr.textContent = st.clearing ? "비우는 중…" : "비우기";
   // 입력 중에는 input 리스너가 draft 를 맞춰 두므로, 값이 다르면 전송·실패 복원 같은 프로그램 변경이다.
   const ta = box.querySelector(".cin");

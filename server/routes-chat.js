@@ -2,22 +2,25 @@
 "use strict";
 
 const { json, withJson } = require("./http");
-const { stateOf } = require("./tail");
-const lineage = require("./lineage");
 const { newSession, stopSession, prompt, cancel, list } = require("./sessions");
-const { apiChat } = require("./models");
 const { listModels, setModel } = require("./session-model");
 const { prepare, MAX_BODY: UPLOAD_BODY } = require("./uploads");
 const { answer } = require("./ui-requests");
+const harness = require("./harness");
+const { switchHarness } = require("./harness/switch");
+const { summaryOf } = require("./summary");
 
-// 본문 { text, files } 를 omp 에 보낼 메시지와 images 로 바꾼다. 실패하면 { error }.
-const promptOf = (p) => prepare(String(p.text || "").trim(), p.files);
+// 본문 { text, files } 를 보낼 메시지와 images 로 바꾼다. 실패하면 { error }.
+const promptOf = (p) => {
+  const claude = String(p.harness || "") === "claude" || harness.of(String(p.node || "")) === "claude";
+  return prepare(String(p.text || "").trim(), p.files, claude ? "claude" : "");
+};
 
 module.exports = {
   "POST /api/session/new": (req, res) => withJson(req, res, async (p) => {
     const a = promptOf(p);
     if (a.error) return json(res, { ok: false, out: a.error });
-    json(res, await newSession(String(p.cwd || ""), a.message, a.images));
+    json(res, await newSession(String(p.cwd || ""), a.message, a.images, String(p.harness || "omp")));
   }, UPLOAD_BODY),
   "POST /api/session/stop": (req, res) => withJson(req, res, (p) => json(res, stopSession(String(p.node || "")))),
   "* /api/session/list": (req, res) => json(res, { sessions: list() }),
@@ -39,20 +42,9 @@ module.exports = {
     res.writeHead(409, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
     res.end(JSON.stringify(out));
   }),
-  "POST /api/summary": (req, res) => withJson(req, res, async (p) => {
-    const st = stateOf(lineage.resolve(String(p.node || "")));
-    if (!st) return json(res, { ok: false, out: "세션 기록 없음" });
-    const convo = (st.messages || []).slice(-10).map((m) => (m.role === "user" ? "사용자: " : "에이전트: ") + m.text).join("\n");
-    const ctx = st.ctx ? `context ${st.ctx.promptTokens} tokens, 압축 ${st.ctx.compactionEpoch}회` : "context 정보 없음";
-    try {
-      const text = await apiChat(
-        `아래 세션 대화를 보고, 에이전트가 지금 무엇을 이해하고 어떤 상태인지 한국어 3줄로 요약하라. 각 줄은 60자 이내.\n\n[${ctx}]\n${convo || "(대화 없음)"}`,
-        700,
-        "You summarize coding-session context. Reply in Korean with exactly 3 short bullet lines, no preamble."
-      );
-      json(res, { ok: true, out: text });
-    } catch (e) {
-      json(res, { ok: false, out: String(e.message || e) });
-    }
+  // 하네스 전환: 원래 세션 요약을 넘겨 대상 하네스로 새 세션을 시작하고 카드 id 는 계보로 유지한다.
+  "POST /api/session/switch": (req, res) => withJson(req, res, async (p) => {
+    json(res, await switchHarness(String(p.node || ""), String(p.target || "")));
   }),
+  "POST /api/summary": (req, res) => withJson(req, res, async (p) => json(res, await summaryOf(String(p.node || "")))),
 };

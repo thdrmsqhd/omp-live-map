@@ -25,17 +25,24 @@ function profileChip(n) {
   return `<span class="prof" title="${esc(t)}">${esc(n.agent)}</span>`;
 }
 
+// 모델 칩. 서브에이전트는 기록 모델이 없으면 프로필에 적힌 모델을 쓴다.
+function modelChip(n) {
+  const m = n.model || n.agentModel || "";
+  return `<span class="mod" title="${esc(n.provider ? n.provider + " · " : "")}${esc(m || "?")}">${esc(modelShort(m))}</span>`;
+}
+
 function sessionChrome(n) {
   const isLocal = n.kind === "local";
   const series = n.series || [];
   const maxOut = series.length ? Math.max(...series.map((s) => s.out || 0)) : 0;
   return `<div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i>
       ${nameField(n)}
+      ${isLocal ? "" : harnessChip(n)}
       ${askBadge(n.id)}<span class="attn-badge"></span>
       ${!isLocal && n.startedAt ? `<span class="since" title="시작 ${esc(new Date(n.startedAt).toLocaleString("ko-KR"))}">시작 ${ago(n.startedAt)}</span>` : ""}
       <button class="x" data-rename="${esc(n.id)}" title="이름 변경${isLocal ? "" : " (비우면 원래 이름)"}">✎</button>
       ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제">🗑</button>` : `<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">세션 닫기</button>`}
-      ${profileChip(n)}${typeof dockTag === "function" ? dockTag(n) : ""}${isLocal ? `<span class="mod">local</span>` : cardBlockTypes(n).includes("chat") ? "" : `<span class="mod" title="${esc(n.provider || "provider 미상")} · ${esc(n.model || "?")}">${esc(modelShort(n.model))}</span>`}
+      ${profileChip(n)}${typeof dockTag === "function" ? dockTag(n) : ""}${isLocal ? `<span class="mod">local</span>` : n.kind === "sub" || !cardBlockTypes(n).includes("chat") ? modelChip(n) : ""}
       <button class="x" data-close="1" title="큰 카드 축소 (Esc)" aria-label="큰 카드 축소">−</button></div>
     <div class="sub-t${SUB_OPEN.has(n.id) ? " open" : ""}" data-subtoggle="${esc(n.id)}" title="${esc(subtitleFull(n, isLocal))}">${esc(subtitleOf(n, isLocal))}</div>
     ${isLocal ? resRow(n, true) : `${tokenSection(n)}

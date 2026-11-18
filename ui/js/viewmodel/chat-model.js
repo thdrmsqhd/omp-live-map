@@ -25,6 +25,8 @@ async function postOut(url, body) {
 
 // 모델 버튼: 선택창을 열며 목록을 새로 받는다. 열려 있으면 닫는다.
 async function toggleModelPicker(id) {
+  const node = nodeById(id);
+  if (!node || !capsOf(node).model) return;   // Claude Code 는 모델 변경 없음(버튼도 잠겨 있다)
   const mp = modelPick(id);
   if (mp.open) { mp.open = false; paintChat(id); return; }
   Object.assign(mp, { open: true, loading: true, err: "", q: "", list: [] });

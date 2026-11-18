@@ -51,7 +51,7 @@ function deleteLocal(id) {
 const BLOCK_LABELS = { chat: "채팅", context: "컨텍스트", terminal: "터미널", bg: "백그라운드 잡", files: "파일 트리", browser: "브라우저", db: "DB 조회", memo: "메모" };
 
 // 카드 종류별로 붙일 수 있는 블록. 로컬 카드는 세션이 아니라 채팅이 없고, 인프라 카드는 사이드 컬럼(파일)을 쓰지 않는다.
-const blockChoices = (n) => (agentKind(n.kind) ? Object.keys(BLOCK_LABELS)
+const blockChoices = (n) => (agentKind(n.kind) ? Object.keys(BLOCK_LABELS).filter((t) => t !== "context" || capsOf(n).context)
   : n.kind === "local" ? ["terminal", "bg", "files", "browser", "db", "memo"] : ["terminal", "bg", "browser"]);
 
 // 브라우저는 카드당 2개까지: 남은 자리 하나에 '추가' 항목, 인스턴스마다 '제거' 항목을 낸다.
@@ -121,6 +121,36 @@ async function releaseSession(id) {
   } catch (err) { alert("실패: " + err.message); }
 }
 
+// 하네스 전환: 원래 세션 요약을 넘겨 반대 하네스로 이어 간다(카드 id·메모·별칭·자리는 그대로).
+async function switchCardHarness(id) {
+  const n = nodeById(id);
+  if (!n || n.kind !== "main") return;
+  const target = capsOf(n).id === "claude" ? "omp" : "claude";
+  const label = target === "claude" ? "Claude Code" : "omp";
+  if (!confirm(`요약을 넘겨 ${label}로 이어갑니다. 원래 세션 기록은 남습니다`)) return;
+  const wasOpen = openIds.has(id);
+  SWITCH_HOLD.add(id);
+  let out = {};
+  try {
+    const res = await postJSON("/api/session/switch", { node: id, target });
+    out = await res.json().catch(() => ({ ok: false, out: "HTTP " + res.status }));
+  } catch (err) { out = { ok: false, out: err.message }; }
+  if (!out.ok) { SWITCH_HOLD.delete(id); alert("전환 실패: " + (out.out || "응답 없음")); return; }
+  // 카드 화면 상태(로컬 표시분·요약)만 버리고 새 기록 기준으로 다시 그린다.
+  CHAT.delete(id);
+  CTX.delete(id);
+  // 새 세션 파일이 스냅샷(DATA)에 올라올 때까지 기다린다. nodeById(NODES)는 렌더 뒤에만 갱신된다.
+  const inData = () => DATA.sessions.some((s) => s.nodes.some((n) => n.id === id));
+  for (let i = 0; i < 8; i++) {
+    await reloadGraph();
+    if (inData()) break;
+    await new Promise((done) => setTimeout(done, 400));
+  }
+  SWITCH_HOLD.delete(id);
+  if (wasOpen && inData()) openIds.add(id);
+  renderMap(false, true);
+}
+
 function openCardMenu(clientX, clientY, id) {
   const n = nodeById(id);
   if (!n) return;
@@ -130,6 +160,10 @@ function openCardMenu(clientX, clientY, id) {
     null,
     ...blockMenuItems(n),
   ];
+  if (n.kind === "main") {
+    const to = capsOf(n).id === "claude" ? "omp" : "Claude Code";
+    items.push(null, { label: to + "로 전환", hint: "요약 이어받기", run: () => switchCardHarness(id) });
+  }
   if (n.kind === "local") items.push(null, { label: "카드 삭제", run: () => deleteLocal(id) });
   else if (key) {
     items.push(null,

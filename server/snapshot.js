@@ -11,6 +11,7 @@ const { profileOf } = require("./profiles");
 const { sumHourly } = require("./turns");
 const { attachImages } = require("./images");
 const { capMessages } = require("./msg-cap");
+const { HARNESSES } = require("./harness");
 
 function tokPerSec(st) {
   if (!st.durationSum) return 0;
@@ -30,10 +31,11 @@ function nodeOf(st, now, last) {
   return {
     id: card || st.file,
     file: st.file, // 지금 실제 기록 파일(카드 id 와 다를 수 있다)
+    harness: st.harness || "omp", // 이 세션을 만든 실행기. UI 는 이 값과 기능 플래그로 버튼을 가른다.
     name: st.name,
     kind: st.kind,
-    agent: "", // 서브에이전트가 쓴 프로필 이름. finishSession 이 부모 task 툴 호출에서 채운다.
-    agentModel: "", // 그 프로필 정의의 첫 모델
+    agent: st.agent || "", // Claude 서브에이전트 agentType / omp 는 finishSession 이 채운다.
+    agentModel: st.agentModel || "", // 그 프로필 정의의 첫 모델
     agentThinking: "", // 그 프로필 정의의 thinking-level
     parent: lineage.cardOf(st.parent) || st.parent, // 세션 안에 없는 부모는 finishSession에서 정리한다.
     title: st.title,
@@ -56,7 +58,7 @@ function nodeOf(st, now, last) {
     avgTtft: st.ttftN ? Math.round(st.ttftSum / st.ttftN) : 0,
     ttftN: st.ttftN,
     errors: st.errors,
-    status: statusOf(st, now, last),
+    status: st.statusOverride || statusOf(st, now, last), // Claude 서브는 meta.finished 가 우선
     active: st.active && st.active.size ? [...st.active.values()] : [], // 지금 도는 툴(툴 결과가 아직 없는 것)
     tools: [...st.tools.entries()]
       .map(([name, v]) => ({ name, ...v }))
@@ -72,8 +74,7 @@ function nodeOf(st, now, last) {
   };
 }
 
-// 서브에이전트는 마지막 assistant 응답이 툴 호출 없이 끝났으면 done(idle·parked로 남아도 일하지 않는다).
-// 그 밖에는 session_exit 직후(2초 이내)에 끝난 기록만 done. 그 뒤 이어 쓰였으면(resume) 90초 이내 live, 아니면 idle.
+// 서브에이전트는 마지막 assistant 응답이 툴 호출 없이 끝났으면 done. session_exit 직후(2초)에 끝난 기록만 done, 그 뒤 이어 쓰였으면 90초 이내 live.
 function statusOf(st, now, last) {
   if (st.kind === "sub" && st.turnOver) return "done";
   if (st.endedAt && last - st.endedAt < 2000) return "done";
@@ -169,6 +170,8 @@ function snapshot() {
     s.nodes.push(node);
     s.lastTs = Math.max(s.lastTs, last);
   }
+  // Claude Code 세션: 메인·서브·비우기 직후 빈 카드를 같은 모양으로 묶는다(claude| 접두사 키).
+  require("./harness/claude-merge").mergeInto(sessions, cutoff, now, nodeOf);
   const list = [...sessions.values()].sort((a, b) => b.lastTs - a.lastTs);
   for (const s of list) finishSession(s);
   capMessages(list);
@@ -176,6 +179,7 @@ function snapshot() {
   return {
     generatedAt: now,
     fx: { usdKrw: USD_KRW },
+    harness: HARNESSES, // 하네스별 표시 이름·기능 플래그. UI 는 노드의 harness 로 여기를 찾는다.
     env: { home: HOME, localCwd: process.env.OMP_MAP_CWD || path.dirname(ROOT) },
     sessions: list,
   };

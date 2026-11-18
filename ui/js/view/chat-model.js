@@ -21,11 +21,11 @@ function chatModelListHTML(mp) {
 
 // paintChat 에서 부른다. 버튼 이름·선택창·안내 문구만 바꾼다.
 function paintChatModel(box, node, st) {
-  const mp = modelPick(node.id);
   const btn = box.querySelector("button[data-model]");
   const label = chatModelLabel(node);
   if (btn.textContent !== label) btn.textContent = label;
-  btn.title = "모델 바꾸기 · " + (node.provider ? node.provider + "/" : "") + (node.model || "?");
+  if (!capsOf(node).model) { btn.title = "Claude Code는 대화 중 모델 변경을 지원하지 않습니다"; return; }
+  const mp = modelPick(node.id);
   const pick = box.querySelector(".cmpick");
   const wasHidden = pick.hidden;
   pick.hidden = !mp.open;

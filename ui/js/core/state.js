@@ -53,6 +53,9 @@ let localSeq = 1;
 
 let renamingId = null;
 
+// 하네스 전환 중에는 새 기록이 스냅샷에 오기 전까지 카드를 닫지 않는다.
+const SWITCH_HOLD = new Set();
+
 let HIDDEN = new Set();
 
 let PINNED = new Set();

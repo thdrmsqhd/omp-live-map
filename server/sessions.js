@@ -3,11 +3,13 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execFile } = require("child_process");
 const { HOME } = require("./config");
 const { open } = require("./rpc");
 const { stateOf } = require("./tail");
+const { isHeld } = require("./omp-lease");
 const lineage = require("./lineage");
+const harness = require("./harness");
+const claudeRun = require("./harness/claude-run");
 const { pushChat } = require("./sse");
 const live = require("./live");
 const uiReq = require("./ui-requests");
@@ -22,10 +24,8 @@ const errText = (e) => String((e && e.message) || e);
 function finish(s, code) {
   if (!s.busy) return;
   const cancelled = s.cancelled;
-  s.busy = false;
-  s.running = false;
-  s.cancelled = false;
-  pushChat({ node: s.node, kind: "done", text: s.full, code: cancelled ? 130 : code, ...(cancelled ? { cancelled: true } : {}) });
+  s.busy = false; s.running = false; s.cancelled = false;
+  pushChat({ node: s.card || s.node, kind: "done", text: s.full, code: cancelled ? 130 : code, ...(cancelled ? { cancelled: true } : {}) });
   s.full = "";
 }
 
@@ -34,7 +34,7 @@ function onFrame(s, e) {
   const ev = e.assistantMessageEvent;
   if (e.type === "message_update" && ev && ev.type === "text_delta" && ev.delta) {
     s.full = (s.full + ev.delta).slice(-4000);
-    pushChat({ node: s.node, kind: "delta", text: ev.delta });
+    pushChat({ node: s.card || s.node, kind: "delta", text: ev.delta });
   } else if (e.type === "agent_start") {
     // 백그라운드 잡이 끝나 에이전트가 스스로 다시 도는 경우도 busy 로 본다.
     if (!s.busy) s.full = "";
@@ -83,7 +83,7 @@ async function sendPrompt(s, text, images) {
   if (images && images.length) cmd.images = images;
   if (steer) cmd.streamingBehavior = "steer";
   else { s.busy = true; s.full = ""; }
-  pushChat({ node: s.node, kind: "req", text });
+  pushChat({ node: s.card || s.node, kind: "req", text });
   try {
     const r = await s.rpc.send(cmd);
     if (!r.success) throw new Error(r.error || "omp 가 프롬프트를 받지 않았습니다");
@@ -94,27 +94,15 @@ async function sendPrompt(s, text, images) {
   }
 }
 
-// 터미널의 omp 가 이 세션을 쥐고 있는지 묻는다. 확인에 실패하면 쥐고 있지 않다고 본다.
-function isHeld(id) {
-  return new Promise((resolve) => {
-    execFile("omp", ["session", "lease", "--json", "--", id], { windowsHide: true, timeout: 15000 }, (err, out) => {
-      try {
-        const text = String(out || "");
-        resolve((JSON.parse(text.slice(text.indexOf("{"))).held || []).includes(id));
-      } catch {
-        resolve(false);
-      }
-    });
-  });
-}
-
 // 기존 세션 기록에 맵 프로세스를 이어 붙인다. 터미널이 쓰는 세션이면 null.
 async function attach(st) {
   if (st.id && await isHeld(st.id)) return null;
   return start(st.cwd && fs.existsSync(st.cwd) ? st.cwd : HOME, st.file);
 }
 
-async function newSession(cwd, text, images) {
+// 새 세션. kind 는 하네스 id("omp" 기본, "claude").
+async function newSession(cwd, text, images, kind) {
+  if (kind === "claude") return claudeRun.newSession(cwd, text, images);
   const dir = cwd || HOME;
   if (!fs.existsSync(dir)) return { ok: false, out: "폴더 없음: " + dir };
   let s;
@@ -126,6 +114,7 @@ async function newSession(cwd, text, images) {
 }
 
 function stopSession(node) {
+  if (harness.of(lineage.resolve(node)) === "claude") return claudeRun.stop(node);
   const s = sessions.get(lineage.cardOf(node) || node);
   if (!s) return { ok: false, out: "맵이 띄운 세션이 아닙니다" };
   s.closing = true;
@@ -154,11 +143,13 @@ async function acquire(node) {
 }
 
 async function prompt(node, text, images) {
+  if (harness.of(lineage.resolve(node)) === "claude") return claudeRun.prompt(node, text, images);
   const { s, err } = await acquire(node);
   return err || sendPrompt(s, text, images);
 }
 
 async function cancel(node) {
+  if (harness.of(lineage.resolve(node)) === "claude") return claudeRun.cancel(node);
   const s = sessions.get(lineage.cardOf(node) || node);
   if (!s || !s.busy) return { ok: false, out: "실행 중인 프롬프트 없음" };
   s.cancelled = true;
@@ -180,8 +171,29 @@ function has(node) {
   return sessions.has(lineage.cardOf(node) || node);
 }
 
-function list() {
-  return [...sessions.values()].map((s) => ({ node: s.card, file: s.node, pid: s.rpc.child.pid, busy: s.busy }));
+// 하네스 전환: 대상 omp 프로세스를 원래 카드 id 로 옮긴다. 그 뒤 프롬프트는 카드 id 로 온다.
+function adopt(file, card) {
+  const key = lineage.cardOf(file) || file;
+  const s = sessions.get(key);
+  if (!s) return;
+  sessions.delete(key);
+  s.card = card;
+  sessions.set(card, s);
 }
 
-module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has };
+// 이 카드에서 지금 응답을 만들고 있는가(하네스 무관). 전환·비우기가 도는 턴을 막는 데 쓴다.
+function busyOf(node) {
+  const card = lineage.cardOf(node) || node;
+  if (harness.of(lineage.resolve(card)) === "claude") return !!claudeRun.isBusy(card);
+  const s = sessions.get(card) || sessions.get(lineage.resolve(card));
+  return !!(s && s.busy);
+}
+
+function list() {
+  return [
+    ...[...sessions.values()].map((s) => ({ node: s.card, file: s.node, harness: "omp", pid: s.rpc.child.pid, busy: s.busy })),
+    ...claudeRun.list(),
+  ];
+}
+
+module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has, adopt, busyOf };

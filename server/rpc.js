@@ -106,4 +106,4 @@ function open({ cwd, resume }) {
   return { child, send, sendRaw, onEvent, close };
 }
 
-module.exports = { open };
+module.exports = { open, killTree };

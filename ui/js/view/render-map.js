@@ -68,7 +68,7 @@ function renderMap(resetView, force) {
   const sessions = filteredSessions();
   NODES = [...agentNodes(sessions), ...infraNodes(), ...LOCALS.map(localNode)];
   for (const id of [...openIds]) {
-    if (!NODES.some((n) => n.id === id)) closeCard(id);
+    if (!NODES.some((n) => n.id === id) && !SWITCH_HOLD.has(id)) closeCard(id);
   }
 
   // 저장 위치·크기 적용 → 새 카드만 배치 → 테두리 → (새 클러스터만) 겹침 회피 → 좌표 저장 → 큰 카드 → 연결선
