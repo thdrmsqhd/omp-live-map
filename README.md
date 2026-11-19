@@ -181,6 +181,11 @@ docs/                  archify 구조 다이어그램(architecture · components
 | `POST /api/db/query` `{type, host, port, database, user, password, path, sql}` | DB 조회 한 문장. 응답 `{ok, columns, rows, total, truncated, changes, ms, error, reason, hint}`. `type`은 `sqlite`\|`mysql`\|`mariadb`\|`oracle`, `path`는 SQLite 파일. SQLite는 내장 `node:sqlite`(없으면 `sqlite3` CLI), MySQL·MariaDB는 `mysql`/`mariadb` 클라이언트, Oracle은 `sqlplus`를 부릅니다. 비밀번호는 요청에만 쓰고 저장하지 않음 |
 | `POST /api/bg/start` `{node, cwd, cmd}` · `GET /api/bg/list?node=` · `GET /api/bg/all` · `POST /api/bg/stop` `{id}` | 백그라운드 잡 |
 | `GET /api/tree?p=&d=` | 디렉터리 트리 |
+| `POST /api/editor/read` `{path}` | 파일 읽기 `{ok, path, text, mtime}`. 절대 경로만 받고 2MB 상한, 폴더·바이너리는 거부 |
+| `POST /api/editor/write` `{path, text, mtime}` | 파일 저장 `{ok, mtime}`. 보낸 `mtime` 이 현재와 다르면 409(다른 곳에서 바뀜), `mtime:null` 이면 덮어씀 |
+| `POST /api/editor/definition` `{path, text, line, character}` | Python 정의 위치 `{ok, locations[{path, line, character}]}`. pyright-langserver 를 워크스페이스 루트별로 띄워 처리(0-based) |
+| `POST /api/editor/diagnostics` `{path, text}` | Python 진단 `{ok, items[{line, character, endLine, endCharacter, severity, message}]}`. `publishDiagnostics` 를 15초까지 기다림 |
+| `GET /api/editor/status` | `{ok, pyright}` — Python 언어 서버(pyright-langserver) 발견 여부 |
 | `POST /api/release` `{node}` | 이 카드에서 띄운 백그라운드 잡과, 명령줄에 세션 폴더가 들어간 프로세스(자식 포함)를 종료. 세션을 돌리는 omp 프로세스와 그 자식(MCP 서버·실행기)은 건드리지 않음 |
 | `GET /api/res?cwd=&node=` · `GET /api/proc` · `GET /api/sys` | 자원·프로세스·호스트 |
 | `GET /api/infra` · `POST /api/infra/action` `{kind, target}` | WSL 배포판·Docker 컨테이너 조회와 start/stop/restart, Compose 프로젝트 실행(`project-start`) |
@@ -190,6 +195,15 @@ docs/                  archify 구조 다이어그램(architecture · components
 스냅샷 노드의 주요 필드: `id`(기록 파일 경로), `kind`(main\|sub), `parent`, `status`(live\|idle\|done), `tokens`, `tokens1h`, `cost`, `auxCost`, `ctx`, `ctxWindow`, `series`, `tools`, `messages[{role, text, ts, tools?, n?}]`, `res{cpu, mb, proc, procs, owner, hist}`.
 
 세션과 프로세스는 omp 본체 프로세스의 명령줄(세션 id·파일 경로) 또는 생성 시각(세션 시작 15초 전~3초 후)으로 잇습니다. 카드의 CPU·메모리는 이 프로세스와 자식 전체의 합입니다. omp 안에서 `/new`로 만든 세션이나 id 없이 이어 쓴 세션은 소유 프로세스를 찾지 못해 공유 프로세스 합계만 보이고, 그 omp 프로세스는 처음 시작한 세션 카드에 계속 잡힙니다.
+
+## 코드 편집기
+
+파일 트리에서 파일을 우클릭해 **편집기로 열기**를 고르면 전체 화면 편집기가 열립니다(닫기 버튼·Esc). Monaco Editor 를 jsDelivr CDN 에서 편집기를 처음 열 때만 받으므로 npm 의존성은 없고, 오프라인이면 열리지 않습니다. 테마는 `vs-dark`, 파일마다 탭이 생기고 상단에 경로·저장 상태·문제 개수가 보입니다.
+
+- `Ctrl+S`: 저장. 읽을 때 받은 `mtime` 과 현재가 다르면(다른 곳에서 수정) 409 로 알리고 덮어쓸지 묻습니다.
+- `F12`·`Ctrl+클릭`: 정의로 이동. Python 은 `pyright-langserver --stdio`(PATH 또는 `C:\Users\op383\AppData\Local\Programs\Python\Python39\Scripts\pyright-langserver.exe`)를 파일의 프로젝트 루트마다 하나 띄워 씁니다. 다른 파일의 정의면 그 파일을 탭으로 열고 위치로 이동합니다. JS/TS 는 Monaco 내장 TypeScript 서비스로 같은 파일의 정의로 이동합니다.
+- 진단: Python 은 입력이 멈춘 뒤 약 600ms 후 서버에 물어 빨간 밑줄을 긋고, JS/TS 문법 오류는 Monaco 가 스스로 표시합니다. 그 밖의 언어는 구문 강조만 합니다.
+- Python 언어 서버가 없으면 편집·저장은 그대로 되고 상단에 `Python 언어 서버 없음` 이 표시됩니다. 언어 서버 프로세스는 5분 유휴 시 스스로 종료합니다.
 
 ## 보안
 

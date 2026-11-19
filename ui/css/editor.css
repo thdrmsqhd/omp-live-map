@@ -1,0 +1,76 @@
+/* omp-live-map · css · 코드 편집기 오버레이(Monaco) */
+
+.edp {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: none;
+  flex-direction: column;
+  background: #0d1016;
+  color: #cdd6e0;
+  font-size: 12px;
+}
+.edp.open { display: flex; }
+
+.edp-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  background: #161a21;
+  border-bottom: 1px solid #2a2f3a;
+  flex: 0 0 auto;
+  min-height: 32px;
+}
+
+.edp-tabs { display: flex; gap: 2px; overflow-x: auto; flex: 0 1 auto; min-width: 0; }
+.edp-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: #1d222b;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #94a0b0;
+}
+.edp-tab:hover { background: #232936; }
+.edp-tab.on { background: #2a3140; color: #eef3f8; }
+.edp-tab.dirty::before { content: "●"; font-size: 8px; color: #e5c07b; }
+.edp-tab b { opacity: .55; font-weight: 400; padding: 0 2px; border-radius: 3px; }
+.edp-tab b:hover { opacity: 1; background: #3a2b2b; color: #ff8b82; }
+
+.edp-info { display: flex; align-items: center; gap: 12px; margin-left: auto; min-width: 0; }
+.edp-path { max-width: 38vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7d8b9c; }
+.edp-msg { color: #7fd1a0; }
+.edp-msg.bad { color: #ff857c; }
+.edp-msg.dirty { color: #e5c07b; }
+.edp-prob { color: #ffab70; }
+.edp-prob.bad { color: #ff857c; }
+.edp-lsp { color: #e5c07b; }
+
+.edp-close {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  color: #cdd6e0;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.edp-close:hover { color: #fff; background: #33202a; border-radius: 4px; }
+
+.edp-body { flex: 1; min-height: 0; position: relative; }
+.edp-load {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7d8b9c;
+  padding: 20px;
+  text-align: center;
+}
+.edp-load.bad { color: #ff857c; }

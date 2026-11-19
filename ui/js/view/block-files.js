@@ -106,6 +106,18 @@ function mountFiles(box, n) {
     const f = e.target.closest(".f[data-file]");
     if (f) copyText(f.dataset.orig || f.textContent, f);
   });
+  // 우클릭 = 파일·폴더 절대경로 복사. 카드 메뉴로 번지지 않게 막는다.
+  tree.addEventListener("contextmenu", (e) => {
+    const t = e.target.closest(".f[data-file], summary[data-dir]");
+    if (!t) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const p = t.dataset.file || t.dataset.dir;
+    const items = [];
+    if (t.dataset.file) items.push({ label: "편집기로 열기", title: "F12 정의 이동 · Ctrl+S 저장", run: () => openEditor(p) });
+    items.push({ label: "경로 복사(절대경로)", title: p, run: () => copyText(p, t) });
+    showMenu(e.clientX, e.clientY, items);
+  });
   // 카드를 열 때마다 다시 읽는다(닫아 둔 사이 바뀐 파일이 보이도록).
   loadTree(id, cwd());
 }

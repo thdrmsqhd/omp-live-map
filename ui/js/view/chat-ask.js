@@ -31,6 +31,15 @@ function askQuestionHTML(r, q, qi) {
 function askBodyHTML(r) {
   if (r.method === "ask") return (r.questions || []).map((q, qi) => askQuestionHTML(r, q, qi)).join("");
   if (r.method === "select") {
+    if (typeof askCheckboxForm === "function" && askCheckboxForm(r)) {
+      // 체크박스는 누를 때마다 label 하나를 보내고 omp 가 다시 묻는다. markableCount 이상은 Done 이라 버튼으로 뺀다.
+      const opts = r.options.slice(0, r.markableCount)
+        .map((label, i) => askOptHTML(r, { label, desc: (r.optionDetails[i] || {}).description || "" }, i, null)).join("");
+      const done = askDoneIndex(r);
+      return `<div class="cask-q"><div class="cask-qu">${esc(r.title)}</div><div class="cask-os">${opts}</div>
+        <div class="cask-f">${done >= 0 ? `<button class="go" data-ask-send="1" title="${esc(r.options[done])}">선택 완료</button>` : ""}
+        <span class="cask-d">누를 때마다 바로 전송 · 여러 개는 이어서</span></div></div>`;
+    }
     const opts = r.options.map((label, i) => askOptHTML(r, { label, desc: (r.optionDetails[i] || {}).description || "" }, i, null)).join("");
     return `<div class="cask-q"><div class="cask-qu">${esc(r.title)}</div><div class="cask-os">${opts}</div></div>`;
   }

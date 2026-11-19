@@ -1,5 +1,5 @@
 /* omp-live-map · view · 메인 큰 카드에 실행 중 서브에이전트 카드 도킹 */
-// 메인 카드를 열면 그 세션에서 실행 중인 서브에이전트 카드가 오른쪽에 세로로 붙는다. 이 탭에서 실행 중으로 보던 서브가 완료되면 그 카드는 자동으로 닫힌다.
+// 메인 카드를 열면 그 세션에서 실행 중인 서브에이전트 카드가 오른쪽에 세로로 붙는다. 자동으로 붙인 서브(SUBDOCK)가 완료되면 그 카드는 자동으로 닫힌다. 손으로 연 완료 서브 카드는 그대로 둔다.
 //   SUBDOCK   subId → mainId (연결: 연결선·읽기 전용 대화·메인과 함께 닫힘)
 //   DOCK_FREE 사용자가 서브를 끌어 뗀 카드(연결은 유지, 자동 배치만 하지 않는다)
 //   DOCK_OFF  사용자가 직접 닫은 서브(메인을 다시 열 때까지 자동으로 열지 않는다)
@@ -49,10 +49,8 @@ function runningSubsOf(mainId) {
     .map((n) => n.id);
 }
 
-// 이 탭에서 실행 중으로 본 서브. 처음부터 완료로 연 카드(결과를 읽으려고 연 것)는 닫지 않는다.
-const SUB_SEEN_LIVE = new Set();
-
-// 렌더마다(placeBigCards 앞): 열린 메인마다 실행 중 서브를 연결·자동으로 연다. 완료된 서브 카드는 닫는다.
+// 렌더마다(placeBigCards 앞): 열린 메인마다 실행 중 서브를 연결·자동으로 연다. 자동으로 붙인 서브가 완료되면 카드를 닫는다.
+// 닫기 판정은 저장되는 SUBDOCK 이 기준이다 — 새로고침 뒤에도, 스냅샷 방송을 놓친 뒤에도 닫힌다. 손으로 연 완료 카드는 SUBDOCK 에 없으므로 유지된다.
 function syncSubDocks() {
   let changed = false;
   const closed = [];
@@ -60,15 +58,14 @@ function syncSubDocks() {
     const n = nodeInData(id);
     if (!n) continue;
     if (n.kind === "sub") {
-      if (subRunning(n)) SUB_SEEN_LIVE.add(id);
-      else if (SUB_SEEN_LIVE.has(id)) { closeCard(id); closed.push(id); }   // 도킹·연결선·BIGPOS 정리 + DOCK_OFF
+      if (!subRunning(n) && SUBDOCK.has(id)) { closeCard(id); closed.push(id); }   // 자동으로 붙인 서브가 끝났다 — 도킹·연결선·BIGPOS 정리 + DOCK_OFF
       continue;
     }
     if (n.kind !== "main") continue;
     for (const subId of runningSubsOf(id)) {
       if (DOCK_OFF.has(subId)) continue;
       if (SUBDOCK.get(subId) !== id) { SUBDOCK.set(subId, id); changed = true; }
-      if (!openIds.has(subId)) { openIds.add(subId); SUB_SEEN_LIVE.add(subId); changed = true; }
+      if (!openIds.has(subId)) { openIds.add(subId); changed = true; }
     }
   }
   // 열린 카드가 아닌 연결 기록은 정리한다(메인이 이미 닫힌 경우 등).
@@ -142,12 +139,11 @@ function dockOnMoved(id) {
 // 큰 카드를 닫을 때: 메인이면 연결 서브를 함께 닫고, 서브면 자동 열림을 끈다.
 function dockOnClose(id) {
   if (!id) return;
-  SUB_SEEN_LIVE.delete(id);
   let dirty = false;
   for (const [subId, mainId] of [...SUBDOCK]) {
     if (mainId !== id) continue;
     openIds.delete(subId); SATS.delete(subId);
-    SUBDOCK.delete(subId); DOCK_FREE.delete(subId); DOCK_OFF.delete(subId); SUB_SEEN_LIVE.delete(subId);
+    SUBDOCK.delete(subId); DOCK_FREE.delete(subId); DOCK_OFF.delete(subId);
     dirty = true;
   }
   if (SUBDOCK.delete(id)) { DOCK_FREE.delete(id); dirty = true; }

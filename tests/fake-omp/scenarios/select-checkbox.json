@@ -1,0 +1,10 @@
+{
+  "name": "select-checkbox",
+  "steps": [
+    { "method": "checkboxLoop", "id": "lang-default", "title": "대상 언어", "options": ["Python (3.12)", "TypeScript", "Rust"], "checked": [0] },
+    { "method": "checkboxLoop", "id": "lang-toggle", "title": "대상 언어", "options": ["Python (3.12)", "TypeScript", "Rust"], "checked": [0] },
+    { "method": "checkboxLoop", "id": "lang-uncheck", "title": "대상 언어", "options": ["Python (3.12)", "TypeScript", "Rust"], "checked": [1] },
+    { "id": "env-radio", "method": "select", "title": "배포 환경", "options": ["로컬", "스테이징", "운영"], "initialIndex": 0, "selectionMarker": "radio", "timeout": 120000 },
+    { "method": "notify", "title": "체크박스 시나리오 완료" }
+  ]
+}

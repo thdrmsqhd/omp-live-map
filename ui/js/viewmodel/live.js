@@ -53,6 +53,15 @@ function liveOutText(node, toolCallId) {
   return "";
 }
 
+// 턴 끝 신호를 받은 열린 서브 카드는 자동 닫기 검사를 예약한다. turn_end 는 완료 스냅샷보다 먼저 올 수 있다.
+function scheduleSubDockCheck(node) {
+  const id = liveNodeId(node);
+  if (!id || !openIds.has(id)) return;
+  const n = typeof nodeById === "function" ? nodeById(id) : null;
+  if (!n || n.kind !== "sub") return;
+  setTimeout(() => { if (openIds.has(id) && typeof renderMap === "function") renderMap(false); }, 500);
+}
+
 // SSE live 이벤트 {node, kind, id?, name?, args?, text?, status?, error?} 를 항목 배열에 반영한다.
 function handleLiveEvent(ev) {
   if (!ev || !ev.node || !ev.kind) return;
@@ -92,6 +101,7 @@ function handleLiveEvent(ev) {
     // 턴이 끝났는데 닫히지 않은 툴은 더 돌지 않는 것으로 본다(백그라운드로 넘어간 출력은 계속 반영된다).
     for (const it of list) if (it.kind === "tool") it.done = true;
     livePush(list, { kind: "turn_end" });
+    scheduleSubDockCheck(ev.node);
   } else return;
   liveTouch(ev.node);
 }

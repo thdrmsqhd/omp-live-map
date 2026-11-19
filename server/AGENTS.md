@@ -3,6 +3,10 @@
 <!-- AUTO:START -->
 <!-- AUTO:END -->
 <!-- MANUAL:START -->
+## 코드 편집기 API
+- `routes-editor.js`가 `POST /api/editor/read|write|definition|diagnostics`와 `GET /api/editor/status`를 맡는다. 절대 경로만 받고, 읽기/쓰기 상한은 2MB(본문은 3MB), 디렉터리·바이너리는 거부한다. 저장은 받은 `mtime` 이 현재와 같을 때만 하고 다르면 409다(`mtime:null` 은 강제 저장).
+- `lsp.js`는 파일의 프로젝트 루트(pyproject/setup.py/pyrightconfig/.git, 없으면 파일 폴더)마다 `pyright-langserver --stdio`를 하나 띄우고 Content-Length JSON-RPC로 initialize/didOpen/didChange/definition/publishDiagnostics를 다룬다. 5분 유휴 시 종료하고 프로세스 종료 시 정리한다. `lsp-client.js`는 프레이밍·요청/알림만, `lsp-find.js`는 실행 파일 탐색과 루트 판별만 맡는다.
+- pyright가 없으면 `status` 가 `{pyright:false}` 를 주고 편집·저장은 그대로 된다. 진단 대기는 15초, 정의 요청은 20초에서 끝난다. pyright는 URI를 `file:///c%3A/...` 로 정규화하므로 진단 키는 `keyOf` 로 맞춰 비교한다.
 <!-- MANUAL:END -->
 <!-- AUTO:START -->
 **부모**: [루트](../AGENTS.md)  

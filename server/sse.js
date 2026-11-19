@@ -55,7 +55,7 @@ function broadcast() {
   const sig = JSON.stringify(data.sessions.map((s) => [
     s.key, s.lastTs, s.totals.tokens, s.live, ...resSig(s),
     s.jobs.map((j) => [j.id, j.done, (j.tail || []).length, (j.tail || [])[(j.tail || []).length - 1] || ""]),
-    s.nodes.map((n) => (n.active || []).map((a) => [a.id, a.name, a.ts])),
+    s.nodes.map((n) => [n.status, (n.active || []).map((a) => [a.id, a.name, a.ts])]),
   ]));
   if (sig === lastSig) return;
   lastSig = sig;

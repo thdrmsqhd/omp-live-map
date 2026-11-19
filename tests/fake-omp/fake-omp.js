@@ -83,9 +83,39 @@ function request(step) {
   });
 }
 
+// omp G(): 체크박스 select 는 항목 하나를 토글한 뒤 같은 질문을 다시 내고, Done 하나로 끝난다.
+async function checkboxLoop(step) {
+  const labels = (step.options || []).map(String);
+  const other = step.other === false ? null : step.otherLabel || "Other (type your own)";
+  const visible = other ? [...labels, other] : [...labels];
+  const done = step.doneLabel || "✓ Done selecting";
+  const shown = [...visible, done];
+  const checked = new Set(step.checked || []);
+  const picked = [];
+  for (let n = 0; n < 30; n++) {
+    const r = await request({
+      method: "select", id: `${step.id || "cb"}-${n}`, title: step.title,
+      options: shown, selectionMarker: "checkbox",
+      checkedIndices: [...checked].sort((a, b) => a - b), markableCount: visible.length,
+      timeout: step.timeout || 120000,
+    });
+    if (!r) return log("cb", { stop: "timeout" });
+    if (r.cancelled) return log("cb", { stop: "cancelled" });
+    const v = String(r.value ?? "");
+    if (v === done) return log("cb-done", { id: step.id, picked, checked: [...checked].map((i) => labels[i] ?? "(other)") });
+    const i = visible.indexOf(v);
+    if (i < 0) return log("cb", { stop: "unknown", value: v });
+    if (other && i === visible.length - 1) return log("cb-other", { id: step.id, value: v });
+    if (checked.has(i)) checked.delete(i); else checked.add(i);
+    picked.push(v);
+  }
+  log("cb", { stop: "loop" });
+}
+
 async function runScenario() {
   for (const step of steps) {
     if (aborted) return;
+    if (step.method === "checkboxLoop") { await waitAskEnabled(); await checkboxLoop(step); continue; }
     if (step.method === "ask") await waitAskEnabled();
     await request(step);
   }

@@ -10,6 +10,16 @@ function asksOf(node) {
 
 const askPending = (node) => asksOf(node).length > 0;
 
+// omp 의 체크박스 select: 옵션마다 label 하나를 토글하고 같은 질문을 다시 내며, markableCount 자리의 Done 이 끝낸다.
+function askCheckboxForm(r) {
+  return r.method === "select" && r.selectionMarker === "checkbox" && Number.isInteger(r.markableCount) && r.markableCount > 0;
+}
+
+// Done(✓ Done selecting) 옵션 자리. 없으면 -1.
+function askDoneIndex(r) {
+  return askCheckboxForm(r) && r.markableCount < r.options.length ? r.markableCount : -1;
+}
+
 // 요청에 답 상태를 붙인다. 다시 그려도 사용자가 고른 값이 남는다.
 function askPrep(r) {
   if (r.method === "ask") {
@@ -72,9 +82,15 @@ function askCustom(node, id, qi, value) {
 function askSelect(node, id, idx) {
   const r = askFind(node, id);
   if (!r || r.method !== "select") return;
-  if (r.selectionMarker === "checkbox") {
-    if (r._sel.has(idx)) r._sel.delete(idx); else r._sel.add(idx);
-  } else r._sel = new Set([idx]);
+  if (askCheckboxForm(r)) {
+    // omp 가 토글하고 갱신된 checkedIndices 로 다시 묻는다. 화면은 label 하나만 그대로 보낸다.
+    if (idx < 0 || idx >= r.markableCount || r._sending) return;
+    r._sending = true;
+    r._err = "";
+    askPost(node, id, { value: r.options[idx] }).finally(() => { r._sending = false; });
+    return;
+  }
+  r._sel = new Set([idx]);
   r._err = "";
   paintChat(liveNodeId(node) || node);
 }
@@ -97,6 +113,10 @@ function askResponse(r) {
     return { response: { answers } };
   }
   if (r.method === "select") {
+    if (askCheckboxForm(r)) {
+      const done = askDoneIndex(r);
+      return done >= 0 ? { response: { value: r.options[done] } } : { error: "완료 항목을 찾지 못했습니다" };
+    }
     const labels = [...r._sel].sort((a, b) => a - b).map((i) => r.options[i]);
     if (!labels.length) return { error: "항목을 골라 주세요" };
     return { response: { value: labels.join(", ") } };
