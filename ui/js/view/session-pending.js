@@ -60,6 +60,7 @@ function pendingHTML(p) {
     ? `<div class="perr">${esc(p.err)}</div><div class="phint">클릭하여 닫기</div>`
     : `<div class="phint">카드가 나타나면 사라집니다</div>`;
   return `<div class="pendcard${p.err ? " err" : ""}" data-pend="${esc(p.id)}" style="left:${p.x}px;top:${p.y}px;width:${AG.W}px">
+    <button class="px2" data-pendx="1" title="닫기" aria-label="닫기">✕</button>
     <div class="pt">${p.err ? `<i class="px">!</i>` : `<i class="sp"></i>`}${p.err ? "새 세션을 열지 못했습니다" : "새 세션 여는 중…"}</div>
     <div class="pcwd" title="${esc(cwd)}">${esc(folderName(p.cwd))}</div>
     ${tail}
@@ -76,10 +77,12 @@ function pendingPieces() {
   return PENDS.map((p) => ({ key: "p:" + p.id, html: pendingHTML(p) }));
 }
 
-// 자리표시 클릭: 오류 카드면 닫는다(진행 중 카드는 그대로 둔다).
+// 자리표시 클릭: 닫기 버튼은 언제나 닫고, 오류 카드는 카드 몸통 클릭으로도 닫는다.
+// (서버가 성공을 돌려줬는데 카드가 끝내 나타나지 않는 경우도 사용자가 바로 치울 수 있어야 한다.)
 $("nodes").addEventListener("click", (e) => {
   const el = e.target.closest(".pendcard");
   if (!el) return;
   const p = PENDS.find((x) => x.id === el.dataset.pend);
-  if (p && p.err) dropPending(p);
+  if (!p) return;
+  if (e.target.closest("[data-pendx]") || p.err) dropPending(p);
 });

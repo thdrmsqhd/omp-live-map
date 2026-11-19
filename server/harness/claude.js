@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { CLAUDE_PROJECTS, HOURS } = require("../config");
-const { recordUser, recordAssistant, noteHourly } = require("../turns");
+const { onAssistant, onUser } = require("./claude-msg");
 const lineage = require("../lineage");
 const pending = require("./claude-pending");
 
@@ -29,77 +29,12 @@ function newState(file) {
     cost: 0, auxCost: 0, auxRequests: 0, hourly: [], durationSum: 0, ttftSum: 0, ttftN: 0,
     recent: [], tools: new Map(), commands: [], files: [], errors: 0, ctx: null, messages: [],
     jobs: [], active: new Map(), taskProfiles: new Map(), liveq: [],
+    msgId: "", // 마지막 assistant API 메시지 id(블록별로 쪼개진 줄을 한 메시지로 합치는 기준)
+    msgRef: null, // 그 id 로 기록한 메시지(아직 없으면 null)
   };
 }
 
-// assistant usage → omp 가 쓰는 모양. 캐시 생성·읽기는 새 입력과 별도 토큰이다.
-function usageOf(u) {
-  const x = u || {};
-  const input = x.input_tokens || 0, output = x.output_tokens || 0;
-  const cacheRead = x.cache_read_input_tokens || 0, cacheWrite = x.cache_creation_input_tokens || 0;
-  return { input, output, cacheRead, cacheWrite, totalTokens: input + output + cacheRead + cacheWrite };
-}
-
-function textOf(content) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content.filter((b) => b && b.type === "text" && typeof b.text === "string").map((b) => b.text).join("\n");
-}
-
-function noteTool(st, name, input, ts) {
-  const cur = st.tools.get(name) || { count: 0, lastTs: 0, intent: "" };
-  cur.count += 1;
-  cur.lastTs = ts || cur.lastTs;
-  st.tools.set(name, cur);
-  const a = input && typeof input === "object" ? input : {};
-  if (typeof a.command === "string") st.commands = [{ cmd: a.command.slice(0, 140), ts }, ...st.commands].slice(0, 8);
-  if (typeof a.file_path === "string" && a.file_path.length < 400) {
-    st.files = [{ p: a.file_path, ts }, ...st.files.filter((f) => f.p !== a.file_path)].slice(0, 12);
-  }
-}
-
-function onAssistant(st, o, ts) {
-  const m = o.message || {};
-  const u = usageOf(m.usage);
-  st.requests += 1;
-  if (m.model) st.model = m.model;
-  st.usage.input += u.input;
-  st.usage.output += u.output;
-  st.usage.cacheRead += u.cacheRead;
-  st.usage.cacheWrite += u.cacheWrite;
-  st.usage.total += u.totalTokens;
-  noteHourly(st, u, ts);
-  if (st.lastTs && ts > st.lastTs) {
-    const dur = Math.min(600_000, ts - st.lastTs);
-    st.durationSum += dur;
-    st.recent.push({ ts, out: u.output, dur });
-    if (st.recent.length > 30) st.recent.shift();
-  }
-  // 컨텍스트 프롬프트 = 캐시 읽기 + 캐시 생성 + 새 입력. 구성 비율은 Claude 기록에 없어 0 으로 둔다.
-  st.ctx = { promptTokens: u.input + u.cacheRead + u.cacheWrite, nonMessageTokens: 0, toolSchemaTokens: 0, compactionEpoch: 0 };
-  const blocks = Array.isArray(m.content) ? m.content : [];
-  const said = blocks.filter((b) => b && b.type === "text").map((b) => b.text).join("\n");
-  const tools = [];
-  for (const b of blocks) {
-    if (!b || b.type !== "tool_use") continue;
-    if (b.name) { tools.push(b.name); noteTool(st, b.name, b.input, ts); }
-  }
-  st.turnOver = tools.length === 0;
-  recordAssistant(st, said, [...new Set(tools)], ts);
-}
-
-function onUser(st, o, ts) {
-  // sidechain 레코드는 서브에이전트 기록 파일의 본문이다. 메인 파일에 섞여 오면 버린다.
-  if (o.isSidechain && !st.sidechain) return;
-  const m = o.message || {};
-  const text = textOf(m.content);
-  if (!text.trim()) return; // tool_result 만 있는 사용자 레코드
-  st.turns += 1;
-  st.turnOver = false;
-  if (!st.firstUser) st.firstUser = text.replace(/\s+/g, " ").slice(0, 120);
-  st.lastUser = text.replace(/\s+/g, " ").slice(0, 300);
-  recordUser(st, text, ts);
-}
+// 메시지 정규화(사용량·툴·isMeta 처리)는 claude-msg.js 가 맡는다. 이 모듈은 파일 증분 읽기와 스캔만 한다.
 
 function ingestLine(st, raw) {
   let o;

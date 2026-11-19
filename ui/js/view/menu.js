@@ -90,26 +90,25 @@ function blockMenuItems(n) {
 }
 
 function hideSession(id, key = sessionKeyOfNode(id)) {
-  if (!key) return;
-  HIDDEN.add(key);
-  PINNED.delete(key);
-  saveHidden();
-  savePinned();
+  // 세션 키가 없어도(아직 스냅샷에 없는 카드) 열린 카드와 화면은 정리한다.
+  if (key) {
+    HIDDEN.add(key);
+    PINNED.delete(key);
+    saveHidden();
+    savePinned();
+  }
   if (openIds.has(id)) closeCard(id);
   renderMap(false, true);
 }
 
-// 맵 소유 omp 종료와 귀속 프로세스 정리를 함께 요청한 뒤 카드 자리를 비운다.
+// 맵 소유 세션 종료와 귀속 프로세스 정리를 함께 요청한 뒤 카드 자리를 비운다.
+// 이미 프로세스·기록이 없는 카드도 닫혀야 하므로 정리 요청 실패는 닫기를 막지 않는다.
 async function closeSession(id) {
-  const key = sessionKeyOfNode(id);
-  if (!key) return;
-  try {
-    await Promise.all([
-      postJSON("/api/session/stop", { node: id }),
-      postJSON("/api/release", { node: id }),
-    ]);
-    hideSession(id, key);
-  } catch (err) { alert("세션을 닫지 못했습니다: " + err.message); }
+  await Promise.allSettled([
+    postJSON("/api/session/stop", { node: id }),
+    postJSON("/api/release", { node: id }),
+  ]);
+  hideSession(id);
 }
 
 async function releaseSession(id) {

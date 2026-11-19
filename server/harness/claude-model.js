@@ -8,7 +8,11 @@ const { ROOT } = require("../config");
 
 const DIR = process.env.OMP_MAP_STATE || path.join(ROOT, "data");
 const FILE = path.join(DIR, "claude-models.json");
+// 별칭(opus 등)은 설치된 Claude Code 버전에 따라 다른 모델로 풀린다(2.1.187 에서 opus → 4.8).
+// 카드에 저장값이 없으면 정식 id 로 5.5 를 고른다.
+const DEFAULT_MODEL = "claude-opus-5-5";
 const ALIASES = [
+  { id: DEFAULT_MODEL, name: "Opus 5.5" },
   { id: "sonnet", name: "Sonnet" },
   { id: "opus", name: "Opus" },
   { id: "haiku", name: "Haiku" },
@@ -30,14 +34,19 @@ function save() {
   } catch { /* 저장 실패는 이번 실행의 선택만 잃는다 */ }
 }
 
+// 카드에 저장한 값(없으면 "")만 돌려준다. 실제 실행 모델은 호출자가 DEFAULT_MODEL 로 채운다.
 const modelOf = (card) => map[norm(card)] || "";
 
+const aliasOf = (id) => ALIASES.find((a) => a.id === id) || null;
+
 function list(card) {
-  const cur = modelOf(card);
+  const cur = modelOf(card) || DEFAULT_MODEL;
+  const a = aliasOf(cur);
   return {
     ok: true,
-    models: ALIASES.map((a) => ({ provider: "claude", id: a.id, name: a.name })),
-    current: cur ? { provider: "claude", id: cur, name: cur } : null,
+    default: DEFAULT_MODEL,
+    models: ALIASES.map((x) => ({ provider: "claude", id: x.id, name: x.name })),
+    current: { provider: "claude", id: cur, name: (a && a.name) || cur },
   };
 }
 
@@ -50,4 +59,4 @@ function set(card, id) {
   return { ok: true, model: { provider: "claude", id: v, name: v } };
 }
 
-module.exports = { modelOf, list, set, ALIASES };
+module.exports = { modelOf, list, set, ALIASES, DEFAULT_MODEL };

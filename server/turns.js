@@ -24,24 +24,27 @@ function recordUser(st, text, ts, images) {
   pushMessage(st, msg);
 }
 
-// said: 본문 텍스트, tools: 이 턴의 toolCall 이름(중복 제거됨).
+// said: 본문 텍스트, tools: 이 턴의 toolCall 이름(중복 제거됨). 기록한 메시지를 돌려준다
+// (Claude 기록은 한 API 메시지가 블록별 줄로 쪼개져 와서 같은 메시지에 이어 붙인다).
 function recordAssistant(st, said, tools, ts) {
   if (said && !EMPTY_TEXT.test(said)) {
     st.lastAssistant = said.replace(/\s+/g, " ").slice(0, 300);
     const msg = { role: "assistant", text: keepText(said), ts };
-    if (tools.length) msg.tools = tools;
+    if (tools.length) msg.tools = [...new Set(tools)];
     pushMessage(st, msg);
-    return;
+    return msg;
   }
-  if (!tools.length) return; // 도구 호출도 본문도 없는 턴은 기록하지 않는다.
+  if (!tools.length) return null; // 도구 호출도 본문도 없는 턴은 기록하지 않는다.
   const prev = st.messages[st.messages.length - 1];
   if (prev && prev.role === "assistant" && prev.text === "" && prev.n) {
     prev.n += 1;
     prev.tools = [...new Set([...prev.tools, ...tools])].slice(0, TOOL_TAGS);
     prev.ts = ts;
-    return;
+    return prev;
   }
-  pushMessage(st, { role: "assistant", text: "", ts, tools: tools.slice(0, TOOL_TAGS), n: 1 });
+  const msg = { role: "assistant", text: "", ts, tools: tools.slice(0, TOOL_TAGS), n: 1 };
+  pushMessage(st, msg);
+  return msg;
 }
 
 // assistant 턴 사용량을 쌓고, 이 턴 ts 기준 1시간보다 오래된 항목을 버린다.
@@ -76,4 +79,4 @@ function sumHourly(st, now) {
   return acc;
 }
 
-module.exports = { recordUser, recordAssistant, noteHourly, sumHourly };
+module.exports = { recordUser, recordAssistant, noteHourly, sumHourly, keepText };

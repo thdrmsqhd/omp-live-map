@@ -104,7 +104,9 @@ async function attach(st) {
 async function newSession(cwd, text, images, kind) {
   if (kind === "claude") return claudeRun.newSession(cwd, text, images);
   const dir = cwd || HOME;
-  if (!fs.existsSync(dir)) return { ok: false, out: "폴더 없음: " + dir };
+  let stat = null;
+  try { stat = fs.statSync(dir); } catch { /* 없음 */ }
+  if (!stat || !stat.isDirectory()) return { ok: false, out: "폴더 없음: " + dir };
   let s;
   try { s = await start(dir, null); } catch (e) { return { ok: false, out: errText(e) }; }
   if (!text) return { ok: true, node: s.node };

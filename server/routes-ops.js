@@ -7,7 +7,6 @@ const { exec, treeOf, startBg, bgJobs, bgJob } = require("./shell");
 const { resFor, releaseSet, procState, findProc, reloadProc } = require("./proc");
 const { sysInfo } = require("./sys");
 const { getInfra, infraAction } = require("./infra");
-const { stateOf } = require("./tail");
 const lineage = require("./lineage");
 const { queryDb } = require("./db");
 
@@ -50,9 +49,7 @@ module.exports = {
   },
   "POST /api/release": (req, res) => withJson(req, res, (p) => {
     const node = String(p.node || "");
-    const st = stateOf(lineage.resolve(node));
-    if (!st) return json(res, { ok: false, out: "세션 기록 없음" });
-    // 맵이 이 노드에서 직접 띄운 백그라운드 잡만 정리한다.
+    // 기록이 이미 없어도(세션을 열지 못한 카드) 맵이 이 노드에서 띄운 잡은 정리한다.
     const r = releaseSet(node);
     const killed = [], skipped = [];
     for (const pid of r.all || []) {
@@ -65,7 +62,7 @@ module.exports = {
       catch (e) { skipped.push(pid); }
     }
     reloadProc();
-    json(res, { ok: killed.length > 0, killed, skipped, freedMB: killed.length ? r.mb : 0 });
+    json(res, { ok: true, killed, skipped, freedMB: killed.length ? r.mb : 0 });
   }),
   "* /api/sys": (req, res) => json(res, sysInfo()),
   "* /api/res": (req, res, url) => json(res, resFor(lineage.resolve(url.searchParams.get("node") || ""))),

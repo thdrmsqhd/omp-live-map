@@ -76,8 +76,8 @@ function spawnTurn(s, loc, text, images, fresh) {
   if (fresh) args.push("--session-id", loc.sessionId);
   else args.push("--resume", loc.sessionId);
   if (images && images.length) args.push("--input-format", "stream-json");
-  const m = model.modelOf(s.node) || model.modelOf(loc.card) || model.modelOf(loc.file);
-  if (m) args.push("--model", m);
+  const m = model.modelOf(s.node) || model.modelOf(loc.card) || model.modelOf(loc.file) || model.DEFAULT_MODEL;
+  args.push("--model", m);
   const child = spawn("claude", args, { cwd: loc.cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   s.child = child;
   s.busy = true;
@@ -156,7 +156,10 @@ function answerAsk(card, text) {
 
 function newSession(cwd, text, images) {
   const dir = cwd || process.env.USERPROFILE || "";
-  if (!dir || !fs.existsSync(dir)) return { ok: false, out: "폴더 없음: " + dir };
+  let stat = null;
+  try { stat = fs.statSync(dir); } catch { /* 없음 */ }
+  // 파일 경로를 작업 폴더로 받으면 claude 는 띄우지도 못한다. 카드만 남기지 말고 바로 실패한다.
+  if (!stat || !stat.isDirectory()) return { ok: false, out: "폴더 없음: " + dir };
   if (!String(text || "").trim() && !(images && images.length)) return { ok: false, out: "Claude Code 세션은 첫 지시가 필요합니다" };
   const id = crypto.randomUUID();
   const file = claude.fileFor(dir, id);
