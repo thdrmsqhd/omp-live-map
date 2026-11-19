@@ -1,43 +1,23 @@
-/* omp-live-map · view · 카드·클러스터 끌기 (카드는 따로, 묶음은 제목으로) */
-// 끌기 규칙 (docs/analysis/card-independent-movement.html A안)
-//   작은 카드(메인·서브)·미러 카드: 그 카드의 지도 좌표(MANUAL["card:"+id])만 바꾼다. 자식·형제·잡은 그대로.
-//   열린 큰 카드: BIGPOS[id] 만 바꾼다.
-//   클러스터 제목: 선택한 클러스터의 작은 카드·미러·잡·열린 큰 카드와 숨긴 구성원의 저장 좌표를 같은 Δ만큼 옮긴다.
-//   HOST·인프라·로컬 카드는 예전처럼 클러스터째 움직인다.
+/* omp-live-map · view · 큰 카드·클러스터 끌기 (큰 카드는 따로, 묶음은 제목으로) */
+// 끌기 규칙
+//   열린 큰 카드: 그 카드의 BIGPOS 와 붙은(도킹) 서브 카드만 같이 움직인다. 서브를 직접 끌면 도킹이 풀린다.
+//   클러스터 제목·HOST·인프라·로컬 카드: 선택한 클러스터(작은 카드·잡·그 클러스터의 큰 카드)를 같은 Δ만큼 옮긴다.
+//   세션 에이전트는 지도에 큰 카드로만 있고 작은 카드·클러스터 테두리가 없다.
 //   Esc·pointercancel 은 임시 위치를 취소하고(저장·이력 없음), 이동 중 Ctrl+Z 도 먼저 이동을 취소한다.
 
 let cardDrag = null;   // 진행 중인 끌기 { mode, id, items, restore, snap, ... }
 
-// 끌기를 시작한 자리에서 소속 클러스터를 찾는다.
+// 끌기를 시작한 자리에서 소속 클러스터를 찾는다(큰 카드는 클러스터가 없을 수 있다).
 function dragClusterAt(target, el) {
   const head = target.closest(".cluster .ch");
   if (head) return clusterByKey(head.parentElement.dataset.ckey);
   if (!el) return null;
   if (el.dataset.metric) return clusterByKey("host:host");
-  return clusterOfCard(el.dataset.id || el.dataset.ghost);
+  return clusterOfCard(el.dataset.id);
 }
 
-// 무엇을 잡았는지로 범위를 정한다: card(작은 카드·미러) | big(열린 큰 카드) | cluster(제목·HOST·인프라·로컬).
-function dragModeOf(target, el) {
-  if (target.closest(".cluster .ch") || !el) return "cluster";
-  if (el.classList.contains("big")) return "big";
-  const n = nodeById(el.dataset.id || el.dataset.ghost);
-  return n && agentKind(n.kind) ? "card" : "cluster";
-}
-
-// 카드 하나를 끄는 동안 소속 클러스터 테두리를 임시 좌표로 다시 감싼다(잡 카드는 프레임 기준 좌표라 함께 보정).
-function previewFrame(d, dx, dy) {
-  if (!d.frame || d.owner.kind !== "session") return;
-  const g = geo.get(d.id);
-  const b = clusterBox(d.owner, (id) => (id === d.id ? { ...g, x: g.x + dx, y: g.y + dy } : geo.get(id)));
-  Object.assign(d.frame.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" });
-  const jobs = d.owner.jobs || [];
-  d.frame.querySelectorAll(":scope > .jcard").forEach((el, i) => {
-    if (!jobs[i]) return;
-    el.style.left = jobs[i].x - b.x + "px";
-    el.style.top = jobs[i].y - b.y + "px";
-  });
-}
+// 무엇을 잡았는지로 범위를 정한다: big(열린 큰 카드) | cluster(제목·HOST·인프라·로컬 작은 카드).
+const dragModeOf = (el) => (el && el.classList.contains("big") ? "big" : "cluster");
 
 // 진행 중인 끌기를 취소한다. 화면만 시작 위치로 돌리고 저장·이력은 남기지 않는다.
 function cancelCardDrag() {
@@ -55,30 +35,27 @@ function startCardDrag(e) {
   if (e.button !== 0 || spaceDown) return;
   const el = e.target.closest(".node");
   if (e.target.closest(CARD_INTERACTIVE)) return;
+  const mode = dragModeOf(el);
   const c = dragClusterAt(e.target, el);
-  if (!c) return;
-  const key = clusterKeyOf(c);
+  if (mode === "cluster" && !c) return;
   e.preventDefault();
-  if (e.shiftKey) {
-    if (SELECTED.has(key)) SELECTED.delete(key); else SELECTED.add(key);
-    paintSelection();
-    return;
-  }
-  if (!SELECTED.has(key)) selectOnly(c);
-  const mode = dragModeOf(e.target, el);
-  const id = el && (el.dataset.id || el.dataset.ghost);
+  if (c) {
+    const key = clusterKeyOf(c);
+    if (e.shiftKey) {
+      if (SELECTED.has(key)) SELECTED.delete(key); else SELECTED.add(key);
+      paintSelection();
+      return;
+    }
+    if (mode === "cluster" && !SELECTED.has(key)) selectOnly(c);
+  } else if (e.shiftKey) return;
+  const id = el && el.dataset.id;
   const d = { mode, id, owner: c, sx: e.clientX, sy: e.clientY, moved: false, dx: 0, dy: 0,
     grip: el || e.target.closest(".cluster .ch") };
-  if (mode === "card") {
-    d.frame = frameOf(c);
-    d.items = [itemOf(el)];
-    d.restore = [...d.items, ...(d.frame ? [d.frame, ...d.frame.querySelectorAll(":scope > .jcard")].map(itemOf) : [])];
-    d.rect = geo.get(id);
-    d.skip = (o) => o === c;
-  } else if (mode === "big") {
+  if (mode === "big") {
     const docked = typeof dockDragExtras === "function" && id ? dockDragExtras(id) : [];
     d.items = d.restore = [itemOf(el), ...docked];
     d.rect = SATS.get(id);
+    d.skip = () => false;
   } else {
     // 포인터 시작 시 대상을 고정한다. 이동 중 새로 생긴 카드는 합류시키지 않는다.
     d.list = CLUSTERS.filter((x) => SELECTED.has(clusterKeyOf(x)));
@@ -102,18 +79,16 @@ function moveCardDrag(e) {
     d.moved = true;
     d.grip.setPointerCapture(e.pointerId);
     d.grip.classList.add("dragging");
-    // 첫 유효 이동 직전 상태를 이력으로 잡아 둔다.
-    d.snap = layoutSnapshot(d.mode === "card" ? { manual: [cardManualKeyOf(d.id)] }
-      : d.mode === "big" ? { big: [d.id] } : clusterKeys(d.list));
+    // 첫 유효 이동 직전 상태를 이력으로 잡아 둔다(도킹 서브 자리는 렌더가 메인 옆으로 다시 맞춘다).
+    d.snap = layoutSnapshot(d.mode === "big" ? { big: [d.id] } : clusterKeys(d.list));
   }
-  const snap = snapDelta(d.rect, dx, dy, d.skip || (() => false));
+  const snap = snapDelta(d.rect, dx, dy, d.skip);
   d.dx = snap.dx;
   d.dy = snap.dy;
   for (const it of d.items) {
     it.el.style.left = it.left + snap.dx + "px";
     it.el.style.top = it.top + snap.dy + "px";
   }
-  if (d.mode === "card") previewFrame(d, snap.dx, snap.dy);
   drawGuides(snap.guides);
   scheduleEdges();
 }
@@ -126,10 +101,7 @@ function finishCardDrag() {
   d.grip.classList.remove("dragging");
   if (!d.moved) return;
   pushHistory(d.snap);
-  if (d.mode === "card") {
-    const g = geo.get(d.id);
-    if (g) MANUAL[cardManualKeyOf(d.id)] = { x: g.x + d.dx, y: g.y + d.dy };
-  } else if (d.mode === "big") {
+  if (d.mode === "big") {
     BIGPOS.set(d.id, { x: d.rect.x + d.dx, y: d.rect.y + d.dy, w: d.rect.w, h: d.rect.h });
     if (typeof dockOnMoved === "function") dockOnMoved(d.id);   // 서브를 직접 끌면 도킹 해제(연결선은 유지)
   } else moveClusters(d.list, d.dx, d.dy);

@@ -23,5 +23,5 @@
   /* 기존 "답 대기" 배지와 겹치지 않게, 선택 필요 표시 중에는 숨긴다(확인해서 해제되면 다시 보인다). */
   .node.attn-ask .cask-badge { display: none; }
   /* 미니맵 해당 점 강조 */
-  #minimap .mm-c.mm-done { fill: #2f9f72; stroke: #7ef0b8; }
-  #minimap .mm-c.mm-ask { fill: #d99a2b; stroke: #ffd489; }
+  #minimap .mm-c.mm-done, #minimap .mm-sat.mm-done { fill: #2f9f72; stroke: #7ef0b8; }
+  #minimap .mm-c.mm-ask, #minimap .mm-sat.mm-ask { fill: #d99a2b; stroke: #ffd489; }

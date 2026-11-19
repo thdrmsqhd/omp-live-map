@@ -10,7 +10,7 @@
   .node.big .bctl .bgrip:active { cursor: grabbing; }
 
   /* 우상단 조작 버튼 자리: 헤더 행은 오른쪽을 비우고, 헤더 없는 블록은 위를 비운다. */
-  .node.big .blk .brow .tinfo, .node.big .blk .term .tinfo, .node.big .col-tree .blk .tt { padding-right: 40px; }
+  .node.big .blk .brow .tinfo, .node.big .blk .term .tinfo { padding-right: 40px; }
   .node.big .blk[data-blk="chat"], .node.big .blk[data-blk="bg"] { padding-top: 14px; }
 
   .node.big .blk > .bresize { flex: none; width: 100%; height: 4px; margin-top: 2px; padding: 0;

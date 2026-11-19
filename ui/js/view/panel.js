@@ -1,19 +1,27 @@
 /* omp-live-map · view · 큰 카드 열기·닫기·자동 배치와 공용 표시 도우미 */
 
+// 큰 카드 열기. 이미 열려 있으면 닫지 않고 그 카드로 화면을 옮긴다(닫기는 toggleCard·카드 − 버튼·목록 ✕).
 function openNode(id) {
-  if (openIds.has(id)) closeCard(id);
-  else {
+  const was = openIds.has(id);
+  if (!was) {
     openIds.add(id);
     if (typeof dockOnOpen === "function") dockOnOpen(id);   // 메인을 다시 열면 그 세션 서브를 다시 붙인다
     saveOpenCards();
   }
   renderMap(false, true);
   if (!openIds.has(id)) return;
-  focusCluster(id);
+  if (was) { focusCluster(id); flashCard(id); }
+  else revealCard(id);
   loadBg(id);
 }
 
-// 열린 카드의 클러스터와 큰 카드가 한 화면에 들어오게 맞춘다.
+function toggleCard(id) {
+  if (!openIds.has(id)) return openNode(id);
+  closeCard(id);
+  renderMap(false, true);
+}
+
+// 큰 카드(와 붙은 서브·클러스터)가 한 화면에 들어오게 맞춘다.
 function focusCluster(nodeId) {
   const c = clusterOfCard(nodeId) || geo.get(nodeId);
   const extra = typeof dockFocusBoxes === "function" ? dockFocusBoxes(nodeId) : [];
@@ -21,26 +29,71 @@ function focusCluster(nodeId) {
   if (b) fitBox(b, 24, 180);
 }
 
-// 카드 하나를 화면 가운데로 가져와 잠깐 강조한다(세션 컨텍스트 목록에서 이동).
-function focusCard(id) {
-  if (typeof attnClear === "function") attnClear(id);   // 카드로 이동해 보면 주의는 끝난다
-  const g = geo.get(id);
-  if (!g) return;
+// 새로 연 카드는 이미 화면 안 빈 자리에 놓였다. 화면 밖(로컬·인프라 옆 등)이면 그때만 옮긴다.
+function revealCard(id) {
+  const c = clusterOfCard(id);
+  const extra = typeof dockFocusBoxes === "function" ? dockFocusBoxes(id) : [];
+  const b = boundsOf([c, SATS.get(id), ...extra].filter(Boolean));
+  if (!b) return;
   const st = $("stage").getBoundingClientRect();
-  const k = Math.max(view.k, 0.7);
-  animateView({ k, x: st.width / 2 - (g.x + g.w / 2) * k, y: st.height / 2 - (g.y + g.h / 2) * k }, 200);
-  const sel = `.node[data-id="${CSS.escape(id)}"]:not(.big), .node[data-ghost="${CSS.escape(id)}"]`;
-  const el = $("nodes").querySelector(sel);
+  const x = b.x * view.k + view.x, y = b.y * view.k + view.y;
+  const inside = x >= 0 && y >= 0 && x + b.w * view.k <= st.width && y + b.h * view.k <= st.height;
+  if (!inside) fitBox(b, 24, 180);
+}
+
+function flashCard(id) {
+  const el = $("nodes").querySelector(`.node.big[data-id="${CSS.escape(id)}"]`);
   if (!el) return;
   el.classList.remove("flash");
   void el.offsetWidth;   // 같은 카드를 연달아 눌러도 애니메이션이 다시 돈다
   el.classList.add("flash");
 }
 
-// 큰 카드를 처음 열 때의 자리: 클러스터 오른쪽. 다른 카드와 겹치면 아래가 아니라 그 카드 오른쪽으로 민다.
+// 카드 하나를 화면 가운데로 가져와 잠깐 강조한다(세션 컨텍스트 목록·알림에서 이동). 닫혀 있으면 연다.
+function focusCard(id) {
+  if (typeof attnClear === "function") attnClear(id);   // 카드로 이동해 보면 주의는 끝난다
+  if (!openIds.has(id)) { if (nodeInData(id)) openNode(id); return; }
+  const g = SATS.get(id);
+  if (!g) return;
+  const st = $("stage").getBoundingClientRect();
+  const k = Math.max(view.k, 0.7);
+  animateView({ k, x: st.width / 2 - (g.x + g.w / 2) * k, y: st.height / 2 - (g.y + g.h / 2) * k }, 200);
+  flashCard(id);
+}
+
+// 큰 카드를 처음 열 때의 자리(로컬·인프라): 클러스터 오른쪽. 다른 카드와 겹치면 아래가 아니라 그 카드 오른쪽으로 민다.
 function placeSatellite(anchor) {
-  const obstacles = [...CLUSTERS, ...geo.values(), ...SATS.values()];
+  const obstacles = [...CLUSTERS, ...geo.values(), ...SATS.values(), ...JOBS];
   const box = { x: anchor.x + anchor.w + 80, y: anchor.y, w: BIG_W, h: BIG_H };
+  for (let i = 0; i < 400; i++) {
+    const hit = obstacles.find((r) => rectsOverlap(box, r));
+    if (!hit) break;
+    box.x = hit.x + hit.w + 40;
+  }
+  return box;
+}
+
+// 큰 카드를 처음 열 때의 자리(세션 에이전트): 지금 화면 안에서 다른 카드와 겹치지 않는 첫 자리.
+// 1) 카드 전체가 화면에 들어오는 자리 2) 왼쪽 위가 화면 안인 자리 3) 화면 왼쪽 위에서 겹치는 카드 오른쪽으로 민 자리.
+function placeInView(w, h) {
+  const st = $("stage").getBoundingClientRect();
+  const v = { x: -view.x / view.k, y: -view.y / view.k, w: st.width / view.k, h: st.height / view.k };
+  const obstacles = [...CLUSTERS, ...geo.values(), ...SATS.values(), ...JOBS];
+  const M = 20, step = Math.max(40, Math.round(v.w / 36));
+  const scan = (x1, x2, y1, y2) => {
+    for (let y = y1; y <= y2; y += step) {
+      for (let x = x1; x <= x2; x += step) {
+        const box = { x: Math.round(x), y: Math.round(y), w, h };
+        if (!obstacles.some((r) => rectsOverlap(box, r))) return box;
+      }
+    }
+    return null;
+  };
+  const full = scan(v.x + M, v.x + v.w - w - M, v.y + M, v.y + v.h - h - M);
+  if (full) return full;
+  const corner = scan(v.x + M, v.x + v.w - Math.min(w, v.w / 2), v.y + M, v.y + v.h - Math.min(h, v.h / 2));
+  if (corner) return corner;
+  const box = { x: Math.round(v.x + M), y: Math.round(v.y + M), w, h };
   for (let i = 0; i < 400; i++) {
     const hit = obstacles.find((r) => rectsOverlap(box, r));
     if (!hit) break;

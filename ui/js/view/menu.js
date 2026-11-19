@@ -22,13 +22,6 @@ function showMenu(clientX, clientY, items) {
   };
 }
 
-function addLocal(x, y) {
-  const id = "local_" + Date.now().toString(36) + "_" + (localSeq++);
-  LOCALS.push({ id, title: "로컬 작업 " + (LOCALS.length + 1), cwd: ENV.localCwd || ENV.home || "", x, y, createdAt: Date.now() });
-  saveLocals();
-  openNode(id);
-}
-
 function deleteLocal(id) {
   const L = LOCALS.find((l) => l.id === id);
   if (!L || !confirm(`'${L.title}' 카드를 삭제할까요?`)) return;
@@ -48,11 +41,11 @@ function deleteLocal(id) {
   renderMap(false, true);
 }
 
-const BLOCK_LABELS = { chat: "채팅", context: "컨텍스트", terminal: "터미널", bg: "백그라운드 잡", files: "파일 트리", browser: "브라우저", db: "DB 조회", memo: "메모" };
+const BLOCK_LABELS = { chat: "채팅", context: "컨텍스트", terminal: "터미널", bg: "백그라운드 잡", editor: "코드 편집기", browser: "브라우저", db: "DB 조회", memo: "메모" };
 
 // 카드 종류별로 붙일 수 있는 블록. 로컬 카드는 세션이 아니라 채팅이 없고, 인프라 카드는 사이드 컬럼(파일)을 쓰지 않는다.
-const blockChoices = (n) => (agentKind(n.kind) ? Object.keys(BLOCK_LABELS).filter((t) => t !== "context" || capsOf(n).context)
-  : n.kind === "local" ? ["terminal", "bg", "files", "browser", "db", "memo"] : ["terminal", "bg", "browser"]);
+const blockChoices = (n) => (agentKind(n.kind) ? Object.keys(BLOCK_LABELS).filter((t) => (t !== "context" || capsOf(n).context) && (t !== "editor" || n.kind !== "sub"))
+  : n.kind === "local" ? ["editor", "terminal", "bg", "browser", "db", "memo"] : ["terminal", "bg", "browser"]);
 
 // 브라우저는 카드당 2개까지: 남은 자리 하나에 '추가' 항목, 인스턴스마다 '제거' 항목을 낸다.
 function browserMenuItems(n, cur) {
@@ -98,6 +91,9 @@ function hideSession(id, key = sessionKeyOfNode(id)) {
     savePinned();
   }
   if (openIds.has(id)) closeCard(id);
+  // 같은 세션의 다른 열린 카드(서브)가 남으면 필터가 세션을 계속 보여 주므로 함께 닫는다.
+  const s = key && DATA.sessions.find((x) => x.key === key);
+  if (s) for (const n of s.nodes) if (openIds.has(n.id)) closeCard(n.id);
   renderMap(false, true);
 }
 
@@ -151,11 +147,11 @@ async function switchCardHarness(id) {
 }
 
 function openCardMenu(clientX, clientY, id) {
-  const n = nodeById(id);
+  const n = nodeById(id) || nodeInData(id);   // 접힌 완료 서브는 목록에서만 보이므로 스냅샷에서도 찾는다
   if (!n) return;
   const key = sessionKeyOfNode(id);
   const items = [
-    { label: openIds.has(id) ? "카드 축소" : "카드 열기", hint: openIds.has(id) ? "− 버튼" : "더블클릭", run: () => openNode(id) },
+    { label: openIds.has(id) ? "카드 축소" : "카드 열기", hint: openIds.has(id) ? "− 버튼" : "목록 클릭", run: () => toggleCard(id) },
     null,
     ...blockMenuItems(n),
   ];
@@ -180,7 +176,8 @@ function openStageMenu(clientX, clientY) {
   const pt = worldPoint(clientX, clientY);
   showMenu(clientX, clientY, [
     { label: "+ 새 세션", run: () => openNewSession(pt) },
-    { label: "+ 새 로컬 카드 (터미널·파일)", hint: "Ctrl+N", run: () => addLocal(pt.x, pt.y) },
+    { label: "+ 새 로컬 카드 (편집기·터미널)", hint: "Ctrl+N", run: () => addLocal(pt.x, pt.y) },
+    { label: "+ 새 브라우저 카드", run: () => addBrowserCard(pt.x, pt.y) },
     null,
     { label: "전체 보기", hint: "0", run: fit },
     { label: "배치 되돌리기", hint: "Ctrl+Z", disabled: !HISTORY.length, run: undoLayout },
@@ -189,8 +186,8 @@ function openStageMenu(clientX, clientY) {
 
 $("stage").addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  const card = e.target.closest(".node[data-id], .node[data-ghost]");
-  if (card) openCardMenu(e.clientX, e.clientY, card.dataset.id || card.dataset.ghost);
+  const card = e.target.closest(".node[data-id]");
+  if (card) openCardMenu(e.clientX, e.clientY, card.dataset.id);
   else openStageMenu(e.clientX, e.clientY);
 });
 

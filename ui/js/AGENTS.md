@@ -3,9 +3,14 @@
 <!-- AUTO:START -->
 <!-- AUTO:END -->
 <!-- MANUAL:START -->
+## 세션 목록과 지도
+- 세션 에이전트(main·sub)는 지도에 큰 카드로만 있고, 목록(`view/session-list.js`, 행 데이터 `viewmodel/session-rows.js`)이 일람을 맡는다. 열린 카드 상태(`openIds`·`BIGPOS`)가 목록 강조와 지도를 함께 결정하므로 열고 닫는 경로는 `openNode`·`closeCard`·`toggleCard` 한 곳을 쓴다.
+- 목록 패널 폭·접힘은 `omp-map-sessions`, 큰 카드 좌표는 `omp-map-bigpos`에 저장한다. 세션 작은 카드 크기(`omp-map-subsize`)·카드 절대 좌표(`omp-map-manual`의 `card:` 키)·세션 원점은 더 쓰지 않는다.
+- 세션 잡 카드는 그 세션에 열린 큰 카드가 있을 때만 지도에 올라온다(앵커 없음 → 미표시).
+
 ## 코드 편집기
-- `view/editor-api.js`(fetch 래퍼) → `view/editor-mount.js`(Monaco jsDelivr CDN 지연 로드·언어 매핑·LSP→마커 변환) → `view/editor.js`(오버레이 패널·탭·열기/닫기) → `view/editor-actions.js`(저장·F12 정의 이동·600ms 진단 디바운스) 순서로 로드한다. `block-files.js`의 우클릭 메뉴가 `openEditor(path)`를 부른다.
-- 편집기 탭 상태(`ED_TABS`)와 Monaco 인스턴스는 `editor.js`가 단독 소유한다. 다른 파일은 DOM 상태를 새로 만들지 말고 이 함수를 쓴다. Monaco는 처음 열 때만 CDN에서 받고, npm 의존성은 두지 않는다.
+- `view/editor-api.js`(fetch 래퍼) → `view/editor-mount.js`(Monaco jsDelivr CDN 지연 로드·언어 매핑·LSP→마커 변환) → `view/editor.js`(카드별 상태·DOM 골격·탭·상태바·Monaco 생성) → `view/editor-chrome.js`(탐색기 폭·접힘, 탭 클릭, 고정 탭, 브레드크럼) → `view/editor-split.js`(대화·편집기 경계 끌기) → `view/editor-explorer.js`(탐색기 트리·필터·우클릭 메뉴) → `view/editor-actions.js`(저장·F12 정의 이동·600ms 진단 디바운스) → `view/editor-open.js`(탭 닫기·`edDispose`·`openEditor(카드id, 경로, {pin})`) → `view/block-editor.js`(큰 카드 `editor` 블록, main 슬롯) 순서로 로드한다. `files` 블록은 없다: 파일 트리는 편집기 탐색기가 맡고 데이터(`TREES`·`loadTree`·`setCwd`)는 `viewmodel/files.js` 에 둔다. 저장된 블록 구성의 `files` 는 `cardBlockTypes` 가 `editor` 로 이전하고, 서브에이전트(sub) 카드에는 editor 를 넣지 않는다. 편집기는 chat 이 있는 카드에서 슬롯 `edit`(대화 오른쪽 `.col-ed`, 폭 `--edcol`)에, 없으면 `main` 에 놓인다. 편집기 안 요소 속성·클래스는 카드 전역 핸들러(`data-act`·`data-close`·`.x`)와 겹치지 않게 `data-edact`·`data-edclose`·`edx` 처럼 `ed` 접두어를 쓴다.
+- 편집기는 카드 안 블록이다. 카드별 상태(`ED`: root DOM·Monaco·탭·미리보기 탭·탐색기 펼침/필터)와 파일 레코드(`ED_FILES`: 경로당 모델·mtime·dirty를 카드끼리 공유)는 `editor.js`가 단독 소유한다. 바디가 다시 만들어져도 root DOM은 살아 있고 `block-editor.js`의 mount가 다시 붙인다(`paint`는 숨김 여부만 맞춘다). 카드를 닫을 때 `closeCard`가 `edDispose`를 불러 인스턴스·모델을 dispose 한다. 편집기 안 휠은 root에서 끊고 포인터는 `CARD_INTERACTIVE`(`.edblk`)로 막아 지도·카드 끌기로 새지 않는다. 다른 파일은 DOM 상태를 새로 만들지 말고 이 함수를 쓴다. Monaco는 처음 열 때만 CDN에서 받고, npm 의존성은 두지 않는다.
 - F12는 Python이면 `/api/editor/definition` 으로, JS/TS면 Monaco 내장 TypeScript 서비스(`getTypeScriptWorker`)로 정의를 찾는다. Ctrl+클릭은 Python만 직접 처리한다. Python 진단은 서버가 주고 JS/TS 문법 오류는 Monaco가 스스로 마커를 단다.
 <!-- MANUAL:END -->
 <!-- AUTO:START -->

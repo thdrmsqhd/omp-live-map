@@ -49,12 +49,10 @@ function onNodesClick(ev) {
     return;
   }
   if (el.dataset.metric) return selectOnly(clusterByKey("host:host"));
-  const id = el.dataset.id || el.dataset.ghost;
+  const id = el.dataset.id;
   if (typeof attnClear === "function") attnClear(id);   // 그 카드를 열어 본 것으로 보고 주의를 해제한다
   const hit = (sel) => ev.target.closest(sel);
-  // 큰 카드의 미러도 실제 작은 카드다. 닫기 버튼은 동작시키고, 나머지 클릭만 선택으로 쓴다.
   if (hit("button[data-dismiss]")) return closeSession(id);
-  if (el.dataset.ghost) return selectOnly(clusterOfCard(id));
   const act = hit("button[data-act]");
   if (act) return infraAction(act.dataset.act, act.dataset.t, id);
   if (hit("button[data-close]")) { closeCard(id); renderMap(false, true); return; }
@@ -64,6 +62,6 @@ function onNodesClick(ev) {
   if (ren) { renamingId = ren.dataset.rename; renderMap(false, true); return; }
   if (el.classList.contains("big") && hit(".chrome") && chromeClick(ev.target, id)) return;
   if (hit(CARD_INTERACTIVE)) return;
-  // 피그마식: 한 번 클릭은 선택, 카드 열기는 더블클릭.
+  // 한 번 클릭은 선택(로컬·인프라 클러스터), 카드 열기는 더블클릭 또는 세션 목록 클릭.
   selectOnly(clusterOfCard(id));
 }

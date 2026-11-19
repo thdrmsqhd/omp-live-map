@@ -17,6 +17,7 @@ async function boot() {
   bindCardDrag();
   bindCardResize();
   bindMinimap();
+  bindSessionList();
   $("nodes").addEventListener("click", onNodesClick);
   // 포인터를 누르고 있는 동안에는 카드를 다시 그리지 않는다(끌기·더블클릭 대상이 바뀌지 않게).
   $("stage").addEventListener("pointerdown", () => { DEFER = true; });
@@ -55,7 +56,7 @@ async function boot() {
   setInterval(() => { if (pendingRender && !DEFER && !typingNow()) renderMap(false); }, 700);
   // 도는 잡이 있으면 경과 시간·출력 꼬리가 흐르도록 다시 그린다. 열린 출력은 스크롤 위치를 지킨다.
   setInterval(() => {
-    if (!typingNow() && CLUSTERS.some((c) => (c.jobs || []).some((j) => !j.done))) renderMap(false);
+    if (!typingNow() && JOBS.some((j) => !j.done)) renderMap(false);
   }, 2000);
   setInterval(paintJobScroll, 500);
   addEventListener("resize", paintMinimap);

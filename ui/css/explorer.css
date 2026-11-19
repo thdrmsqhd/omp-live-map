@@ -1,0 +1,30 @@
+/* omp-live-map · css · 편집기 탐색기 행과 파일 아이콘(SVG 마스크를 확장자별 고정 색으로 칠한다) */
+
+.extree { flex: 1; min-height: 0; overflow: auto; font-size: 13px; padding-bottom: 6px; }
+.exr { display: flex; align-items: center; height: 22px; padding-right: 8px; color: #cccccc; cursor: pointer; white-space: nowrap; }
+.exr:hover { background: #2a2d2e; }
+.exr.sel { background: #37373d; color: #fff; }
+.exr .exn { overflow: hidden; text-overflow: ellipsis; }
+.exm { color: #8a8a8a; font-size: 12px; padding: 3px 12px; }
+/* 폴더 화살표(펼침이면 아래로) */
+.exc { flex: none; width: 16px; height: 16px; position: relative; }
+.exr.dir .exc::before { content: ""; position: absolute; left: 5px; top: 5px; width: 5px; height: 5px; border-right: 1.5px solid #c5c5c5; border-bottom: 1.5px solid #c5c5c5; transform: rotate(-45deg); }
+.exr.dir.open .exc::before { transform: rotate(45deg); top: 4px; }
+
+.ic { display: inline-block; flex: none; width: 16px; height: 16px; margin-right: 6px; background: #9da5b4;
+  -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat;
+  --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M3 1h6.5L14 5.5V15H3zM9 2v4h4z'/></svg>"); }
+.ic.d { background: #c09553;
+  --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M1 2.5h5l1.6 1.8H15V14H1z'/></svg>"); }
+.exr.dir.open > .ic.d { background: #dcb67a;
+  --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M1 2.5h5l1.6 1.8H13v1.9H3.6L1 13zM4.2 7.2H16L13 14H1z'/></svg>"); }
+.ic[data-ext="js"], .ic[data-ext="mjs"], .ic[data-ext="cjs"] { background: #cbcb41; }
+.ic[data-ext="ts"], .ic[data-ext="tsx"], .ic[data-ext="jsx"] { background: #519aba; }
+.ic[data-ext="py"] { background: #6aa5d6; }
+.ic[data-ext="md"], .ic[data-ext="txt"] { background: #b6c2cf; }
+.ic[data-ext="json"], .ic[data-ext="jsonl"], .ic[data-ext="yml"], .ic[data-ext="yaml"], .ic[data-ext="toml"] { background: #cbcb41; }
+.ic[data-ext="css"], .ic[data-ext="scss"] { background: #a074c4; }
+.ic[data-ext="html"], .ic[data-ext="htm"], .ic[data-ext="svg"] { background: #e37933; }
+.ic[data-ext="go"], .ic[data-ext="rs"], .ic[data-ext="cs"], .ic[data-ext="java"] { background: #4dc3b8; }
+.ic[data-ext="sh"], .ic[data-ext="ps1"], .ic[data-ext="bat"], .ic[data-ext="cmd"] { background: #8dc149; }
+.ic[data-ext="png"], .ic[data-ext="jpg"], .ic[data-ext="gif"], .ic[data-ext="webp"], .ic[data-ext="pdf"] { background: #b07cc6; }

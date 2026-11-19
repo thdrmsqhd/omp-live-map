@@ -1,4 +1,4 @@
-/* omp-live-map · view · 비활성 세션 검색(고르면 고정해서 맵에 올린다) */
+/* omp-live-map · view · 비활성 세션 검색(고르면 고정해서 사이드 목록에 올리고 그 줄로 이동한다) */
 
 function renderSearch() {
   const box = $("searchResults");
@@ -34,7 +34,7 @@ $("searchResults").addEventListener("click", (e) => {
   $("search").value = "";
   $("searchResults").classList.remove("open");
   renderMap(false, true);
-  focusSession(key);
+  revealSession(key);
 });
 
 // 클러스터 제목의 "고정됨 ✕"

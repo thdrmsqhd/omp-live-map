@@ -1,6 +1,9 @@
-/* omp-live-map · view · 큰 카드 바디와 블록(terminal·bg·chat·files·browser), 스테이지 잡 카드 */
+/* omp-live-map · view · 큰 카드 바디와 블록(terminal·bg·chat·browser), 스테이지 잡 카드 */
   .node.big > .body { display: flex; gap: 10px; flex: 1; min-height: 0; margin-top: 8px; cursor: default; }
   .node.big .col-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow-y: auto; }
+  .node.big .col-ed { flex: 0 1 var(--edcol, 58%); min-width: 280px; display: flex; flex-direction: column; min-height: 0; }
+  .node.big .edsplit { flex: none; width: 8px; margin: 0 -4px; cursor: col-resize; z-index: 3; }
+  .node.big .edsplit:hover, .node.big .edsplit.on { background: #1f6fb5; }
   .node.big .col-tree { width: 252px; flex: none; display: flex; flex-direction: column; gap: 6px; min-height: 0;
     border-left: 1px solid #1d2a38; padding-left: 10px; }
   .node.big .blk { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
@@ -9,7 +12,6 @@
   .node.big .blk[data-blk="chat"] { min-height: 320px; }
   .node.big .blk[data-blk="terminal"] { min-height: 120px; }
   .node.big .blk[data-blk="browser"] { min-height: 120px; }
-  .node.big .blk[data-blk="files"] { min-height: 100px; }
 
   .term { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 2px; }
   .term .tinfo { display: flex; gap: 8px; align-items: center; font-size: 10px; color: var(--dim); font-family: var(--mono); }
@@ -174,42 +176,6 @@
   .brow .bframe { flex: 1; min-height: 120px; width: 100%; border: 1px solid #1d2a38; border-radius: 6px; background: #070b10; }
   .brow .bframe.on { background: #fff; }
 
-  .col-tree .tt { display: flex; gap: 6px; align-items: center; font-size: 10px; color: var(--dim); font-family: var(--mono); }
-  .col-tree .tt .p { color: #7fd3ba; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; flex: 1; }
-  .col-tree [data-reload-tree].busy { opacity: .45; cursor: progress; }
-  .col-tree .fq { margin-top: 5px; background: #0a1017; border: 1px solid #1c2a39; border-radius: 5px; color: var(--fg);
-    font: inherit; font-size: 10.5px; padding: 2px 6px; outline: 0; }
-  .col-tree .fq:focus { border-color: #2f5d85; }
-  .tree { flex: 1; min-height: 0; overflow: auto; margin-top: 5px; font-family: var(--mono); font-size: 11px; }
-  .tree details { margin-left: 3px; }
-  .tree details > details, .tree details > .n { margin-left: 12px; }
-  .tree details > .f { margin-left: 9px; }
-  .tree summary { cursor: pointer; color: #9fc0d8; padding: 1px 0; list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tree summary::before { content: "▸ "; color: #47607a; }
-  .tree details[open] > summary::before { content: "▾ "; }
-  .tree .f { color: #7d93a8; padding: 1px 0 1px 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-  .tree .f.up { color: #47607a; }
-  .tree .f:hover, .tree summary:hover { color: #cfe3f5; }
-  .tree .n { color: #45607a; font-size: 10px; padding-left: 12px; }
-  /* 파일 트리 아이콘: SVG 마스크를 확장자별 고정 색으로 칠한다(14px, 이름과 가운데 정렬). */
-  .tree .ic { display: inline-block; width: 14px; height: 14px; margin-right: 5px; vertical-align: -3px;
-    background: #8fa3b6; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat;
-    --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M3 1h6.5L14 5.5V15H3zM9 2v4h4z'/></svg>"); }
-  .tree .ic.d { background: #e3b558;
-    --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M1 2.5h5l1.6 1.8H15V14H1z'/></svg>"); }
-  .tree details[open] > summary .ic.d { background: #f2c96b;
-    --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M1 2.5h5l1.6 1.8H13v1.9H3.6L1 13zM4.2 7.2H16L13 14H1z'/></svg>"); }
-  .tree .f.up .ic.d { background: #6f8aa3; }
-  .tree .ic[data-ext="js"], .tree .ic[data-ext="mjs"], .tree .ic[data-ext="cjs"] { background: #f0db4f; }
-  .tree .ic[data-ext="ts"], .tree .ic[data-ext="tsx"], .tree .ic[data-ext="jsx"] { background: #4ea6f5; }
-  .tree .ic[data-ext="py"] { background: #5fb3e8; }
-  .tree .ic[data-ext="md"], .tree .ic[data-ext="txt"] { background: #c9d6e2; }
-  .tree .ic[data-ext="json"], .tree .ic[data-ext="jsonl"], .tree .ic[data-ext="yml"], .tree .ic[data-ext="yaml"], .tree .ic[data-ext="toml"] { background: #e8a33d; }
-  .tree .ic[data-ext="css"], .tree .ic[data-ext="scss"] { background: #b07cf0; }
-  .tree .ic[data-ext="html"], .tree .ic[data-ext="htm"], .tree .ic[data-ext="svg"] { background: #f2774b; }
-  .tree .ic[data-ext="go"], .tree .ic[data-ext="rs"], .tree .ic[data-ext="cs"], .tree .ic[data-ext="java"] { background: #5fd1c4; }
-  .tree .ic[data-ext="sh"], .tree .ic[data-ext="ps1"], .tree .ic[data-ext="bat"], .tree .ic[data-ext="cmd"] { background: #8fd16a; }
-  .tree .ic[data-ext="png"], .tree .ic[data-ext="jpg"], .tree .ic[data-ext="gif"], .tree .ic[data-ext="webp"], .tree .ic[data-ext="pdf"] { background: #e86f9a; }
 
   .jcard { position: absolute; border: 1px solid #1d2c3a; background: #0e161f; border-radius: 8px;
     padding: 5px 7px; overflow: hidden; }

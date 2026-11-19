@@ -1,7 +1,7 @@
 /* omp-live-map · view · 스테이지 포인터·휠·키보드 입력 */
 
 // 카드 안에서 자체 동작이 있는 영역. 여기서 시작한 포인터는 카드 끌기·선택·열기로 치지 않는다.
-const CARD_INTERACTIVE = "button, input, textarea, .term, .chat, .col-tree, .brow, .bgs, .cmsgs, .cmsg, .tout, .tree, .rename, .rsz";
+const CARD_INTERACTIVE = "button, input, textarea, .term, .chat, .col-tree, .edblk, .edsplit, .brow, .bgs, .cmsgs, .cmsg, .tout, .rename, .rsz";
 
 function bindStageInput() {
   const stage = $("stage");
@@ -48,15 +48,10 @@ function bindStageInput() {
     toggleJobCard(card.dataset.job);
   });
 
-  // 피그마식: 카드 더블클릭 = 열기, 미러 카드 더블클릭 = 접기, 클러스터 제목 = 그 클러스터로 확대. 빈 바탕은 아무 동작 없음.
+  // 로컬·인프라 작은 카드 더블클릭 = 큰 카드 열기(이미 열려 있으면 그 카드로 이동). 빈 바탕·클러스터 제목은 아무 동작 없음.
   stage.addEventListener("dblclick", (e) => {
     const node = e.target.closest(".node");
-    if (!node) {
-      const head = e.target.closest(".cluster .ch");
-      const c = head && clusterByKey(head.parentElement.dataset.ckey);
-      if (c) fitBox(c, 26, 220);
-      return;
-    }
+    if (!node) return;
     const id = node.dataset.id;
     if (node.classList.contains("big") && e.target.closest(".chrome .nm")) {
       const n = nodeById(id);
@@ -64,8 +59,7 @@ function bindStageInput() {
       return;
     }
     if (e.target.closest(CARD_INTERACTIVE)) return;
-    if (node.dataset.ghost) return openNode(node.dataset.ghost);
-    if (id && !openIds.has(id)) openNode(id);
+    if (id && !node.classList.contains("big")) openNode(id);
   });
 
   stage.addEventListener("wheel", (e) => {
@@ -92,7 +86,7 @@ function bindStageInput() {
   // 카드 안 스크롤 영역 위에서는 휠이 그 영역을 굴리고, 끝에 닿아도 맵을 스크롤·확대·축소하지 않는다.
   $("nodes").addEventListener("wheel", (e) => {
     if (e.ctrlKey || e.metaKey) return;
-    if (e.target.closest(".tout, .cmsgs, .tree, .bgs, .bgout, .cin, .col-main")) e.stopPropagation();
+    if (e.target.closest(".tout, .cmsgs, .bgs, .bgout, .cin, .col-main")) e.stopPropagation();
   }, { passive: true });
 
   addEventListener("keydown", (e) => {

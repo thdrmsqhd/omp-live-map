@@ -25,6 +25,9 @@ let CLUSTERS = [];
 
 let SATS = new Map();
 
+// 지도에 올라간 세션 잡 카드(열린 큰 카드 아래). 렌더마다 sessionJobs()가 다시 만든다.
+let JOBS = [];
+
 // 열린 큰 카드의 절대 위치·크기. 열 때 한 번 자동 배치한 뒤 카드별로 유지한다.
 const BIGPOS = new Map();
 
@@ -38,7 +41,8 @@ const ELS = new Map();
 
 const TERM = new Map();
 
-const BIG_W = 1080, BIG_H = 900;
+// 대화 + VS Code형 편집기를 나란히 놓아도 답답하지 않은 기본 크기.
+const BIG_W = 3200, BIG_H = 1920;
 
 const CARD_BLOCKS = new Map();   // nodeId -> {add, remove} (기본 블록 대비 차이)
 const BURL = new Map();          // nodeId -> { url } (browser 블록 상태)

@@ -1,4 +1,4 @@
-/* omp-live-map · view · 카드 블록 레지스트리 (slot: main | side) */
+/* omp-live-map · view · 카드 블록 레지스트리 (slot: main | side | edit) */
 //
 // 카드 = 블록 목록. 새 블록은 view/block-*.js 에서 registerBlock 으로 등록하고,
 // BLOCK_DEFAULTS 나 CARD_BLOCKS(nodeId) 오버라이드에 넣으면 큰 카드 바디에 붙는다.
@@ -29,20 +29,26 @@ function registerBlock(def) {
 }
 
 // 잡은 스테이지 잡 카드가 보여주므로 bg 블록은 기본으로 넣지 않는다(블록 메뉴에서 더할 수 있다).
-// 서브에이전트 카드는 chat 만 기본: 터미널·파일 트리는 블록 메뉴로 직접 더한다.
+// 서브에이전트 카드는 chat 만 기본: 터미널 등은 블록 메뉴로 직접 더한다.
+// editor 블록(VS Code형: 탐색기+탭+Monaco)이 파일 트리를 대신한다. 서브에이전트 카드에는 넣지 않는다.
 const BLOCK_DEFAULTS = (n) => (n.kind === "sub" ? ["chat"]
-  : n.kind === "main" ? ["chat", "terminal", "files"]
-  : n.kind === "local" ? ["terminal", "files"] : ["terminal"]);
+  : n.kind === "main" ? ["editor", "chat", "terminal"]
+  : n.kind === "local" ? ["editor", "terminal"] : ["terminal"]);
 
 function cardBlockTypes(n) {
   const base = BLOCK_DEFAULTS(n);
   const ov = CARD_BLOCKS.get(n.id);
   // 배열은 예전 전체 덮어쓰기 형식, 객체는 기본값 대비 {add, remove} 차이만 저장한다.
-  const list = Array.isArray(ov)
-    ? ov
-    : ov
-      ? [...base.filter((t) => !(ov.remove || []).includes(t)), ...(ov.add || [])]
-      : base;
+  // 옛 저장값 이전: "files" 블록은 editor(탐색기)로 합친다. 전체 덮어쓰기 배열에 editor 가 없으면(editor 도입 전 저장) 첫 자리에 더한다.
+  const mig = (l) => l.map((t) => (t === "files" ? "editor" : t));
+  let list = base;
+  if (Array.isArray(ov)) {
+    list = mig(ov);
+    if (base.includes("editor") && !list.includes("editor")) list.unshift("editor");
+  } else if (ov) {
+    list = [...base.filter((t) => !(ov.remove || []).filter((x) => x !== "files").includes(t)), ...mig(ov.add || [])];
+  }
+  if (n.kind === "sub") list = list.filter((t) => t !== "editor");   // 저장된 sub 카드 구성에 남은 editor/files 는 버린다
   // 같은 키는 한 번만, 같은 타입은 blockMax(기본 1)개까지만 허용한다.
   // 저장된 설정에 남은 옛 타입(예: "live")은 등록된 블록만 남겨 조용히 버린다.
   const out = [];
@@ -65,13 +71,16 @@ function cardUI(nodeId) {
 
 // 한 슬롯에 그릴 블록을 저장된 순서대로 돌려준다. 순서에 없는 블록은 기본 순서대로 뒤에 붙는다.
 // 반환: [{ b: 정의, key: 인스턴스 키 }]
+// 블록이 실제로 놓이는 슬롯. 편집기는 대화(chat)가 있는 카드에서만 대화 오른쪽 열(edit)에 놓이고, 없으면 main 에 쌓인다.
+const slotOf = (n, b) => (b.type === "editor" && cardBlockTypes(n).includes("chat") ? "edit" : b.slot);
+
 function slotBlocks(n, slot) {
   const ui = CARD_UI.get(n.id);
   const order = (ui && ui.order[slot]) || [];
   const rank = (t, i) => { const k = order.indexOf(t); return k >= 0 ? k : order.length + i; };
   return cardBlockTypes(n)
     .map((key) => ({ b: BLOCKS.get(blockBase(key)), key }))
-    .filter((x) => x.b && x.b.slot === slot)
+    .filter((x) => x.b && slotOf(n, x.b) === slot)
     .map((x, i) => ({ ...x, r: rank(x.key, i) }))
     .sort((a, z) => a.r - z.r)
     .map(({ b, key }) => ({ b, key }));
@@ -86,7 +95,7 @@ function renderBlocks(n, slot) {
 function blockSig(n) {
   const ui = CARD_UI.get(n.id);
   const one = (key) => key + (ui && ui.collapsed[key] ? "-" : "") + ((ui && ui.h[key]) || "");
-  return ["main", "side"].map((slot) => slotBlocks(n, slot).map((x) => one(x.key)).join(",")).join("|");
+  return ["main", "edit", "side"].map((slot) => slotBlocks(n, slot).map((x) => one(x.key)).join(",")).join("|");
 }
 
 function blockShell(n, b, key, ui) {
@@ -96,7 +105,7 @@ function blockShell(n, b, key, ui) {
   const h = ui && ui.h[key];
   const style = collapsed ? "flex:0 0 auto" : h ? `flex:0 0 auto;height:${h}px` : `flex:${b.flex ?? 1}`;
   const cls = "blk" + (collapsed ? " collapsed" : h ? " sized" : "");
-  return `<div class="${cls}" data-blk="${base}" data-bkey="${k}" data-slot="${esc(b.slot)}" style="${style}">
+  return `<div class="${cls}" data-blk="${base}" data-bkey="${k}" data-slot="${esc(slotOf(n, b))}" style="${style}">
     <div class="bctl"><button class="bgrip" data-bgrip="${k}" title="끌어서 순서 변경">⋮⋮</button><button class="bchev" data-bchev="${k}" title="${collapsed ? "펼치기" : "접기"}">${collapsed ? "▸" : "▾"}</button></div>
     ${b.render(n, key)}
     <button class="bresize" data-bresize="${k}" title="끌어서 높이 조절 · 더블클릭으로 원래대로"></button>

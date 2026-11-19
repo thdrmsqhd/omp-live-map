@@ -1,17 +1,4 @@
-/* omp-live-map · view · 압축 카드·미러 카드·클러스터 프레임·HOST 지표 카드 */
-
-// 큰 카드로 열린 동안 원래 자리에 남는 미러: 상태 점·이름·"열림"만 둔다(수치는 큰 카드에 있다).
-function ghostCard(n) {
-  const g = geo.get(n.id);
-  const name = agentKind(n.kind) ? displayName(n) : n.name;
-  return `<div class="node ghost ${n.kind} ${n.status}" data-ghost="${esc(n.id)}" style="left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h - 3}px">
-    <div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(name)}</span><span class="attn-badge"></span><span class="mod">열림</span></div></div>`;
-}
-
-function ctxChip(n) {
-  const u = ctxUsage(n);
-  return u ? `<span class="ctxp ${u.level}" title="컨텍스트 ${fmt(n.ctx.promptTokens)} / ${fmt(n.ctxWindow)} tok">ctx ${u.text}</span>` : "";
-}
+/* omp-live-map · view · 로컬·인프라 카드·클러스터 프레임·HOST 지표 카드·지금 하는 일 한 줄 */
 
 function localCard(n, base) {
   const st = TERM.get(n.id);
@@ -25,7 +12,7 @@ function localCard(n, base) {
       <span class="mod">local</span></div>
     <div class="sub-t">${esc(st ? st.cwd : n.cwd)}</div>
     ${resRow(n, false)}
-    <div class="kv" style="margin-top:6px">더블클릭 → 터미널·파일</div>
+    <div class="kv" style="margin-top:6px">더블클릭 → 편집기·터미널</div>
     <div class="kv" style="margin-top:2px">우클릭 / Ctrl+N → 새 카드</div>
   </div>`;
 }
@@ -95,37 +82,15 @@ function nowLine(n) {
     ${last ? `<span class="nwo">${esc(cut(last, 48))}</span>` : ""}</div>`;
 }
 
-function smallCard(n) {
+// 지도에 남은 작은 카드: 로컬·인프라(세션 에이전트는 큰 카드와 사이드 목록으로만 다룬다).
+function plainCard(n) {
   const g = geo.get(n.id);
   const base = `left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h - 3}px`;
-  if (n.kind === "local") return localCard(n, base);
-  if (!agentKind(n.kind)) return infraCard(n, base);
-  const subText = n.synthetic ? "원본 기록 없음" : (n.title || n.firstUser || (n.kind === "main" ? "main agent" : "subagent"));
-  const sum = tokTotal(n.tokens);
-  return `<div class="node ${n.kind} ${n.status}${SUBSIZE.has(n.id) ? " sized" : ""}" data-id="${esc(n.id)}" style="${base}">
-    <div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i><span class="nm">${esc(displayName(n))}</span>
-      ${harnessChip(n)}${askBadge(n.id)}<span class="attn-badge"></span>
-      ${ctxChip(n)}${profileChip(n)}${modelChip(n)}<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">닫기</button></div>
-    <div class="sub-t" title="${esc(subText)}">${esc(subText)}</div>
-    ${nowLine(n)}
-    <div class="ibar">${tokenTape(n.tokens)}</div>
-    <div class="nums">
-      <u class="m-tok" title="입력 ${fmt(n.tokens.input)} tok · 전체의 ${pctText(n.tokens.input, sum)}">in <b>${fmt(n.tokens.input)}</b></u>
-      <u class="m-out" title="출력 ${fmt(n.tokens.output)} tok · 전체의 ${pctText(n.tokens.output, sum)}">out <b>${fmt(n.tokens.output)}</b></u>
-      <u class="m-cache" title="캐시 읽기 ${fmt(n.tokens.cacheRead)} tok · 전체의 ${pctText(n.tokens.cacheRead, sum)}">cache <b>${fmt(n.tokens.cacheRead)}</b></u>
-      <u class="m-req" style="margin-left:auto" title="요청 ${n.requests}회 · 턴 ${n.turns || 0} · 평균 TTFT ${n.avgTtft || 0}ms">req <b>${n.requests}</b></u>
-    </div>
-    <div class="sparkwrap">
-      <span class="rate">${n.liveTokPerSec ? n.liveTokPerSec.toFixed(1) : "0"} t/s</span>
-      ${spark(n.series || [], 208, 24, "#2fbf9b", true)}
-    </div>
-    ${resRow(n, false)}
-    ${resizeGrip()}
-  </div>`;
+  return n.kind === "local" ? localCard(n, base) : infraCard(n, base);
 }
 
 function clusterHTML(c) {
-  // 제목 줄을 끌면 클러스터 묶음이 함께 움직인다(카드를 끌면 그 카드만).
+  // 제목 줄을 끌면 클러스터 묶음이 함께 움직인다.
   const frame = (cls, inner) => `<div class="cluster ${cls}" data-ckey="${esc(clusterKeyOf(c))}" style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px">${inner.replace('<div class="ch">', '<div class="ch" title="끌어서 묶음 이동">')}</div>`;
   if (c.kind === "host") {
     return frame("live", `<div class="ch"><div class="r1"><span class="ct">${esc(c.title)}</span><span class="cm">${esc(c.folder)}</span></div></div>`);
@@ -138,15 +103,7 @@ function clusterHTML(c) {
     return frame("live", `<div class="ch"><div class="r1"><span class="ct">${esc(c.title)}</span></div>
       <div class="r2"><span class="cd">${esc(c.folder || "")}</span><span class="ca">local</span></div></div>`);
   }
-  return frame(c.live ? "live" : "", `<div class="ch">
-      <div class="r1"><span class="ct">${esc(c.title)}</span>
-        ${c.pinned ? `<button class="unpin" data-unpin="${esc(encodeURIComponent(c.key || ""))}" style="padding:0 5px;font-size:9.5px">고정됨 ✕</button>` : ""}
-        ${c.agents + (c.hiddenDoneSubs || 0) > 1 ? `<span class="cm"><span class="m-tok">${fmt(c.tokens.tokens)} tok</span> · <span class="m-cost">${krw(c.cost)}</span></span>` : ""}</div>
-      <div class="r2"><span class="cd">${esc(c.folder)}</span>
-        <span class="ca">${c.ctxTotal && c.agents > 1 ? "ctx " + fmt(c.ctxTotal) + " · " : ""}${c.agents} agent${c.hiddenDoneSubs ? ` · 완료 ${c.hiddenDoneSubs} 숨김` : ""} · ${c.jobTotal ? c.jobTotal + " job · " : ""}${ago(c.lastTs)}</span></div>
-    </div>
-    <div class="ctape">${tokenTape(c.tokens)}</div>
-    ${(c.jobs || []).map((j) => jobCard(j, c)).join("")}`);
+  return "";
 }
 
 // HOST 클러스터 안의 지표 카드. 조각(piece)은 루트 엘리먼트가 하나여야 하므로 카드마다 따로 돌려준다.

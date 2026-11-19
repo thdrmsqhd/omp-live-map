@@ -55,7 +55,7 @@ function agentNodes(sessions) {
 // 카드에 보이는 이름: 사용자가 붙인 별칭이 우선한다.
 const displayName = (n) => ALIAS.get(n.id) || (n.kind === "main" ? "main" : n.name);
 
-function buildBlocks(sessions) {
+function buildBlocks() {
   const PAD = 16, HEAD = 62;
   const zero = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 });
   const blocks = [];
@@ -80,7 +80,6 @@ function buildBlocks(sessions) {
           meta: INFRA.distros.map((d) => d.name).join(" · ") + " · " + (INFRA.containers || []).length + " containers" });
       } });
   }
-  for (const s of sessions) blocks.push(sessionBlock(s, PAD, HEAD));
   return blocks;
 }
 
@@ -152,6 +151,7 @@ function closeCard(id) {
   if (!id) id = [...openIds].at(-1);
   if (!id) return;
   if (typeof dockOnClose === "function") dockOnClose(id);   // 메인이면 연결 서브도 함께, 서브면 자동 열림 끄기
+  if (typeof edDispose === "function") edDispose(id);   // 카드별 Monaco·탭·모델 정리
   openIds.delete(id);
   SATS.delete(id);
   saveOpenCards();

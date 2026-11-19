@@ -5,8 +5,8 @@
 function paintAttention() {
   const box = $("nodes");
   if (!box) return;
-  for (const el of box.querySelectorAll(".node")) {
-    const id = el.dataset.id || el.dataset.ghost || "";
+  for (const el of [...box.querySelectorAll(".node"), ...document.querySelectorAll("#slList .sl-row")]) {
+    const id = el.dataset.id || "";
     const rec = id ? ATTN.get(id) : null;
     const kind = rec ? rec.kind : "";
     el.classList.toggle("attn-done", kind === "done");

@@ -13,11 +13,12 @@ function paintMinimap() {
   const st = $("stage").getBoundingClientRect();
   svg.innerHTML = [
     ...CLUSTERS.map((c) => R(c, "mm-cl")),
-    ...[...geo.entries()].map(([id, g]) => {
+    ...[...geo.values()].map((g) => R(g, "mm-c")),
+    ...JOBS.map((j) => R(j, "mm-c")),
+    ...[...SATS.entries()].map(([id, box]) => {
       const rec = typeof ATTN !== "undefined" ? ATTN.get(id) : null;
-      return R(g, "mm-c" + (rec ? (rec.kind === "ask" ? " mm-ask" : " mm-done") : ""));
+      return R(box, "mm-sat" + (rec ? (rec.kind === "ask" ? " mm-ask" : " mm-done") : ""));
     }),
-    ...[...SATS.values()].map((box) => R(box, "mm-sat")),
     R({ x: -view.x / view.k, y: -view.y / view.k, w: st.width / view.k, h: st.height / view.k }, "mm-view"),
   ].join("");
 }

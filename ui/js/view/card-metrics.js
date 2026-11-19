@@ -84,15 +84,15 @@ function ctxBlock(n) {
 }
 
 function sessionCtxBlock(n) {
-  const cl = CLUSTERS.find((c) => c.kind === "session" && c.key === n.session);
-  if (!cl || !cl.ctxParts || cl.ctxParts.length < 2) return "";
-  const max = Math.max(...cl.ctxParts.map((p) => p.tok), 1);
+  const cl = ctxPartsOf(n.session);
+  if (cl.parts.length < 2) return "";
+  const max = Math.max(...cl.parts.map((p) => p.tok), 1);
   const open = CTX_OPEN.has(n.id);
   const TOP = 3;   // 접힌 상태에서 보일 행 수(큰 카드 크롬이 블록 자리를 덜 먹게)
-  const rest = cl.ctxParts.length - TOP;
-  const rows = open ? cl.ctxParts : cl.ctxParts.slice(0, TOP);
-  return `<div class="sec2" style="margin-top:7px">세션 컨텍스트 · 토큰순 · ${cl.ctxParts.length} agent</div>
-    ${rows.map((p) => `<button class="tbar${p.id === n.id ? " me" : ""}" data-ctxnode="${esc(p.id)}" title="${esc(p.name)} · ${fmt(p.tok)} tok (${pctText(p.tok, cl.ctxTotal)}) · 클릭: 이 카드로 이동">
+  const rest = cl.parts.length - TOP;
+  const rows = open ? cl.parts : cl.parts.slice(0, TOP);
+  return `<div class="sec2" style="margin-top:7px">세션 컨텍스트 · 토큰순 · ${cl.parts.length} agent</div>
+    ${rows.map((p) => `<button class="tbar${p.id === n.id ? " me" : ""}" data-ctxnode="${esc(p.id)}" title="${esc(p.name)} · ${fmt(p.tok)} tok (${pctText(p.tok, cl.total)}) · 클릭: 이 카드로 이동">
       <span class="tn">${esc(cut(p.name, 14))}</span>
       <span class="tb"><i style="width:${Math.max(3, (p.tok / max) * 100)}%"></i></span>
       <span class="tv">${p.id === n.id ? "" : fmt(p.tok)}</span></button>`).join("")}

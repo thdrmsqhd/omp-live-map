@@ -73,16 +73,11 @@ function boundsOf(boxes) {
   return isFinite(minX) ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : null;
 }
 
-const allBoxes = () => [...geo.values(), ...CLUSTERS, ...SATS.values()];
+const allBoxes = () => [...geo.values(), ...CLUSTERS, ...SATS.values(), ...JOBS];
 
 function fit() {
   const b = boundsOf(allBoxes());
   if (b) fitBox(b, 30, 200, 0.18, 1.6);
-}
-
-function focusSession(key) {
-  const c = CLUSTERS.find((x) => x.key === key);
-  if (c) fitBox(c, 26, 220);
 }
 
 function worldPoint(clientX, clientY) {

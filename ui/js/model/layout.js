@@ -2,7 +2,7 @@
 
 const agentKind = (k) => k === "main" || k === "sub";
 
-const blockKeyOf = (b) => b.key || (b.s && "3:session:" + b.s.key) || b.kind;
+const blockKeyOf = (b) => b.key || b.kind;
 
 function keyHash(s) {
   let h = 5381;
@@ -19,57 +19,11 @@ function chooseCols(n) {
   return LAYOUT.cols;
 }
 
-function layoutTree(nodes, P) {
-  const { W, H, GAPX, GAPY, ROWMAX } = P;
-  const ids = new Set(nodes.map((n) => n.id));
-  const kids = new Map();
-  for (const n of nodes) {
-    const p = n.parent && ids.has(n.parent) ? n.parent : null;
-    if (!kids.has(p)) kids.set(p, []);
-    kids.get(p).push(n);
-  }
-  for (const arr of kids.values()) arr.sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0) || String(a.name).localeCompare(String(b.name)) || String(a.id).localeCompare(String(b.id)));
-  const pos = new Map();
-  let cursor = 0;
-  const assign = (n, depth) => {
-    const cs = kids.get(n.id) || [];
-    if (!cs.length) {
-      const y = cursor;
-      cursor += H + GAPY;
-      pos.set(n.id, { x: depth * (W + GAPX), y });
-      return y;
-    }
-    // 잎 자식은 부모 바로 오른쪽부터 여러 열로 묶는다.
-    if (cs.every((c) => !(kids.get(c.id) || []).length)) {
-      const top = cursor;
-      const rows = Math.min(cs.length, ROWMAX);
-      const gridH = rows * H + Math.max(0, rows - 1) * GAPY;
-      cs.forEach((c, i) => pos.set(c.id, {
-        x: (depth + 1 + Math.floor(i / ROWMAX)) * (W + GAPX),
-        y: top + (i % ROWMAX) * (H + GAPY),
-      }));
-      cursor = top + gridH + GAPY;
-      const y = top + (gridH - H) / 2;
-      pos.set(n.id, { x: depth * (W + GAPX), y });
-      return y;
-    }
-    const ys = cs.map((c) => assign(c, depth + 1));
-    pos.set(n.id, { x: depth * (W + GAPX), y: (ys[0] + ys[ys.length - 1]) / 2 });
-    return pos.get(n.id).y;
-  };
-  for (const root of kids.get(null) || []) { assign(root, 0); cursor += GAPY * 2; }
-  let maxX = 0, maxY = 0;
-  for (const p of pos.values()) { maxX = Math.max(maxX, p.x + W); maxY = Math.max(maxY, p.y + H); }
-  return { pos, w: maxX, h: maxY };
-}
-
 const jobLive = (j) => !j.done && Date.now() - (j.ts || 0) < 30 * 60e3;
 
 // 끝난 잡은 바로 감춘다. 스테이지 잡 카드와 카드 안 bg 블록이 같은 규칙을 쓴다.
 // 앱 잡(BGS/BGALL)은 서버가 실제 프로세스 상태를 주므로 done 만 본다.
 const jobVisible = (j) => !j.done;
-
-const activeJobs = (s) => (s.jobs || []).filter(jobLive).slice(0, JOB.MAX);
 
 function layoutInfraInto(nodes, map, ox, oy) {
   const W = IF.W, H = IF.H, GAPX = IF.GAPX, COLS = IF.COLS;
@@ -110,16 +64,14 @@ function infraLive() {
 
 function shiftCluster(c, dx, dy) {
   c.x += dx; c.y += dy;
-  if (c.ox != null) { c.ox += dx; c.oy += dy; }
   for (const id of c.members || []) {
     const g = geo.get(id);
     if (g) { g.x += dx; g.y += dy; }
   }
-  for (const j of c.jobs || []) { j.x += dx; j.y += dy; }
 }
 
 // 겹친 클러스터를 밀어낸다. 큰 카드는 위에 뜨는 창이라 대상이 아니다.
-// 자리를 확정한 클러스터(fixed: 저장 원점이 있는 세션·로컬 카드)는 밀지 않고, 새 클러스터만 비켜 놓는다.
+// 자리를 확정한 클러스터(fixed: 로컬 카드)는 밀지 않고, 새 클러스터만 비켜 놓는다.
 function separateCards() {
   // 밀어내기 순서가 렌더마다 달라지지 않도록 키로 정렬한다.
   const bk = (c) => (c.key || c.kind) + ":" + (c.title || "");

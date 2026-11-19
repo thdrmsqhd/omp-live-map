@@ -2,15 +2,12 @@
 // 이동·크기 조절 1회 = 이력 1개. 그때 바뀐 키의 이전 값만 담아 그 키만 되돌린다.
 // 자동 배치로 새로 저장된 카드 좌표는 이력에 없으므로 되돌려도 지워지지 않는다.
 
-const cardManualKeyOf = (id) => "card:" + id;
-
-// keys: { manual: [MANUAL 키], big: [BIGPOS id], size: [SUBSIZE id], locals: [로컬 카드 id] }
+// keys: { manual: [MANUAL 키], big: [BIGPOS id], locals: [로컬 카드 id] }
 function layoutSnapshot(keys) {
   const copy = (v) => (v ? { ...v } : null);
   return {
     manual: (keys.manual || []).map((k) => [k, copy(MANUAL[k])]),
     big: (keys.big || []).map((id) => [id, copy(BIGPOS.get(id))]),
-    size: (keys.size || []).map((id) => [id, copy(SUBSIZE.get(id))]),
     locals: (keys.locals || []).map((id) => LOCALS.find((l) => l.id === id)).filter(Boolean).map((L) => [L.id, L.x, L.y]),
   };
 }
@@ -25,7 +22,6 @@ function undoLayout() {
   if (!prev) return false;
   for (const [k, v] of prev.manual) if (v) MANUAL[k] = v; else delete MANUAL[k];
   for (const [id, v] of prev.big) if (v) BIGPOS.set(id, v); else BIGPOS.delete(id);
-  for (const [id, v] of prev.size) if (v) SUBSIZE.set(id, v); else SUBSIZE.delete(id);
   for (const [id, x, y] of prev.locals) {
     const L = LOCALS.find((l) => l.id === id);
     if (L) { L.x = x; L.y = y; }
@@ -33,7 +29,6 @@ function undoLayout() {
   saveManual();
   saveLocals();
   saveOpenCards();
-  saveSubSizes();
   renderMap(false, true);
   return true;
 }

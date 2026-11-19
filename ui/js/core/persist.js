@@ -11,49 +11,15 @@ const strList = (v) => (Array.isArray(v) ? v.filter((t) => typeof t === "string"
 // 삭제된 관심사 배치 기능이 남긴 키.
 localStorage.removeItem("omp-map-groups");
 
-MANUAL = readJSON("omp-map-manual", {});
+// 지도에 남은 자동 배치 클러스터(HOST·인프라)의 저장 원점만 읽는다. 세션·카드 좌표(card:…)는 더 쓰지 않는다.
+const storedManual = readJSON("omp-map-manual", {});
+MANUAL = {};
+for (const k of ["host", "infra"]) {
+  const v = storedManual[k];
+  if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) MANUAL[k] = { x: v.x, y: v.y };
+}
 
 const saveManual = () => writeJSON("omp-map-manual", MANUAL);
-
-// A안 카드 절대 좌표 전환 표식. "2" 가 아니면 기존 규칙으로 한 번 그린 뒤 그 좌표를 저장한다(commitLayout).
-let LAYOUT_V2 = localStorage.getItem("omp-map-layout-version") === "2";
-
-let layoutSaveWarned = false;
-
-// 전환 직전 배치 저장값을 한 키에 백업한다. 중간 실패 뒤 다시 들어와도 처음 백업을 덮지 않는다.
-function backupLayout() {
-  if (localStorage.getItem("omp-map-layout-backup-v1") !== null) return;
-  const raw = (k) => localStorage.getItem(k);
-  writeJSON("omp-map-layout-backup-v1", { at: Date.now(), manual: raw("omp-map-manual"), bigpos: raw("omp-map-bigpos"), subsize: raw("omp-map-subsize"), open: raw("omp-map-open") });
-}
-
-// 렌더마다 한 번: 자리를 확정하지 않은 세션(전환 전에는 전부)은 원점과 보이는 카드 좌표를, 확정한 세션은 새 카드 좌표만 저장한다.
-// 자동 배치는 이력(Ctrl+Z)에 넣지 않는다. 전환은 저장에 성공했을 때만 표식을 남긴다.
-function commitLayout() {
-  const migrating = !LAYOUT_V2;
-  if (migrating && !CLUSTERS.some((c) => c.kind === "session")) return;   // 데이터가 오기 전에는 전환하지 않는다
-  let dirty = false;
-  for (const c of CLUSTERS) {
-    if (c.kind !== "session") continue;
-    if (!c.fixed) { MANUAL[c.key] = { x: c.ox, y: c.oy }; dirty = true; }
-    for (const id of c.fixed ? c.fresh : c.members) {
-      const g = geo.get(id);
-      if (g) { MANUAL["card:" + id] = { x: g.x, y: g.y }; dirty = true; }
-    }
-  }
-  if (!dirty) return;
-  try {
-    if (migrating) backupLayout();
-    saveManual();
-    if (!migrating) return;
-    localStorage.setItem("omp-map-layout-version", "2");
-    LAYOUT_V2 = true;
-    for (const c of CLUSTERS) if (c.kind === "session") fitCluster(c);
-  } catch (err) {
-    console.error("layout save failed", err);
-    if (migrating && !layoutSaveWarned) { layoutSaveWarned = true; alert("카드 배치 전환을 저장하지 못했습니다. 기존 배치로 계속 표시하며 다음 화면 갱신 때 다시 시도합니다."); }
-  }
-}
 
 const storedLocals = readJSON("omp-map-locals", []);
 
@@ -107,14 +73,9 @@ const saveOpenCards = () => {
   writeJSON("omp-map-bigpos", Object.fromEntries(BIGPOS));
 };
 
-// 작은 서브카드 크기(nodeId -> {w, h}). 열린 카드 크기는 BIGPOS 가 갖는다.
-const SUBSIZE = new Map();
-
-for (const [id, s] of Object.entries(readJSON("omp-map-subsize", {}))) {
-  if (s && Number.isFinite(s.w) && Number.isFinite(s.h)) SUBSIZE.set(id, { w: Math.max(180, s.w), h: Math.max(99, s.h) });
-}
-
-const saveSubSizes = () => writeJSON("omp-map-subsize", Object.fromEntries(SUBSIZE));
+// 작은 세션 카드를 없애면서 쓰지 않게 된 키.
+localStorage.removeItem("omp-map-subsize");
+localStorage.removeItem("omp-map-layout-version");
 
 // 배열 = 예전 전체 덮어쓰기 형식, 객체 = 기본값 대비 {add, remove} 형식. 둘 다 읽는다.
 for (const [id, v] of Object.entries(readJSON("omp-map-blocks", {}))) {

@@ -40,9 +40,7 @@
   }
   .node.big > .chrome { flex: none; min-width: 0; }
   .node, .cluster, #minimap { user-select: none; -webkit-user-select: none; }
-  .tout, .bgout, .cmsg, .cmsgs, .tree, .cin, input, textarea, code, pre { user-select: text; -webkit-user-select: text; }
-  .node.ghost { opacity: .72; }
-  .node.ghost:hover { opacity: .92; }
+  .tout, .bgout, .cmsg, .cmsgs, .cin, input, textarea, code, pre { user-select: text; -webkit-user-select: text; }
   .node.flash { animation: flash 1.2s ease-out; }
   .node .hd { display: flex; align-items: center; gap: 5px; min-width: 0; }
   .node .nm { font-weight: 620; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -141,14 +139,10 @@
   .chip.more { color: var(--accent); }
   .node.metric { background: linear-gradient(180deg, #141d27, #0e151d); border-color: #27384a; }
   .node.metric .mv { font-size: 19px; font-weight: 650; margin-top: 2px; letter-spacing: .2px; }
-  /* 서브카드 크기 조절: 오른쪽 아래 손잡이. 키운 작은 카드는 제목·스파크라인이 남는 공간을 채운다. */
+  /* 큰 카드 크기 조절: 오른쪽 아래 손잡이 */
   .rsz { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; z-index: 5; cursor: nwse-resize;
     background: linear-gradient(135deg, transparent 50%, #35506b 50%, #35506b 60%, transparent 60%, transparent 72%, #35506b 72%, #35506b 82%, transparent 82%); }
   .rsz:hover { background-color: #1d2a38; border-radius: 3px 0 9px 0; }
-  .node.sub.sized:not(.big) { display: flex; flex-direction: column; z-index: 4; }
-  .node.sub.sized:not(.big) .sub-t { flex: none; white-space: normal; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; line-height: 14px; }
-  .node.sub.sized:not(.big) .sparkwrap { flex: 1 1 24px; min-height: 24px; height: auto; }
-  .node.sub.sized:not(.big) .sparkwrap svg { position: absolute; left: 0; bottom: 0; width: 100%; height: calc(100% - 12px); }
 
   @keyframes pulse { 50% { box-shadow: 0 0 0 5px #2fbf9b00; } }
   @keyframes flash { 0%, 40% { box-shadow: 0 0 0 3px #4aa8ff, 0 6px 18px #0006; } 100% { box-shadow: 0 0 0 3px #4aa8ff00, 0 6px 18px #0006; } }
