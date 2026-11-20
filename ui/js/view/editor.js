@@ -5,6 +5,7 @@ const ED_FILES = new Map(); // 절대경로 -> {model, mtime, dirty, refs:Set<�
 const ED = new Map();       // 카드 id -> {id, root, editor, tabs:Map<경로, 뷰 상태>, active, preview, exp:Set, fq, focus, diagTimer, diagSeq}
 let edMarkerHooked = false;
 let edPyright = null;       // Python 언어 서버 발견 여부(상태바 표시용)
+let edJava = false;           // Java 언어 서버(JDT LS) 설치 여부
 
 const ED_LANG_NAME = { plaintext: "Plain Text", javascript: "JavaScript", typescript: "TypeScript", json: "JSON", css: "CSS", html: "HTML",
   markdown: "Markdown", python: "Python", yaml: "YAML", shell: "Shell Script", xml: "XML", powershell: "PowerShell", cpp: "C++", csharp: "C#" };
@@ -34,6 +35,7 @@ function edPaintStatus(s) {
   const lang = m ? m.getLanguageId() : "";
   edQ(s, ".edst-lang").textContent = m ? ED_LANG_NAME[lang] || lang : "";
   const lsp = lang === "python" ? (edPyright === null ? "" : edPyright ? "LSP: pyright" : "LSP: 없음")
+    : lang === "java" ? (edJava ? "LSP: JDT LS" : "LSP: 없음")
     : lang === "javascript" || lang === "typescript" ? "LSP: TypeScript" : "";
   const el = edQ(s, ".edp-lsp");
   el.textContent = lsp;
@@ -77,7 +79,7 @@ function edState(id) {
     if (e.ctrlKey || e.metaKey) e.preventDefault();
     e.stopPropagation();
   }, { passive: false });
-  if (edPyright === null) edLspStatus().then((st) => { edPyright = !!st.pyright; for (const x of ED.values()) edPaintStatus(x); });
+  if (edPyright === null) edLspStatus().then((st) => { edPyright = !!st.pyright; edJava = !!st.java; for (const x of ED.values()) edPaintStatus(x); });
   return s;
 }
 
@@ -154,13 +156,13 @@ function edStart(s, monaco) {
   ed.addCommand(monaco.KeyCode.F12, () => {
     const m = ed.getModel();
     const lang = m && m.getLanguageId();
-    if (lang === "python" || lang === "javascript" || lang === "typescript") edGoto(s);
+    if (lang === "python" || lang === "java" || lang === "javascript" || lang === "typescript") edGoto(s);
   });
   // Ctrl+클릭 정의 이동(Python). JS/TS 는 Monaco 내장 링크가 같은 일을 한다.
   ed.onMouseDown((e) => {
     const f = edFile(s);
     if (!f || !e.target.position || !(e.event.ctrlKey || e.event.metaKey)) return;
-    if (f.model.getLanguageId() === "python") edGoto(s);
+    if (["python", "java"].includes(f.model.getLanguageId())) edGoto(s);
   });
   if (!edMarkerHooked) {
     edMarkerHooked = true;

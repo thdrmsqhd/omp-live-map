@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { json, withJson } = require("./http");
 const lsp = require("./lsp");
+const lspJava = require("./lsp-java");
 
 const MAX_FILE = 2 * 1024 * 1024;
 const MAX_BODY = 3 * 1024 * 1024;
@@ -36,7 +37,7 @@ async function readText(file) {
 }
 
 module.exports = {
-  "* /api/editor/status": (req, res) => json(res, { ok: true, pyright: lsp.available() }),
+  "* /api/editor/status": (req, res) => json(res, { ok: true, pyright: lsp.available(), java: lspJava.available() }),
 
   "POST /api/editor/read": (req, res) => withJson(req, res, async (p) => {
     const file = absPath(p.path);
@@ -72,7 +73,7 @@ module.exports = {
     const file = absPath(p.path);
     if (!file) return bad(res, "절대 경로가 아닙니다");
     try {
-      const locations = await lsp.definition(file, textOf(p), intOf(p.line), intOf(p.character));
+      const locations = await (path.extname(file).toLowerCase() === ".java" ? lspJava : lsp).definition(file, textOf(p), intOf(p.line), intOf(p.character));
       json(res, { ok: true, locations });
     } catch (e) {
       bad(res, e.message || "정의를 찾지 못했습니다");

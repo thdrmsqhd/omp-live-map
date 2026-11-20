@@ -63,7 +63,7 @@ async function edGoto(s) {
   const file = s.active;
   const lang = f.model.getLanguageId();
   try {
-    if (lang === "python") {
+    if (lang === "python" || lang === "java") {
       const r = await edDefinition(file, f.model.getValue(), pos.lineNumber - 1, pos.column - 1);
       if (!r.ok) return edSetMsg(s, r.error || "언어 서버 오류", "bad");
       const loc = (r.locations || [])[0];
