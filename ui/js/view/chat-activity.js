@@ -10,7 +10,7 @@ function liveItemHTML(it) {
   }
   if (it.kind !== "tool") {
     const cls = it.kind === "text" ? "text" : "think";
-    return `<div class="lvitem ${cls}"><span class="lvk">${LIVE_LABEL[it.kind] || esc(it.kind)}</span><div class="lvt md">${mdHTML(it.text)}</div></div>`;
+    return `<div class="lvitem ${cls}"><span class="lvk">${LIVE_LABEL[it.kind] || esc(it.kind)}</span><div class="lvt md">${mdHTML(it.text, it.kind === "text")}</div></div>`;
   }
   if (it.job) {
     return `<div class="lvitem tool job"><div class="lvh"><i class="dot live"></i><span class="lvk">${esc(it.name)}</span>

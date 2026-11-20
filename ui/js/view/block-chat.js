@@ -26,6 +26,7 @@ function chatBodyHTML(text) {
 // 시각 문구(ago)는 매 초 바뀌므로 마크업에 넣지 않고 hover 때 채운다.
 function chatListHTML(st, shown, tool, act) {
   const html = shown.map((m, i) => {
+    if (m.role === "result") return agentResultHTML(st, m);
     const body = chatText(m.text);
     const toolOnly = m.role !== "user" && !body;
     const names = (m.tools || []).join(", ");
@@ -36,11 +37,11 @@ function chatListHTML(st, shown, tool, act) {
     // 이미지를 실은 턴의 "(이미지 첨부)" 자리 표시 글은 같은 그림이 이미 있어 숨긴다.
     const text = imgs && /^\(이미지 첨부\)$/.test(label) ? "" : label;
     return `<div class="cmsg ${m.role === "user" ? "u" : "a"}"${!toolOnly && names ? ` title="사용 도구: ${esc(names)}"` : ""}>
-      <span class="who">${m.role === "user" ? "user" : "ai"}</span><div class="tx${toolOnly ? " dim" : ""}">${imgs}${m.role === "user" || toolOnly ? chatBodyHTML(text) : mdHTML(label)}</div>
+      <span class="who">${m.role === "user" ? "user" : "ai"}</span><div class="tx${toolOnly ? " dim" : ""}">${imgs}${m.role === "user" || toolOnly ? chatBodyHTML(text) : mdHTML(label, true)}${agentCallsHTML(st, m)}</div>
       <span class="cact">${cts}${toolOnly ? "" : `<button class="ccopy" data-copy="${i}">복사</button>`}</span></div>`;
   }).join("");
   // 도는 중인 활동에 답변 글이 있으면 같은 글을 말풍선으로 또 그리지 않는다.
-  const stream = st.stream && !act.includes('class="lvitem text"') ? `<div class="cmsg a"><span class="who">ai</span><div class="tx">${mdHTML(st.stream)}</div></div>` : "";
+  const stream = st.stream && !act.includes('class="lvitem text"') ? `<div class="cmsg a"><span class="who">ai</span><div class="tx">${mdHTML(st.stream, true)}</div></div>` : "";
   // 기록 메시지 → 마지막 턴 활동 → 흘러나오는 답변 순서.
   if (html || act || stream) return html + act + stream;
   return `<div class="cmsg"><div class="tx dim">${tool ? "최근 기록에 이 툴을 쓴 턴이 없습니다" : "대화 기록 없음"}</div></div>`;
@@ -161,6 +162,7 @@ function mountChat(blk, n) {
       return;
     }
     if (e.target.closest("[data-actsum]")) { st.actOpen = !st.actOpen; paintChat(id); return; }
+    if (chatInlineClick(e, st, id)) return;
     const b = e.target.closest("button");
     if (!b) return;
     if (b.dataset.send) sendChat(id);

@@ -10,16 +10,20 @@ const MD_QUOTE = /^\s{0,3}>[ \t]?/;
 const MD_LIST = /^( *)([-*+]|\d{1,9}[.)])(?:[ \t]+(.*))?$/;
 const MD_TSEP = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
 
+// assistant 답변만 true: URL·경로를 span[data-plink] 로 만든다(core/pathlinks.js). mdHTML 이 호출 동안만 켠다.
+let MD_LINKS = false;
+
 // 인라인: 코드·링크를 먼저 토큰으로 빼 두고 나머지를 escape 한 뒤 강조를 붙인다.
 function mdInline(src) {
   const toks = [];
   const tok = (html) => "\u0000" + (toks.push(html) - 1) + "\u0000";
   let s = String(src).replace(/\u0000/g, "");
-  s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (_, t, c) => tok(`<code>${esc(c)}</code>`));
+  s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (_, t, c) => tok(`<code>${MD_LINKS ? plLinkify(esc(c)) : esc(c)}</code>`));
   s = esc(s);
   s = s.replace(/\[([^\]\n]+)\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)(?:\s+&quot;[^\n]*?&quot;)?\)/g, (all, text, url) =>
     (/^https?:\/\//i.test(url) ? tok(`<a href="${url}" target="_blank" rel="noopener noreferrer">${mdEmph(text)}</a>`) : text));
-  s = s.replace(/\bhttps?:\/\/[^\s<&"]+[^\s<&".,;:!?)\]]/g, (url) => tok(`<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`));
+  if (MD_LINKS) s = plLinkify(s, tok);
+  else s = s.replace(/\bhttps?:\/\/[^\s<&"]+[^\s<&".,;:!?)\]]/g, (url) => tok(`<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`));
   s = mdEmph(s);
   const back = (t) => t.replace(/\u0000(\d+)\u0000/g, (_, n) => back(toks[n]));
   return back(s);
@@ -142,4 +146,7 @@ function mdBlocks(lines) {
   return out.join("");
 }
 
-const mdHTML = (text) => `<div class="md">${mdBlocks(String(text ?? "").replace(/\r\n?/g, "\n").split("\n"))}</div>`;
+function mdHTML(text, links = false) {
+  MD_LINKS = links;
+  try { return `<div class="md">${mdBlocks(String(text ?? "").replace(/\r\n?/g, "\n").split("\n"))}</div>`; } finally { MD_LINKS = false; }
+}

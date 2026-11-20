@@ -3,7 +3,8 @@
 
 const path = require("path");
 const { SESSIONS } = require("./config");
-const { recordUser, recordAssistant, noteHourly } = require("./turns");
+const { recordUser, recordAssistant, recordResults, noteHourly } = require("./turns");
+const { callsOf } = require("./agent-msgs");
 const { toolStart, toolResult, noteText } = require("./jobs");
 const { imageRef, textRefs } = require("./images");
 
@@ -111,7 +112,9 @@ function onUser(st, m, ts) {
   if (!st.firstUser && text) st.firstUser = text.replace(/\s+/g, " ").slice(0, 120);
   if (text) st.lastUser = text.replace(/\s+/g, " ").slice(0, 300);
   // 본문이 없어도 이미지가 있으면 사용자 턴을 기록한다.
-  if (text || imgs.length) recordUser(st, text, ts, imgs);
+  // 서브에이전트 결과 안내문은 사용자 말풍선이 아니라 결과 카드로 기록한다.
+  const asResult = /^\s*<system-notice>/.test(text) && recordResults(st, text, ts) > 0;
+  if (!asResult && (text || imgs.length)) recordUser(st, text, ts, imgs);
   noteText(st, text, ts);
 }
 
@@ -144,7 +147,8 @@ function onAssistant(st, m, ts) {
   const blocks = Array.isArray(m.content) ? m.content : [];
   const said = blocks.filter((c) => c.type === "text").map((c) => c.text).join(" ");
   const tools = [...new Set(blocks.filter((c) => c.type === "toolCall" && c.name).map((c) => c.name))];
-  recordAssistant(st, said, tools, ts);
+  const calls = blocks.flatMap((c) => (c.type === "toolCall" ? callsOf(c.name, toolArgs(c.arguments)) : []));
+  recordAssistant(st, said, tools, ts, calls);
   for (const block of blocks) {
     if (block.type !== "toolCall") continue;
     const a = toolArgs(block.arguments);
@@ -201,6 +205,7 @@ function ingest(st, raw) {
     }
   } else if (e.type === "custom_message" || e.type === "system") {
     noteText(st, String(e.content || ""), ts);
+    if (e.type === "custom_message") recordResults(st, String(e.content || ""), ts);
   } else if (e.type === "message") {
     const m = e.message || {};
     if (m.role === "user" || m.role === "assistant") st.turnOver = m.role === "assistant" && m.stopReason !== "toolUse";

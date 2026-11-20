@@ -141,3 +141,11 @@
   .ctxblk .ctmsg { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ctxblk .ctmsg.err { color: var(--error); }
+  /* assistant 답변 속 링크(span[data-plink]) · 복사 알림 */
+  .md .plink { cursor: pointer; border-radius: 3px; }
+  .md .plink:hover { text-decoration: underline; text-underline-offset: 2px; background: #1e3a5a55; color: #9fd0ff; }
+  #plToast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 90; max-width: 70vw;
+    padding: 6px 12px; border-radius: 8px; border: 1px solid #2f5d85; background: #0d151df2; color: var(--fg);
+    font-size: 12px; box-shadow: 0 8px 20px #0009; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity .15s; }
+  #plToast.on { opacity: 1; } #plToast.bad { border-color: var(--error); }

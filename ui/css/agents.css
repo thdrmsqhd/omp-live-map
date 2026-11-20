@@ -1,0 +1,24 @@
+/* omp-live-map · 대화 블록의 서브에이전트 호출·결과 카드 */
+  .agc { margin: 3px 0; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; background: #0b121a; min-width: 0; }
+  .agc.send { border-left-color: var(--idle); }
+  .agc.res { border-left-color: var(--live); }
+  .agh { display: flex; align-items: baseline; gap: 6px; padding: 3px 7px; cursor: pointer; min-width: 0; }
+  .agh:hover { background: #101c26; }
+  .agh b { color: var(--fg); font-weight: 600; flex: none; }
+  .agk { flex: none; font-size: 9px; text-transform: uppercase; letter-spacing: .3px; color: var(--dim); }
+  .agb, .ags { flex: none; font-size: 9.5px; padding: 0 5px; border-radius: 8px; border: 1px solid var(--border); color: var(--muted); }
+  .ags.ok { color: #6ee7a8; border-color: #23543f; background: #16352a; }
+  .ags.bad { color: var(--error); border-color: #6b2a27; background: #2a1514; }
+  .ags.warn { color: var(--idle); border-color: #5c4a1f; background: #2a2210; }
+  .agd { flex: none; font-size: 9.5px; color: var(--dim); }
+  .agsum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .agc.res .agsum { display: none; }
+  .agh .lvcar { margin-left: auto; flex: none; color: var(--dim); }
+  .agc.res .agh .lvcar { margin-left: auto; }
+  .agbody { display: none; padding: 2px 8px 5px; border-top: 1px solid var(--border); font-size: .96em; }
+  .agc.open .agbody { display: block; }
+  .agc.open .agh .lvcar { transform: rotate(180deg); }
+  /* 결과 카드는 닫혀 있어도 본문 처음 몇 줄을 보여 준다. */
+  .agc.res .agbody { display: block; max-height: 5.4em; overflow: hidden; position: relative; }
+  .agc.res:not(.open) .agbody::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6em; background: linear-gradient(transparent, #0b121a); }
+  .agc.res.open .agbody { max-height: none; }
