@@ -1,7 +1,6 @@
 // TUI 세션 실시간 방송: 기록 파싱이 모아 둔 이벤트를 짧은 주기로 SSE 로 내보낸다.
 // 맵이 띄운 rpc 세션은 server/live.js 가 프레임에서 직접 방송하므로 여기서는 건너뛴다.
 "use strict";
-  for (const st of allStates()) if (st.liveq) st.liveq.length = 0; // 시작 스캔이 쌓은 과거 이벤트는 방송하지 않는다(접속한 화면에 옛 툴이 턴 끝 뒤에 붙어 "진행 중"이 된다)
 
 const { allStates } = require("./tail");
 const { pushLive } = require("./sse");
@@ -31,6 +30,7 @@ function tick() {
 
 function start() {
   if (timer) return;
+  for (const st of allStates()) if (st.liveq) st.liveq.length = 0; // 시작 스캔이 쌓은 과거 이벤트는 방송하지 않는다(접속한 화면에 옛 툴이 턴 끝 뒤에 붙어 "진행 중"이 된다)
   timer = setInterval(tick, TICK);
   timer.unref?.();
 }
