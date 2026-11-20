@@ -10,6 +10,8 @@
     --mono: "Cascadia Mono", Consolas, "D2Coding", monospace;
     /* 본문 글꼴: 화면 기본, 실시간 흐름·터미널(mono), 대화 */
     --fs-base: 11.5px; --fs-flow: 10.5px; --fs-chat: 9.5px;
+    /* 큰 카드(3200×1920)는 열 때 fitBox가 0.5~0.65배로 맞춘다. 대화 블록만 이 배율로 키워 그 배율에서 본문이 약 12px로 읽히게 한다. */
+    --chat-zoom: 2;
   }
   * { box-sizing: border-box; }
   html, body, #app { height: 100%; margin: 0; }
