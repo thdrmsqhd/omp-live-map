@@ -29,7 +29,7 @@ function toolStart(st, d, ts) {
   st.active.set(item.id, item);
   // 잡 카드의 명령줄은 툴 결과에 없으므로 시작할 때 적어 둔다.
   if (d.toolName === "bash" && d.args && typeof d.args.command === "string") st.toolCmds.set(item.id, d.args.command.slice(0, 300));
-  queue(st, { kind: "tool", id: item.id, name: item.name, args: item.args });
+  queue(st, { kind: "tool", id: item.id, name: item.name, args: item.args, ts: item.ts }); // ts: 기록 시각. 화면이 턴 끝(turn_end)과 순서를 맞춘다.
 }
 
 function toolEnd(st, id) {
@@ -91,6 +91,8 @@ function toolResult(st, e, m, ts) {
     queue(st, { kind: "out", id, text: lines.join("\n") });
     queue(st, { kind: "tool_end", id, error: !!e.errorMessage });
   }
+  // 서브에이전트가 yield 로 결과를 냈으면 그 순간이 끝이다. 마지막 메시지가 툴 호출이라 turnOver 로는 잡히지 않는다. 거절되면 다음 assistant 메시지가 다시 연다.
+  if (m.toolName === "yield" && !m.isError && (!m.details || !m.details.status || m.details.status === "success")) st.turnOver = true;
   const bg = text.match(/Backgrounded[^]*?job (bg_\d+)/);
   if (bg) addJob(st, bg[1], st.toolCmds.get(id) || "", ts, id);
   // wait 같은 도구 결과에는 잡 상태 목록이 구조화되어 실린다. proc://bg_N/kill 결과는 details.proc.jobs 에 실린다.

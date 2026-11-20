@@ -76,7 +76,11 @@ function handleLiveEvent(ev) {
     if (last && last.kind === ev.kind) last.text = (last.text + add).slice(-LIVE_TEXT_MAX);
     else livePush(list, { kind: ev.kind, text: add.slice(-LIVE_TEXT_MAX) });
   } else if (ev.kind === "tool") {
-    livePush(list, { kind: "tool", id: ev.id, name: String(ev.name ?? ""), args: String(ev.args ?? ""), out: "", done: false, error: false });
+    const item = { kind: "tool", id: ev.id, name: String(ev.name ?? ""), args: String(ev.args ?? ""), out: "", done: false, error: false };
+    const end = list.findLastIndex((x) => x.kind === "turn_end");
+    // 기록에서 읽힌 툴 시작은 확장의 turn_end 보다 늦게 도착할 수 있다(yield 로 끝나는 서브는 항상). 턴이 끝나기 전에 시작한 툴이면 끝난 턴 쪽에 끼워 "진행 중"으로 되살리지 않는다.
+    if (end >= 0 && Number(ev.ts) > 0 && Number(ev.ts) <= list[end].ts) { item.done = true; item.seq = ++liveSeq; list.splice(end, 0, item); }
+    else livePush(list, item);
   } else if (ev.kind === "out") {
     const t = tool();
     const out = String(ev.text ?? "");
@@ -100,7 +104,7 @@ function handleLiveEvent(ev) {
   } else if (ev.kind === "turn_end") {
     // 턴이 끝났는데 닫히지 않은 툴은 더 돌지 않는 것으로 본다(백그라운드로 넘어간 출력은 계속 반영된다).
     for (const it of list) if (it.kind === "tool") it.done = true;
-    livePush(list, { kind: "turn_end" });
+    livePush(list, { kind: "turn_end", ts: Number(ev.ts) || Date.now() });
     scheduleSubDockCheck(ev.node);
   } else return;
   liveTouch(ev.node);

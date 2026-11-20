@@ -78,7 +78,7 @@ function emit(rec) {
     push({ node, kind: "out", id: String(rec.id), name: typeof rec.name === "string" ? rec.name : "", text: typeof rec.text === "string" ? rec.text.slice(-MAX_TEXT) : "" });
     return;
   }
-  if (rec.kind === "turn_end") push({ node, kind: "turn_end" });
+  if (rec.kind === "turn_end") push({ node, kind: "turn_end", ...(typeof rec.t === "number" ? { ts: rec.t } : {}) }); // ts: 화면이 늦게 온 툴 시작을 이 턴 쪽에 놓는 기준
 }
 
 // 늘어난 바이트만 읽어 줄 단위로 방송한다. 확장이 파일을 새로 시작하면(크기 감소) 처음부터 다시 읽는다.

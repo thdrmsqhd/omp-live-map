@@ -33,10 +33,11 @@ function nodeInData(id) {
   return (s && s.nodes.find((n) => n.id === id)) || nodeById(id) || null;
 }
 
-// 실행 중 판정: 스냅샷 상태(live) 또는 이 탭의 실시간 활동(마지막 턴 미종료).
+// 실행 중 판정: 스냅샷 상태(live) 또는 이 탭의 실시간 활동(마지막 턴 미종료). 서버가 끝났다고 한(done) 서브는 실시간 목록과 상관없이 끝난 것이다.
 function subRunning(n) {
   if (!n || n.kind !== "sub") return false;
   if (n.status === "live") return true;
+  if (n.status === "done") return false;
   try { return typeof actItems === "function" && actItems(n.id).running; } catch { return false; }
 }
 

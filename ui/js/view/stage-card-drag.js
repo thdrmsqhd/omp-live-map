@@ -34,7 +34,7 @@ function cancelCardDrag() {
 function startCardDrag(e) {
   if (e.button !== 0 || spaceDown) return;
   const el = e.target.closest(".node");
-  if (e.target.closest(CARD_INTERACTIVE)) return;
+  if (blockPanStart(e) || e.target.closest(CARD_INTERACTIVE)) return;   // 블록 본문은 맵 이동(stage-input)
   const mode = dragModeOf(el);
   const c = dragClusterAt(e.target, el);
   if (mode === "cluster" && !c) return;

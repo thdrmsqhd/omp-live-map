@@ -74,7 +74,7 @@ function nodeOf(st, now, last) {
   };
 }
 
-// 서브에이전트는 마지막 assistant 응답이 툴 호출 없이 끝났으면 done. session_exit 직후(2초)에 끝난 기록만 done, 그 뒤 이어 쓰였으면 90초 이내 live.
+// 서브에이전트는 마지막 assistant 응답이 툴 호출 없이 끝났거나 yield 결과 제출이 성공했으면 done(turnOver, server/jobs.js). session_exit 직후(2초)에 끝난 기록만 done, 그 뒤 이어 쓰였으면 90초 이내 live.
 function statusOf(st, now, last) {
   if (st.kind === "sub" && st.turnOver) return "done";
   if (st.endedAt && last - st.endedAt < 2000) return "done";
