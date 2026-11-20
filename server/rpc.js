@@ -1,7 +1,12 @@
 // omp rpc-ui 자식 프로세스 하나를 감싼다: 줄 단위 JSON 파싱, ready 대기, 응답 id 대조. 모듈 상태는 없다.
 "use strict";
 
+const path = require("path");
 const { spawn } = require("child_process");
+
+// 맵이 띄우는 메인 세션에만 붙는 지시(서브에이전트에는 omp 가 넘기지 않는다).
+// 이 플래그는 ~/.omp/agent/APPEND_SYSTEM.md 를 대신하므로, 그 파일을 만들면 이 파일에 합쳐야 한다.
+const MAIN_PROMPT = path.join(__dirname, "main-card-prompt.md");
 
 const READY_MS = 60000; // omp 가 ready 를 낼 때까지 기다리는 시간
 const REPLY_MS = 30000; // 명령 하나의 응답을 기다리는 시간
@@ -17,7 +22,7 @@ function killTree(child) {
 // omp 를 띄운다. resume(세션 파일 경로)을 주면 그 세션을 이어 붙인다.
 // 반환: { child, send(cmd) → 응답 프레임 Promise, onEvent(fn) 모든 프레임 구독, close() }
 function open({ cwd, resume }) {
-  const args = ["--mode", "rpc-ui"];
+  const args = ["--mode", "rpc-ui", "--append-system-prompt", MAIN_PROMPT];
   if (resume) args.push("-r", resume);
   const child = spawn("omp", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   const pending = new Map(); // 명령 id -> { resolve, reject, timer }

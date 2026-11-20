@@ -40,7 +40,7 @@ Compose 프로젝트 카드에서 `start`를 누르면 해당 프로젝트를 `d
 
 카드에는 그 세션을 만든 하네스 칩(`omp` / `Claude`)이 붙습니다. 새 세션 창의 **하네스**에서 고르고, 마지막 선택은 브라우저에 기억됩니다.
 
-- **omp**(기본): 지금까지와 같습니다. `omp --mode rpc-ui`로 띄우고 압축·비우기·모델 변경·ask를 모두 씁니다.
+- **omp**(기본): 지금까지와 같습니다. `omp --mode rpc-ui --append-system-prompt server/main-card-prompt.md`로 띄우고 압축·비우기·모델 변경·ask를 모두 씁니다. `main-card-prompt.md`는 메인 카드 세션이 작업을 `task` 서브에이전트에 넘기고 `wait` 없이 턴을 바로 끝내 사용자 메시지를 계속 받게 하는 지시입니다. omp는 이 지시를 서브에이전트에 넘기지 않습니다. 이 플래그가 `~/.omp/agent/APPEND_SYSTEM.md`를 대신하므로, 그 파일을 만들면 내용을 `main-card-prompt.md`에 합칩니다.
 - **Claude Code**: `~/.claude/projects/<슬러그>/<sessionId>.jsonl`을 **읽기 전용**으로 읽어 카드로 그립니다(제목·대화·cwd·토큰·비용·툴). 서브에이전트 기록(`<sessionId>/subagents/agent-*`)도 메인 아래 카드로 그려 실행 중이면 자동 도킹·완료 시 자동 닫힘합니다.
 - 프롬프트는 `claude -p --output-format stream-json --include-partial-messages`로 보내고, 이어가기는 `--resume <sessionId>`, 취소는 프로세스 종료입니다. 모델 변경은 다음 실행에 `--model <별칭>`으로 넘깁니다(카드별 저장). 첨부 이미지는 stream-json 입력의 이미지 블록으로, 일반 파일은 임시 경로에 저장해 `@경로`로 참조합니다.
 - **비우기**는 계보(lineage)에 다음 세션 파일을 적어 카드 id·자리·메모를 유지한 채 빈 세션으로 잇습니다. **압축**은 `/compact [지시문]`을 프롬프트로 보냅니다(Claude Code `-p` 모드의 슬래시 명령 지원 여부는 [미확인]). **ask**는 스트림의 `AskUserQuestion` tool_use를 기존 질문 카드로 띄우고, 고른 답을 다음 프롬프트로 보냅니다.
