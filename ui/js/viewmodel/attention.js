@@ -50,13 +50,22 @@ function attnSet(id, kind, title) {
 // toast 에서 어느 세션인지 알아보도록 세션 제목을 먼저 쓴다(메인 카드 이름은 대개 "main").
 const attnTitle = (n) => String(n.sessionTitle || "").trim() || displayName(n) || n.title || String(n.id);
 
-// 응답 생성 중인가: 이 탭이 띄운 rpc 세션(chatState.busy)이거나, 실시간 활동의 마지막 턴이 아직 안 닫힌 상태.
-function attnBusy(id) {
+// 메인 자신이 응답 생성 중인가: 이 탭이 띄운 rpc 세션(chatState.busy)이거나, 실시간 활동의 마지막 턴이 아직 안 닫힌 상태.
+function attnMainBusy(id) {
   const st = CHAT.get(id);
   if (st && st.busy) return true;
   if (typeof actItems !== "function") return false;
   try { return actItems(id).running; } catch { return false; }
 }
+
+// 이 세션이 띄운 서브(하위 서브 포함)가 아직 도는 개수. 판정은 sub-dock 의 subRunning 을 그대로 쓴다.
+// 끝을 알 수 없는 서브(kill 등)는 서버가 90초 뒤 idle 로 바꾸고 subRunning 이 실행 중으로 보지 않으므로 영원히 기다리지 않는다.
+function attnSubsRunning(id) {
+  return typeof runningSubsOf === "function" ? runningSubsOf(id).length : 0;
+}
+
+// 끝난 것으로 알리려면 메인도 쉬고 서브도 모두 끝나야 한다. 메인이 턴을 끝내도 서브가 돌면 아직 진행 중이다.
+const attnBusy = (id) => attnMainBusy(id) || attnSubsRunning(id) > 0;
 
 // 맵에 있는 메인 세션 카드를 600ms 마다 훑어 busy→끝남·질문 등장 전이를 잡는다.
 // 서브에이전트 카드까지 알리면 노이즈가 커서 메인 세션만 대상으로 한다.

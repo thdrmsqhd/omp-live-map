@@ -35,6 +35,8 @@
   .sl-row:hover .sl-x, .sl-row.open .sl-x { visibility: visible; }
   .sl-row .nowline { margin-top: 2px; padding-left: 12px; }
   .sl-row .attn-badge { display: none; flex: none; font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 4px; border-radius: 4px; white-space: nowrap; }
+  .sl-row .sub-badge { flex: none; font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 4px; border-radius: 4px; white-space: nowrap;
+    color: #9ecbff; background: #16273a; border: 1px solid #2f5d85; }
   .sl-row.attn-done .attn-badge { display: inline-block; color: #7ef0b8; background: #16352a; border: 1px solid #23543f; }
   .sl-row.attn-done .attn-badge::before { content: "답변 완료"; }
   .sl-row.attn-ask .attn-badge { display: inline-block; color: #ffd489; background: #3a2c13; border: 1px solid #6b5223; }

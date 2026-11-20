@@ -35,6 +35,12 @@ function rowTip(n, s) {
   return lines.filter(Boolean).join("\n");
 }
 
+// 메인 행: 서브가 도는 동안 답변 완료 대신 "서브 N개 진행 중"을 보인다.
+function subBadge(n) {
+  const k = n.kind === "main" ? runningSubsOf(n.id).length : 0;
+  return k ? `<span class="sub-badge" title="서브에이전트가 모두 끝나면 답변 완료로 알립니다">서브 ${k}개 진행 중</span>` : "";
+}
+
 function rowHTML({ n, depth }, s) {
   const open = openIds.has(n.id);
   const main = n.kind === "main";
@@ -43,7 +49,7 @@ function rowHTML({ n, depth }, s) {
     ? `<button class="x danger sl-x" data-slclose="1" title="세션 종료 · 리소스 정리 · 목록에서 제거">✕</button>`
     : open ? `<button class="x sl-x" data-slclose="1" title="큰 카드 닫기">✕</button>` : "";
   return `<div class="sl-row ${n.kind} ${n.status}${open ? " open" : ""}" data-id="${esc(n.id)}" style="padding-left:${8 + depth * 14}px" title="${esc(rowTip(n, s))}">
-    <div class="sl-l1"><i class="dot ${n.status}"></i><span class="nm">${esc(name)}</span>${harnessChip(n)}${askBadge(n.id)}<span class="attn-badge"></span>${close}</div>
+    <div class="sl-l1"><i class="dot ${n.status}"></i><span class="nm">${esc(name)}</span>${harnessChip(n)}${askBadge(n.id)}<span class="attn-badge"></span>${subBadge(n)}${close}</div>
     ${nowLine(n)}</div>`;
 }
 
