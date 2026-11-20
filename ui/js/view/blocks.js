@@ -72,7 +72,10 @@ function cardUI(nodeId) {
 // 한 슬롯에 그릴 블록을 저장된 순서대로 돌려준다. 순서에 없는 블록은 기본 순서대로 뒤에 붙는다.
 // 반환: [{ b: 정의, key: 인스턴스 키 }]
 // 블록이 실제로 놓이는 슬롯. 편집기는 대화(chat)가 있는 카드에서만 대화 오른쪽 열(edit)에 놓이고, 없으면 main 에 쌓인다.
-const slotOf = (n, b) => (b.type === "editor" && cardBlockTypes(n).includes("chat") ? "edit" : b.slot);
+const slotOf = (n, b) => {
+  const hasChat = cardBlockTypes(n).includes("chat");
+  return b.type === "editor" && hasChat ? "edit" : b.type === "browser" && hasChat ? "left" : b.slot;
+};
 
 function slotBlocks(n, slot) {
   const ui = CARD_UI.get(n.id);
@@ -95,7 +98,7 @@ function renderBlocks(n, slot) {
 function blockSig(n) {
   const ui = CARD_UI.get(n.id);
   const one = (key) => key + (ui && ui.collapsed[key] ? "-" : "") + ((ui && ui.h[key]) || "");
-  return ["main", "edit", "side"].map((slot) => slotBlocks(n, slot).map((x) => one(x.key)).join(",")).join("|");
+  return ["main", "edit", "side", "left"].map((slot) => slotBlocks(n, slot).map((x) => one(x.key)).join(",")).join("|");
 }
 
 function blockShell(n, b, key, ui) {

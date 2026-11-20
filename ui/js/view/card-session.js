@@ -78,13 +78,17 @@ function bigCard(n) {
   const chrome = agentKind(n.kind) || n.kind === "local" ? sessionChrome(n) : infraChrome(n);
   const side = renderBlocks(n, "side");
   const edit = renderBlocks(n, "edit");
+  const left = renderBlocks(n, "left");
   const dock = typeof dockClassOf === "function" ? dockClassOf(n.id) : "";
   return `<div class="node big ${n.kind} ${n.status}${dock ? " " + dock : ""}" data-id="${esc(n.id)}" style="${style}">
     <div class="chrome">${chrome}</div>
     <div class="body" data-sig="${esc(blockSig(n))}">
-      <div class="col-main">${renderBlocks(n, "main")}</div>
-      ${edit ? `<div class="edsplit" title="끌어서 대화·편집기 폭 조절 · 더블클릭으로 원래대로"></div><div class="col-ed">${edit}</div>` : ""}
-      ${side ? `<div class="col-tree">${side}</div>` : ""}
+      ${left ? `<div class="col-left">${left}</div>` : ""}
+      <div class="col-rest">
+        <div class="col-main">${renderBlocks(n, "main")}</div>
+        ${edit ? `<div class="edsplit" title="끌어서 대화·편집기 폭 조절 · 더블클릭으로 원래대로"></div><div class="col-ed">${edit}</div>` : ""}
+        ${side ? `<div class="col-tree">${side}</div>` : ""}
+      </div>
     </div>
     ${resizeGrip()}
   </div>`;

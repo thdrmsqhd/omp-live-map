@@ -2,6 +2,7 @@
 
 // 블록을 더하면 브라우저 블록이 이 크기(px, 지도 좌표)가 되도록 열린 큰 카드를 키운다.
 const BROWSER_FIT = { blockW: 1920, blockH: 1080 };
+document.documentElement.style.setProperty("--browser-col", BROWSER_FIT.blockW + "px");   // .col-left 폭(panel.css)
 
 function browserBlock(n, key = "browser") {
   const st = BURL.get(burlKey(n.id, key)) || { url: "" };
@@ -109,9 +110,12 @@ function fitBrowserCard(id, key = "browser") {
   if (!box || !blk) return;
   const r = blk.getBoundingClientRect();
   const k = view.k || 1;
+  // 대화가 있는 카드는 브라우저가 왼쪽 열(.col-left, 고정 폭 blockW)로 새로 붙는다: 열 폭 + 간격(10)만큼 카드를 넓혀 대화·편집기 폭을 그대로 둔다.
+  const col = blk.dataset.slot === "left";
   const cur = r.height / k;
-  const grow = Math.max(0, Math.ceil(BROWSER_FIT.blockH - cur));
-  const w = Math.max(box.w || BIG_W, Math.ceil((box.w || BIG_W) + BROWSER_FIT.blockW - r.width / k));
+  const grow = col ? 0 : Math.max(0, Math.ceil(BROWSER_FIT.blockH - cur));
+  const w = col ? (box.w || BIG_W) + BROWSER_FIT.blockW + 10
+    : Math.max(box.w || BIG_W, Math.ceil((box.w || BIG_W) + BROWSER_FIT.blockW - r.width / k));
   const h = (box.h || BIG_H) + grow;
   if (grow) { u.h[key] = BROWSER_FIT.blockH; }
   u.fit[key] = { w: w - (box.w || BIG_W), h: grow };

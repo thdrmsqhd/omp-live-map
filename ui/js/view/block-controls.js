@@ -22,10 +22,11 @@ function dragBlockOrder(e, grip) {
     col.removeEventListener("pointercancel", done);
     blk.classList.remove("bmoving");
     const u = cardUI(card.dataset.id);
-    const slot = blk.dataset.slot === "side" ? "side" : "main";
+    const slot = ["side", "left"].includes(blk.dataset.slot) ? blk.dataset.slot : "main";
     const now = [...col.children].filter((x) => x.classList.contains("blk")).map((x) => x.dataset.bkey || x.dataset.blk);
     // 이 카드에서 빠진 블록의 예전 순서는 뒤에 보존한다.
-    u.order[slot] = [...now, ...u.order[slot].filter((t) => !now.includes(t))];
+    const prev = u.order[slot] || [];
+    u.order[slot] = [...now, ...prev.filter((t) => !now.includes(t))];
     saveCardUI();
     // DOM 순서가 이미 저장한 순서와 같다. 서명만 맞춰 바디를 유지한다.
     syncBodySig(card);
