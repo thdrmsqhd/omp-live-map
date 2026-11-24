@@ -21,8 +21,9 @@ function choices(select, entries, fallback) {
 export function bindWorkflow({ find, request, report, definitions }) {
   const el = (name) => find("workflow-" + name);
   const selector = el("list"), form = el("node-form");
-  let project = "", workflow, selected, documentState = blank();
-  const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project });
+  let project = "", workflow, selected, documentState = blank(), runDetail;
+  const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project,
+    onStatus(detail) { runDetail = detail; showRunStates(); } });
   choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end"].includes(type)));
 
   function draw() {
@@ -53,6 +54,7 @@ export function bindWorkflow({ find, request, report, definitions }) {
     const button = document.createElement("button");
     const label = document.createElement("strong"), type = document.createElement("small");
     button.className = "workflow-node";
+    button.dataset.node = node.id;
     button.type = "button";
     button.setAttribute("aria-pressed", String(selected === node.id));
     label.textContent = node.label; type.textContent = types[node.type]; button.append(label, type);
@@ -74,6 +76,16 @@ export function bindWorkflow({ find, request, report, definitions }) {
     return button;
   }
 
+  function showRunStates() {
+    const sameVersion = runDetail?.run.workflow === workflow?.id && runDetail?.run.version === workflow?.version;
+    const statusByNode = new Map((sameVersion ? runDetail?.nodes ?? [] : []).map(({ node, status }) => [node, status]));
+    for (const button of el("nodes").children) {
+      const node = documentState.nodes.find(({ id }) => id === button.dataset.node);
+      const status = statusByNode.get(node.id) ?? "";
+      button.dataset.status = status;
+      button.querySelector("small").textContent = status ? types[node.type] + " · " + status : types[node.type];
+    }
+  }
   function outputPorts() {
     const type = documentState.nodes.find(({ id }) => id === el("from").value)?.type;
     choices(el("port"), (ports[type] ?? ["next"]).map((port) => [port, port]));
@@ -83,6 +95,7 @@ export function bindWorkflow({ find, request, report, definitions }) {
     const nodes = documentState.nodes;
     const entries = nodes.map(({ id, label }) => [id, label]);
     el("nodes").replaceChildren(...nodes.map(nodeButton));
+    showRunStates();
     choices(el("from"), entries.filter(([id]) => nodes.find((node) => node.id === id).type !== "end"));
     choices(el("to"), entries.filter(([id]) => nodes.find((node) => node.id === id).type !== "start"));
     outputPorts();

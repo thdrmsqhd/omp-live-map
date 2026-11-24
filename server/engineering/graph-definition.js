@@ -146,4 +146,4 @@ function compileGraph(payload) {
   return { document: { name, nodes, edges }, order };
 }
 
-module.exports = { compileGraph };
+module.exports = { compileGraph, artifactPath };

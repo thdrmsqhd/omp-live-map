@@ -2,6 +2,7 @@
 
 const { graphScheduler } = require("./graph-scheduler");
 const { nodeExecutor } = require("./workflow-node-executor");
+const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
 const { problem, redact } = require("./state");
 
 function workflowEngine(store, workflows, catalog, runner, worktrees) {
@@ -28,8 +29,11 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       const plan = workflows.plan(run.project, definition.payload);
       const scheduler = graphScheduler(plan);
       const results = new Map(store.nodes(id).map(({ node, status, outcome }) => [node, { ...outcome, status }]));
-      let remaining = run.budget - [...results.values()].reduce((sum, result) => sum + (result.costCents ?? 0), 0);
+      const earlier = store.retries(id).map(({ outcome }) => outcome);
+      let remaining = run.budget - [...results.values(), ...earlier].reduce((sum, result) => sum + (result.costCents ?? 0), 0);
       store.change(id, ["queued", "paused", "interrupted"], "running");
+      const approved = [...results.values()].filter((result) => result.port === "approved");
+      for (const decision of approved) await validateArtifacts(workspace, decision.artifacts ?? [], signal);
       for (;;) {
         signal.throwIfAborted();
         if (control.pause) { store.change(id, ["running"], "paused"); return; }
@@ -43,7 +47,9 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
           store.change(id, ["running"], scheduler.outcome(results) ?? "failed");
           return;
         }
-        if (node.type === "approval") { store.ask(id, node.id, node.prompt); return; }
+        const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
+        signal.throwIfAborted();
+        if (node.type === "approval") { store.ask(id, node.id, node.prompt, artifacts); return; }
         store.begin(id, node.id);
         operating = node.id;
         let result = { status: "succeeded" };
@@ -56,6 +62,11 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
           signal.throwIfAborted();
           result = await runNode(node, run.project, workspace, Math.max(0, remaining), signal);
           remaining -= result.costCents ?? 0;
+          if (result.status === "succeeded" && node.outputs.length) {
+            try { result.artifacts = await collectOutputs(workspace, node, signal); } catch (error) {
+              result = { ...result, status: "failed", interrupted: true, error: redact(error.message) };
+            }
+          }
         }
         if (signal.aborted) {
           store.finish(id, operating, "cancelled", result);
@@ -87,8 +98,31 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       if (created) launch(run.id);
       return store.get(run.id);
     },
-    decide(id, node, decision, reason) {
+    async decide(id, node, decision, reason) {
+      const run = store.get(id);
+      const waiting = store.nodes(id).find((item) => item.node === node && item.status === "waiting_approval");
+      if (run.status !== "waiting_approval" || !waiting) throw problem(409, "Approval is not pending");
+      if (decision === "approved" && waiting.outcome?.artifacts?.length) {
+        await validateArtifacts(run.workspace, waiting.outcome.artifacts);
+      }
       store.decide(id, node, decision, reason);
+      launch(id);
+      return store.get(id);
+    },
+    retry(id, node) {
+      const run = store.get(id);
+      if (active.has(id)) throw problem(409, "Workflow is still active");
+      const workflow = workflows.get(run.project, run.workflow, run.version).payload;
+      const children = new Map(workflow.nodes.map((item) => [item.id, []]));
+      for (const edge of workflow.edges) children.get(edge.from).push(edge.to);
+      const descendants = new Set(), pending = [...(children.get(node) ?? [])];
+      while (pending.length) {
+        const child = pending.pop();
+        if (descendants.has(child)) continue;
+        descendants.add(child);
+        pending.push(...children.get(child));
+      }
+      store.retry(id, node, descendants);
       launch(id);
       return store.get(id);
     },

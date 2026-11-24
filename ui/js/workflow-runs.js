@@ -1,4 +1,4 @@
-export function bindWorkflowRuns({ el, request, report, current, projectId }) {
+export function bindWorkflowRuns({ el, request, report, current, projectId, onStatus }) {
   const list = el("run-list"), approval = el("approval");
   let pending, selected, refreshing = false;
 
@@ -12,6 +12,7 @@ export function bindWorkflowRuns({ el, request, report, current, projectId }) {
     const detail = id ? await request("workflow-run", { id }) : null;
     if (project !== projectId() || id !== list.value) return;
     selected = detail;
+    onStatus(detail);
     const waiting = detail?.nodes.find((node) => node.status === "waiting_approval");
     approval.hidden = !waiting || detail.run.status !== "waiting_approval";
     const actions = el("run-actions");
@@ -28,10 +29,27 @@ export function bindWorkflowRuns({ el, request, report, current, projectId }) {
       const heading = document.createElement("strong");
       heading.textContent = (detail.labels[node.node] ?? node.node) + " · " + node.status;
       item.append(heading);
+      if (status === "failed" && node.status === "failed" && node.outcome?.passed === false && !node.outcome?.interrupted) {
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "이 노드 재시도";
+        retry.onclick = report(async () => {
+          await request("workflow-runs/retry", {}, { id: detail.run.id, node: node.node });
+          await refresh();
+        });
+        item.append(retry);
+      }
       if (node.outcome) {
         const details = document.createElement("pre");
         details.textContent = JSON.stringify(node.outcome, null, 2);
         item.append(details);
+      }
+      for (const retry of detail.retries.filter((retry) => retry.node === node.node)) {
+        const history = document.createElement("details"), summary = document.createElement("summary"), output = document.createElement("pre");
+        summary.textContent = "이전 실패 " + retry.attempt;
+        output.textContent = JSON.stringify(retry.outcome, null, 2);
+        history.append(summary, output);
+        item.append(history);
       }
       return item;
     }));

@@ -6,6 +6,10 @@
 .workflow-node { position: absolute; width: 132px; height: 52px; margin: 0; cursor: grab; touch-action: none; overflow: hidden; }
 .workflow-node strong, .workflow-node small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workflow-node[aria-pressed="true"] { outline: 2px solid #73baff; }
+.workflow-node[data-status="succeeded"] { border-color: #4abb8f; }
+.workflow-node[data-status="failed"], .workflow-node[data-status="interrupted"] { border-color: #e57379; }
+.workflow-node[data-status="running"], .workflow-node[data-status="waiting_approval"] { border-color: #e7b258; }
+.workflow-node[data-status="skipped"] { opacity: .68; }
 .workflow-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
 .workflow-details form { min-width: 0; }
 #workflow-edges button { margin-left: .5rem; }

@@ -83,7 +83,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const id = query("id");
           const run = flowRuns.get(id);
           const workflow = workflows.get(run.project, run.workflow, run.version);
-          result = { run, nodes: flowRuns.nodes(id),
+          result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id),
             labels: Object.fromEntries(workflow.payload.nodes.map(({ id, label }) => [id, label])) };
         }
         if (endpoint === "workflow") {
@@ -131,8 +131,9 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflows/plan") result = workflows.plan(string(input.project, "project"), input.payload);
         if (endpoint === "workflow-runs") result = flow.start(input, input.key);
         if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
+        if (endpoint === "workflow-runs/retry") result = flow.retry(string(input.id, "run"), string(input.node, "node"));
         if (endpoint === "workflow-runs/approval") {
-          result = flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
+          result = await flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
         }
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);

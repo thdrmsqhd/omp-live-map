@@ -41,11 +41,8 @@ function workflowRuns(db, catalog, workflows) {
         if (existing.request_hash !== hash) throw problem(409, "Idempotency key was used for a different workflow run");
         return { run: get(existing.id), created: false };
       }
-      const definition = workflows.get(project, id, version);
+      workflows.get(project, id, version);
       if (catalog.project(project).archived) throw problem(409, "Project is archived");
-      if (definition.payload.nodes.some(({ inputs, outputs }) => inputs.length || outputs.length)) {
-        throw problem(409, "Artifact contracts are not yet enabled for execution");
-      }
       const run = randomUUID(), now = Date.now();
       db.prepare("INSERT INTO workflow_run VALUES (?,?,?,?, 'queued',NULL,?,?,?,?,?,NULL)")
         .run(run, id, version, title, now, now + timeout, budget, key, hash);
@@ -87,21 +84,49 @@ function workflowRuns(db, catalog, workflows) {
         setNode(id, node, status, outcome);
       });
     },
-    ask(id, node, prompt) {
+    ask(id, node, prompt, artifacts) {
       transaction(db, () => {
         setStatus(id, ["running"], "waiting_approval");
-        updatePendingNode(id, node, "waiting_approval", { prompt });
+        updatePendingNode(id, node, "waiting_approval", { prompt, artifacts });
       });
     },
     decide(id, node, decision, reason) {
       transaction(db, () => {
-        if (db.prepare("SELECT status FROM workflow_node WHERE run=? AND node=?").get(id, node)?.status !== "waiting_approval") {
+        const waiting = db.prepare("SELECT status,outcome FROM workflow_node WHERE run=? AND node=?").get(id, node);
+        if (waiting?.status !== "waiting_approval") {
           throw problem(409, "Approval is not pending");
         }
         if (!["approved", "rejected"].includes(decision)) throw problem(400, "Invalid approval decision");
         setStatus(id, ["waiting_approval"], "queued");
         const explanation = (reason || decision === "rejected") ? string(reason, "approval reason", 2000) : "";
-        setNode(id, node, "succeeded", { port: decision, reason: redact(explanation) });
+        const previous = JSON.parse(waiting.outcome ?? "null");
+        setNode(id, node, "succeeded", { ...previous, port: decision, reason: redact(explanation) });
+      });
+    },
+    retries(id) {
+      return db.prepare("SELECT node,attempt,outcome,created FROM workflow_retry WHERE run=? ORDER BY created,node,attempt").all(id)
+        .map((item) => ({ ...item, outcome: JSON.parse(item.outcome) }));
+    },
+    retry(id, node, descendants) {
+      transaction(db, () => {
+        const run = get(id);
+        const history = nodes(id);
+        const failed = history.find((item) => item.node === node);
+        if (run.status !== "failed" || failed?.status !== "failed" || failed.outcome?.interrupted ||
+            failed.outcome?.passed !== false || run.deadline <= Date.now()) {
+          throw problem(409, "Only a failed node with a known result and time remaining can be retried");
+        }
+        if (history.some((item) => descendants.has(item.node) && item.status !== "skipped")) {
+          throw problem(409, "A downstream node already executed; start a new workflow run");
+        }
+        const count = db.prepare("SELECT COUNT(*) AS n FROM workflow_retry WHERE run=? AND node=?").get(id, node).n;
+        if (count >= 3) throw problem(409, "Workflow node retry limit reached");
+        db.prepare("INSERT INTO workflow_retry VALUES (?,?,?,?,?)").run(id, node, count + 1, JSON.stringify(failed.outcome), Date.now());
+        const remove = db.prepare("DELETE FROM workflow_node WHERE run=? AND node=?");
+        remove.run(id, node);
+        for (const child of descendants) remove.run(id, child);
+        setStatus(id, ["failed"], "queued");
+        event(db, "workflow.retry", { id, node, attempt: count + 1 });
       });
     },
     recover() {
