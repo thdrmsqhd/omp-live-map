@@ -1,31 +1,37 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { app, BrowserWindow, utilityProcess } = require("electron");
 
+const { OMP_PROBE_DIRECTORY: directory, OMP_PROBE_RESULT: resultFile } = process.env;
 const port = Number(process.env.OMP_PROBE_PORT);
 let server;
 let window;
 
-globalThis.probe = app.whenReady().then(async () => {
+app.setPath("userData", directory);
+const timeout = setTimeout(() => finish({ error: "Electron probe timed out" }), 20000);
+
+function finish(result) {
+  clearTimeout(timeout);
+  fs.writeFileSync(resultFile, JSON.stringify(result));
+  app.quit();
+}
+
+async function probe() {
   server = utilityProcess.fork(path.resolve(__dirname, "../../server.js"), ["--port", String(port)], {
-    env: process.env,
+    env: { ...process.env, USERPROFILE: directory, OMP_MAP_STATE: directory },
     stdio: "pipe",
   });
   const result = await new Promise((resolve) => {
     let stderr = "";
     let stdout = "";
-    const timer = setTimeout(() => resolve({ error: "Server readiness timed out" }), 8000);
-    function finish(value) {
-      clearTimeout(timer);
-      resolve(value);
-    }
     server.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
-      if (stdout.includes(`omp live map: http://127.0.0.1:${port}`)) finish({ ready: true });
+      if (stdout.includes(`omp live map: http://127.0.0.1:${port}`)) resolve({ ready: true });
     });
     server.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    server.once("exit", (code) => finish({ code, error: stderr.trim() || "Server exited" }));
+    server.once("exit", (code) => resolve({ code, error: stderr.trim() || "Server exited" }));
   });
   if (!result.ready) return result;
 
@@ -35,10 +41,16 @@ globalThis.probe = app.whenReady().then(async () => {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   await window.loadURL(`http://127.0.0.1:${port}`);
+  const stageVisible = await window.webContents.executeJavaScript("Boolean(document.querySelector('#stage'))");
+  const graph = await fetch(`http://127.0.0.1:${port}/api/graph`, { signal: AbortSignal.timeout(3000) });
   const { nodeIntegration, contextIsolation, sandbox } = window.webContents.getLastWebPreferences();
-  return { ready: true, pid: server.pid, nodeIntegration, contextIsolation, sandbox };
-}).catch((error) => ({ error: error.message }));
+  return {
+    ready: true, pid: server.pid, stageVisible, graphReady: graph.ok && Array.isArray((await graph.json()).sessions),
+    nodeIntegration, contextIsolation, sandbox,
+  };
+}
 
+app.whenReady().then(probe).then(finish, (error) => finish({ error: error.stack }));
 app.on("before-quit", (event) => {
   if (!server?.pid) return;
   event.preventDefault();
