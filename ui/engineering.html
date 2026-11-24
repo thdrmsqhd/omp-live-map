@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'">
+  <title>Engineering · OMP Live Map</title>
+  <link rel="stylesheet" href="/css/engineering.css">
+  <script src="/js/engineering.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>OMP Live Map</strong>
+    <nav aria-label="워크스페이스">
+      <button id="design-nav" aria-pressed="true">설계</button>
+      <button id="execution-nav" aria-pressed="false">실행</button>
+      <a href="/">관측</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Engineering</h1>
+    <p id="status" role="status"></p>
+    <section>
+      <h2>프로젝트</h2>
+      <form id="project-form">
+        <label>이름 <input name="name" required></label>
+        <label>로컬 Git 루트 <input name="root" placeholder="C:\workspace\project" required></label>
+        <label>기준 브랜치 <input name="branch" placeholder="현재 브랜치"></label>
+        <button>등록 또는 수정</button>
+      </form>
+      <label>프로젝트 선택 <select id="project"></select></label>
+      <button id="archive" type="button">보관</button>
+    </section>
+    <section id="design">
+      <h2>정의 편집</h2>
+      <form id="definition-form">
+        <label>종류 <select id="kind" name="kind">
+          <option value="model">모델</option><option value="harness">하네스</option><option value="loop">Loop</option>
+        </select></label>
+        <label>기존 정의 <select id="definition"></select></label>
+        <label>정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
+        <div><button>버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
+      </form>
+    </section>
+    <section id="execution" hidden>
+      <h2>Loop 실행</h2>
+      <form id="run-form">
+        <label>Loop <select name="definition" id="loop" required></select></label>
+        <label>작업 제목 <input name="title" required></label>
+        <label>작업 지시 <textarea name="instruction" required rows="4"></textarea></label>
+        <button>실행</button>
+      </form>
+      <label>실행 이력 <select id="runs"></select></label>
+      <div id="actions">
+        <button type="button" data-operation="pause">일시정지</button>
+        <button type="button" data-operation="resume">재개</button>
+        <button type="button" data-operation="cancel">취소</button>
+      </div>
+      <p id="run-summary"></p>
+      <ol id="attempts"></ol>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "omp-live-map-desktop",
+  "version": "2.0.0-dev",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": { "start": "electron ." },
+  "devDependencies": { "electron": "43.8.12" }
+}

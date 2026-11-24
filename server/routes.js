@@ -12,6 +12,12 @@ const { recentFor } = require("./ext-live");
 const { addClient, removeClient } = require("./sse");
 const localfs = require("./routes-localfs");
 const images = require("./routes-images");
+const { prefix, createEngineeringRoutes } = require("./engineering/routes");
+const engineering = createEngineeringRoutes({
+  token: process.env.OMP_MAP_ENGINEERING_TOKEN,
+  directory: process.env.OMP_MAP_ENGINEERING_DATA,
+});
+delete process.env.OMP_MAP_ENGINEERING_TOKEN;
 
 const ROUTES = {
   ...require("./routes-ops"),
@@ -76,6 +82,7 @@ async function handle(req, res) {
   const denied = guardStatus(req);
   if (denied) return fail(res, denied, denied === 415 ? "unsupported media type" : "forbidden");
   const url = new URL(req.url, "http://127.0.0.1");
+  if (url.pathname.startsWith(prefix)) return engineering(req, res, url);
   const route = ROUTES[req.method + " " + url.pathname] || ROUTES["* " + url.pathname];
   if (route) return route(req, res, url);
   if (url.pathname.startsWith(localfs.PREFIX)) return localfs.serveLocal(req, res, url);
