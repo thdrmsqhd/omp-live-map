@@ -1,28 +1,10 @@
 /* omp-live-map · view · 스테이지 포인터·휠·키보드 입력 */
 
 // 카드 안에서 자체 동작이 있는 영역. 여기서 시작한 포인터는 카드 끌기·선택·열기로 치지 않는다.
-const CARD_INTERACTIVE = "button, input, textarea, .term, .chat, .col-tree, .edblk, .edsplit, .brow, .bgs, .cmsgs, .cmsg, .tout, .rename, .rsz";
+const CARD_INTERACTIVE = "button, input, textarea, .term, .chat, .col-tree, .edblk, .edsplit, .brow, .bgs, .cmsgs, .cmsg, .tout, .rename, .rsz, .body, a, select, [contenteditable]";
 
-// 대화·터미널 블록 본문: 눌러서 4px 넘게 끌면 맵 이동(팬), 그 안의 클릭·더블클릭 선택은 그대로 둔다.
-const PAN_BLOCK = ".cmsgs, .cmsg, .col-main, .tout, .bgs, .bgout, .chat";
-const PAN_EXCLUDE = "input, textarea, select, button, a, [contenteditable], .rename, .rsz, .edblk";
-const PAN_THRESHOLD = 4;
-// 눌린 자리가 조상 스크롤 요소의 스크롤바 위인지(크기 변환을 나눠 보정, 인라인 요소는 건너뛴다).
-function onScrollbar(e) {
-  for (let el = e.target; el && el.nodeType === 1 && !el.classList.contains("node"); el = el.parentElement) {
-    if (!el.clientWidth || !el.clientHeight) continue;
-    const r = el.getBoundingClientRect(), k = r.width / el.offsetWidth || 1;
-    const x = (e.clientX - r.left) / k, y = (e.clientY - r.top) / k;
-    if (x > el.clientLeft + el.clientWidth + 2 || y > el.clientTop + el.clientHeight + 2) return true;
-  }
-  return false;
-}
-function blockPanStart(e) {
-  if (e.button !== 0 || spaceDown) return false;
-  const t = e.target;
-  if (!t.closest || !t.closest(PAN_BLOCK) || t.closest(PAN_EXCLUDE)) return false;
-  return !onScrollbar(e);
-}
+// 카드 본문은 텍스트 선택과 자체 입력을 우선한다. 팬은 빈 배경/Space/가운데 버튼으로만 시작한다.
+function blockPanStart() { return false; }
 
 function bindStageInput() {
   const stage = $("stage");
@@ -30,11 +12,7 @@ function bindStageInput() {
 
   stage.addEventListener("pointerdown", (e) => {
     const onCard = e.target.closest(".node, .cluster .ch, .jcard");
-    if (onCard && blockPanStart(e)) {
-      drag = { pending: true, pid: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, lt: performance.now() };
-      return;
-    }
-    const wantPan = e.button === 1 || spaceDown || !onCard;
+    const wantPan = e.button === 1 || (e.button === 0 && (spaceDown || !onCard));
     if (!wantPan) return;
     if (!onCard && !spaceDown && SELECTED.size) { SELECTED.clear(); paintSelection(); }
     e.preventDefault();
@@ -46,15 +24,6 @@ function bindStageInput() {
 
   stage.addEventListener("pointermove", (e) => {
     if (!drag) return;
-    if (drag.pending) {
-      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < PAN_THRESHOLD) return;
-      stopMomentum();
-      getSelection().removeAllRanges();
-      stage.classList.add("drag");
-      stage.setPointerCapture(drag.pid);
-      drag = { x: e.clientX - view.x, y: e.clientY - view.y, lx: e.clientX, ly: e.clientY, lt: performance.now(), blockPan: true };
-    }
-    if (drag.blockPan) getSelection().removeAllRanges();
     const now = performance.now();
     const dt = Math.max(1, now - drag.lt);
     view.x = e.clientX - drag.x;
@@ -71,12 +40,10 @@ function bindStageInput() {
     if (!drag) return;
     const d = drag;
     drag = null;
-    if (d.pending) return;   // 4px 안 움직인 클릭: 블록 안 클릭으로 그대로 처리된다
     stage.classList.remove("drag");
-    if (d.blockPan) suppressClickUntil = Date.now() + 300;
+    suppressClickUntil = Date.now() + 300;
     if (Math.abs(velocity.x) > 0.6 || Math.abs(velocity.y) > 0.6) momentum();
   });
-  stage.addEventListener("selectstart", (e) => { if (drag && drag.blockPan) e.preventDefault(); });
   stage.addEventListener("pointercancel", () => { drag = null; stage.classList.remove("drag"); });
 
   // 잡 카드: 누르면 출력을 펼치거나 접는다(끝쪽 따라가기, 위로 올리면 멈춤).
@@ -121,30 +88,17 @@ function bindStageInput() {
     applyView();
   }, { passive: false });
 
-  // 카드 안 요소가 휠 방향으로 더 굴러갈 수 있으면 그 요소가 굴린다. 끝에 닿았거나 넘치지 않으면 맵이 움직인다.
-  const canScroll = (el, e) => {
-    const cs = getComputedStyle(el);
-    const v = /auto|scroll/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1;
-    const h = /auto|scroll/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1;
-    const dy = e.shiftKey ? 0 : e.deltaY, dx = e.shiftKey ? (e.deltaX || e.deltaY) : e.deltaX;
-    if (v && dy < 0 && el.scrollTop > 0) return true;
-    if (v && dy > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
-    if (h && dx < 0 && el.scrollLeft > 0) return true;
-    if (h && dx > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
-    return false;
-  };
+  // 카드 내부의 일반 휠은 스크롤 한계에서도 캔버스로 전파하지 않는다.
   $("nodes").addEventListener("wheel", (e) => {
     if (e.ctrlKey || e.metaKey) return;
-    for (let el = e.target; el && el !== e.currentTarget; el = el.parentElement) {
-      if (el.nodeType === 1 && canScroll(el, e)) { e.stopPropagation(); return; }
-    }
+    if (e.target.closest(".node, .jcard")) e.stopPropagation();
   }, { passive: true });
 
   addEventListener("keydown", (e) => {
     // 입력창·contenteditable·터미널 안의 키(Ctrl+Z 포함)는 지도에서 가로채지 않는다.
     const typing = e.target && (/input|textarea/i.test(e.target.tagName) || e.target.isContentEditable || !!(e.target.closest && e.target.closest(".term")));
     if (e.code === "Space" && !e.repeat && !typing) { spaceDown = true; stage.style.cursor = "grab"; }
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "n" || e.key === "N")) {
+    if (!typing && (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "n" || e.key === "N")) {
       e.preventDefault();
       const r = stage.getBoundingClientRect();
       const pt = worldPoint(r.left + r.width / 2 - 120, r.top + r.height / 2 - 60);
