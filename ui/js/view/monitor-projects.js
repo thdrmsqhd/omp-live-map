@@ -25,13 +25,15 @@ function patchMonitorGroups(root,html){
     for(const c of [...b.children]){
       const previous=oldCards.get(c.dataset.monId);
       if(!previous)continue;
-      if(previous.outerHTML===c.outerHTML||previous.contains(document.activeElement))c.replaceWith(previous);
+      if(previous.outerHTML===c.outerHTML)c.replaceWith(previous);
     }
   }
   const focused=document.activeElement;
-  const restore=focused?.isConnected&&root.contains(focused)?focused:null;
+  const card=focused?.closest?.("[data-mon-id]");
+  const attr=focused&&[...focused.attributes].find(a=>a.name.startsWith("data-mon-"));
+  const id=card?.dataset.monId;
   root.replaceChildren(...template.children);
-  if(restore?.isConnected)restore.focus({preventScroll:true});
+  if(id&&attr){const el=[...root.querySelectorAll("[data-mon-id]")].find(c=>c.dataset.monId===id);const control=el&&[...el.querySelectorAll("["+attr.name+"]")].find(b=>b.getAttribute(attr.name)===attr.value);control?.focus({preventScroll:true});}
 }
 $("mon-search").oninput=e=>{MON_QUERY=e.target.value.trim().toLowerCase();paintOverview(filteredSessions());};
 $("mon-settings").onclick=()=>{const panel=$("mon-settings-panel");panel.hidden=!panel.hidden;$("mon-settings").setAttribute("aria-expanded",String(!panel.hidden));};
@@ -83,19 +85,26 @@ function monitorSessionHTML(s) {
   const st=monitorSessionStats(s,overviewMemory), n=st.main;
   if(!n)return "";
   const id=esc(n.id), ask=askPending(n.id), att=ATTN.get(n.id);
-  const state=ask?"선택 필요":st.resourceWarning?"RAM 경고":monStatus[n.status]||n.status;
-  const tone=ask||st.resourceWarning?"warn":n.status==="live"?"live":"idle";
+  const state=ask?"선택 필요":st.resourceWarning?"RAM 경고":att?.kind==="done"?"응답 완료":monStatus[n.status]||n.status;
+  const tone=ask||st.resourceWarning?"warn":n.status==="live"?"live":att?.kind==="done"?"done":"idle";
   const ctx=ctxUsage(n), now=(n.active||[])[0], name=ALIAS.get(n.id)||s.title||n.name;
-  const selected=OVERVIEW_SELECTED.has(n.id);
-  const work=now?now.name+" · "+cut(now.args||"",85):att?.kind==="done"?"응답 완료":n.lastUser?cut(n.lastUser,95):"최근 활동 미수집";
+  const selected=OVERVIEW_SELECTED.has(n.id), expanded=overviewDensity==="detailed"||MON_EXPANDED.has(n.id);
+  const work=now?now.name+" · "+cut(now.args||"",150):att?.kind==="done"?"응답 완료":n.lastUser?cut(n.lastUser,150):"최근 작업 기록 없음";
+  const metric=(label,value,level="")=>`<div class="mon-stat ${level}"><small>${label}</small><strong>${esc(value)}</strong></div>`;
+  const resource=(label,value,pct,level="")=>`<div class="mon-resource ${level}"><div><span>${label}</span><strong>${esc(value)}</strong></div>${pct===null?"":`<progress max="100" value="${Math.max(0,Math.min(100,pct))}" aria-label="${label} 사용률"></progress>`}</div>`;
+  const hostRam=SYS?.mem?.totalMB;
   return `<article class="mon-card ${tone}${selected?" selected":""}${activeCardId===n.id?" active":""}" data-mon-id="${id}">
-    <div class="mon-card-head"><input type="checkbox" data-mon-select="${id}" aria-label="세션 선택"${selected?" checked":""}><button class="mon-name" data-mon-open="${id}" title="${esc(name)}">${esc(name)}</button><span class="mon-state">${esc(state)}</span><button data-mon-menu="${id}" aria-label="카드 메뉴">⋯</button></div>
-    <div class="mon-secondary">${harnessChip(n)} ${esc(modelShort(n.model||n.agentModel||"미상"))} · ${PINNED.has(s.key)?"고정 · ":""}${esc(ago(s.lastTs||0))}</div>
-    <div class="mon-activity" title="${esc(work)}">${esc(work)}</div>${overviewDensity==="compact"?"":`
-    <div class="mon-metrics"><div><small>에이전트</small><strong>${st.running}/${st.total}</strong></div><div><small>컨텍스트</small><strong>${ctx?esc(ctx.text):"—"}</strong></div><div><small>비용</small><strong>${esc(krw(st.cost))}</strong></div><div><small>CPU (코어 합)</small><strong>${st.cpu===null?"—":Math.round(st.cpu)+"%"}</strong></div><div><small>RAM</small><strong>${st.ram===null?"—":esc(memSize(st.ram))}</strong></div><div><small>토큰</small><strong>${esc(fmt(st.tokens))}</strong></div></div>`}
-    ${(overviewDensity==="detailed"||MON_EXPANDED.has(n.id))?`<div class="mon-agent-list">${s.nodes.map((a)=>`<button data-mon-open="${esc(a.id)}"><i class="dot ${esc(a.status)}"></i>${esc(a.kind==="main"?"Main":displayName(a))}<span>${esc(monStatus[a.status]||a.status)}</span></button>`).join("")}</div>
-      <div class="mon-trend">${(n.res?.hist||[]).length?miniSpark(n.res.hist,170,25,"#4aa8ff"):"CPU 추세 미수집"}<span>누적 오류 ${st.errors}건</span></div>`:""}
-    <div class="mon-card-actions"><button class="mon-primary" data-mon-open="${id}">작업 열기 ↗</button><button data-mon-detail="${id}" aria-expanded="${MON_EXPANDED.has(n.id)}">상세</button><button data-mon-editor="${id}">코드</button><button data-mon-map="${id}">지도</button><button data-mon-pin="${id}">${PINNED.has(s.key)?"고정 해제":"고정"}</button>${att?.kind==="done"?`<button data-mon-ack="${id}">완료 확인</button>`:""}</div>
+    <header class="mon-card-head">
+      <div class="mon-title-stack"><div class="mon-eyebrow"><span class="mon-state"><i></i>${esc(state)}</span><span>MAIN</span>${PINNED.has(s.key)?"<span>고정</span>":""}</div>
+      <button class="mon-name" data-mon-open="${id}" title="${esc(name)}">${esc(name)}</button></div>
+      <input type="checkbox" data-mon-select="${id}" aria-label="세션 선택"${selected?" checked":""}><button data-mon-menu="${id}" aria-label="카드 메뉴">⋯</button>
+    </header>
+    <div class="mon-secondary">${harnessChip(n)} <span title="${esc(n.model||n.agentModel||"미상")}">${esc(modelShort(n.model||n.agentModel||"모델 미수집"))}</span><time>${esc(ago(s.lastTs||0))}</time></div>
+    <section class="mon-current"><small>${now?"실행 중인 작업":"최근 작업"}</small><div class="mon-activity" title="${esc(work)}">${esc(work)}</div></section>
+    <div class="mon-resources">${resource("CPU",st.cpu===null?"—":Math.round(st.cpu)+"%",st.cpu,st.cpu>=85?"warn":"")}${resource("RAM",st.ram===null?"—":memSize(st.ram),st.ram!==null&&hostRam?st.ram/hostRam*100:null,st.resourceWarning?"warn":"")}${resource("컨텍스트",ctx?.text||"—",ctx?.pct??null,ctx?.level==="err"||ctx?.level==="warn"?"warn":"")}</div>
+    ${overviewDensity==="compact"&&!expanded?"":`<div class="mon-metrics">${metric("에이전트",st.running+" / "+st.total)}${metric("토큰",fmt(st.tokens))}${metric("비용",krw(st.cost))}${metric("오류",String(st.errors),st.errors?"warn":"")}</div>`}
+    ${expanded?`<section class="mon-detail"><div class="mon-section-label">에이전트 · ${st.running}개 실행 중</div><div class="mon-agent-list">${s.nodes.map(a=>`<button data-mon-open="${esc(a.id)}"><i class="dot ${esc(a.status)}"></i>${esc(a.kind==="main"?"Main":displayName(a))}<span>${esc(monStatus[a.status]||a.status)}</span></button>`).join("")}</div><div class="mon-trend">${(n.res?.hist||[]).length?miniSpark(n.res.hist,170,25,"#4aa8ff"):"CPU 추세 미수집"}</div></section>`:""}
+    <footer class="mon-card-actions"><button class="mon-primary" data-mon-open="${id}">작업 열기 ↗</button><button data-mon-detail="${id}" aria-expanded="${expanded}">${expanded?"접기":"상세"}</button><button data-mon-editor="${id}">코드</button><button data-mon-map="${id}">지도</button><button data-mon-pin="${id}" title="세션 고정">${PINNED.has(s.key)?"고정 해제":"고정"}</button>${att?.kind==="done"?`<button data-mon-ack="${id}">완료 확인</button>`:""}</footer>
   </article>`;
 }
 function paintOverview(sessions) {

@@ -54,6 +54,11 @@ test("existing map opens a session card, restores panel state and renders update
       await page.waitForSelector("#slList .sl-row.open", filter);
       await page.waitForFunction(() => document.querySelector("#nodes").innerText.includes("Timing 0"), null, filter);
       assert.equal(await page.locator(".node.big.active-card [data-blk=editor]").count(),0);
+      assert.equal(await page.locator(".node.big.active-card .card-summary>div").count(),6);
+      assert.equal(await page.locator(".node.big.active-card .card-metrics-detail").isVisible(),false);
+      await page.locator(".node.big.active-card [data-metrics-toggle]").click();
+      assert.equal(await page.locator(".node.big.active-card .card-metrics-detail").isVisible(),true);
+      await page.locator(".node.big.active-card [data-metrics-toggle]").click();
       await page.locator(".node.big.active-card [data-card-editor]").click();
       const explorerFile = page.locator("#nodes .exr").filter({ hasText: editorFixture });
       await explorerFile.click(filter);
@@ -82,6 +87,7 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator('[data-mode="overview"]').click();
       await page.waitForSelector("#overview .mon-card",filter);
       assert.equal(await page.locator("#overview .mon-card").count(),10);
+      assert.equal(await page.locator("#overview .mon-card .mon-resources").count(),10);
       await page.screenshot({path:"artifacts/v4-ux/01-overview.png"});
       await page.locator("#mon-search").fill("Timing 1");
       assert.equal(await page.locator("#overview .mon-card").count(),1);
