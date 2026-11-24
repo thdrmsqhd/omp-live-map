@@ -50,7 +50,7 @@ async function boot() {
   setInterval(loadInfra, 5000);
   setInterval(loadSys, 3000);
   setInterval(() => { if (LOCALS.length) loadLocalRes(); }, 5000);
-  setInterval(() => { for (const id of openIds) loadBg(id); }, 1200);
+  setInterval(() => { for (const id of openIds) if(cardContentVisible(id)) loadBg(id); }, 1200);
   loadBgAll();
   setInterval(loadBgAll, 2500);
   setInterval(() => { if (pendingRender && !DEFER && !typingNow()) renderMap(false); }, 700);

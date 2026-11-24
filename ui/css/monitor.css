@@ -64,3 +64,16 @@
 .mon-agent-list button span{margin-left:auto;font-size:10px;color:var(--muted)}
 .mon-trend{display:flex;gap:10px;align-items:center;margin:8px 0;font-size:10px;color:var(--muted)}
 @media(max-width:800px){#topbar .searchwrap{width:150px}#overview{padding:8px}.mon-grid{grid-template-columns:1fr}}
+
+.node.big.virtual-card{display:flex;flex-direction:column;justify-content:space-between;padding:16px}
+.virtual-card .virtual-hint{color:var(--muted);font-size:14px}
+.virtual-card .virtual-stats{display:flex;gap:20px;flex-wrap:wrap}
+.virtual-card .virtual-stats span{font-size:14px;color:var(--muted)}
+.virtual-card [data-card-resume]{align-self:flex-start;font-size:16px;padding:8px 16px}
+#power-save.on{color:#9ecbff;border-color:#2f5d85}
+.overview-toolbar #suspend-frames{width:auto}
+.chat-history-nav,.term-history-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:none;font-size:10px;color:var(--muted)}
+.chat-history-nav span,.term-history-nav span{flex:1;text-align:center}
+.chat-history-nav .cmore{width:auto;margin:0}
+.node.big .body{overscroll-behavior:contain}
+.node.big .cmsgs,.node.big .tout,.node.big .ctlist{overscroll-behavior:contain}

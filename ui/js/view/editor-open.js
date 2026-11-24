@@ -4,10 +4,10 @@ function edCloseTab(s, path) {
   const f = ED_FILES.get(path);
   if (!f || !s.tabs.has(path)) return;
   if (f.dirty && f.refs.size < 2 && !confirm(`'${path}' 의 변경을 저장하지 않았습니다. 닫을까요?`)) return;
-  if (s.active === path) { s.editor.setModel(null); s.active = null; }
+  if (s.active === path) { s.editor?.setModel(null); s.active = null; }
   edRelease(s, path, true);
   const next = [...s.tabs.keys()].pop();
-  if (next) edShow(s, next);
+  if (next) { if (s.editor) edShow(s, next); else { s.active = next; void edResume(s); } }
   else {
     edPaintTabs(s);
     exSelect(s);
@@ -56,7 +56,7 @@ function edDropPreview(s, keep) {
   if (!prev || prev === keep || !s.tabs.has(prev)) return;
   const f = ED_FILES.get(prev);
   if (f && f.dirty) return;
-  if (s.active === prev) { s.editor.setModel(null); s.active = null; }
+  if (s.active === prev) { s.editor?.setModel(null); s.active = null; }
   edRelease(s, prev);
 }
 
@@ -92,3 +92,24 @@ async function openEditor(nodeId, path, opts) {
 addEventListener("beforeunload", (event) => {
   if ([...ED_FILES.values()].some((f) => f.dirty)) { event.preventDefault(); event.returnValue = ""; }
 });
+
+// 비활성 카드에서는 편집기 인스턴스만 해제한다. 모델, 파일 참조, 탭, 뷰 상태는 유지한다.
+function edSuspend(id) {
+  const s = ED.get(id);
+  if (!s || !s.editor) return;
+  if (s.active && s.tabs.has(s.active)) s.tabs.set(s.active, s.editor.saveViewState());
+  clearTimeout(s.diagTimer); s.diagSeq++;
+  s.focus = false;
+  s.editor.setModel(null); s.editor.dispose(); s.editor = null;
+}
+async function edResume(s) {
+  if (!s.active || s.editor || s.resuming) return;
+  s.resuming = true;
+  try {
+    const monaco = await loadMonaco();
+    if (ED.get(s.id) !== s || !s.root.isConnected || !s.active || s.editor) return;
+    edStart(s, monaco);
+    edShow(s, s.active, false);
+  } catch(e) { edSetMsg(s, "편집기 복원 실패: " + e.message, "bad"); }
+  finally { s.resuming = false; }
+}

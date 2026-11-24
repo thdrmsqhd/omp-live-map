@@ -19,6 +19,7 @@ function setMapMode(mode, render = true) {
   if (mode === "overview" && typeof refreshMonitorProjects === "function") void refreshMonitorProjects();
 }
 function paintMode() {
+  if (mapMode === "workspace" && !openIds.has(activeCardId)) activeCardId = [...openIds].at(-1) || null;
   $("app").dataset.view = mapMode;
   $("overview").hidden = mapMode !== "overview";
   $("workspace-empty").hidden = mapMode !== "workspace" || openIds.has(activeCardId);

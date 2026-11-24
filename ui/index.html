@@ -27,6 +27,7 @@
     <span class="brand"><b>omp</b> / live map</span>
     <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">관제</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">Live Map</button></nav>
     <button id="new-session-action" title="새 세션">＋ 세션</button>
+    <button id="power-save" title="화면 밖 카드의 무거운 블록을 해제합니다">절전</button>
     <div class="filters" id="filters">
       <button data-f="live" class="on" title="실행 중이거나 30분 안에 활동한 세션">활성</button>
       <button data-f="2h">2시간</button>
@@ -69,6 +70,7 @@
         <label>표시 밀도 <select id="overview-density"><option value="compact">Compact</option><option value="standard">Standard</option><option value="detailed">Detailed</option></select></label>
         <label>정렬 <select id="overview-sort"><option value="attention">주의 우선</option><option value="memory">메모리</option><option value="recent">최근 활동</option><option value="name">이름</option></select></label>
         <label title="세션에 귀속된 프로세스의 메모리 경고 기준">RAM 경고(MB) <input id="overview-memory" type="number" min="128" max="1048576" step="128"></label>
+        <label title="해제된 브라우저 블록은 다시 열 때 페이지를 재로드합니다"><input id="suspend-frames" type="checkbox">비활성 브라우저 해제</label>
         <button id="overview-select-all">전체 선택</button><button id="overview-close-selected">선택 카드 닫기</button><button id="overview-pin-selected">선택 세션 고정</button>
       </div>
       <div id="overview-attention" aria-label="주의 필요"></div>
@@ -157,6 +159,7 @@
   <script src="js/view/attn-card.js"></script>
   <script src="js/view/patch-card-body.js"></script>
   <script src="js/view/patch-nodes.js"></script>
+  <script src="js/view/card-virtualization.js"></script>
   <script src="js/view/render-map.js"></script>
   <script src="js/view/monitor.js"></script>
   <script src="js/view/monitor-projects.js"></script>

@@ -1,6 +1,7 @@
 /* omp-live-map · view · chat 블록 (세션 대화 기록 + 에이전트에 프롬프트 전송) */
 
-const CHAT_SHOW = 8;
+const CHAT_SHOW = 8, CHAT_PAGE = 40;
+const CHAT_SELECTION_PENDING = new Set();
 
 // 세션 기록의 대화 + 아직 기록에 안 올라온 로컬 표시분. 툴 칩으로 거른 상태면 그 툴을 쓴 턴만.
 function chatMsgs(node, st) {
@@ -8,7 +9,9 @@ function chatMsgs(node, st) {
   const tool = CHAT_TOOL.get(node.id) || "";
   const base = [...(node.messages || []), ...st.log];
   const all = tool ? base.filter((m) => (m.tools || []).includes(tool)) : base;
-  return { all, shown: st.expanded ? all : all.slice(-CHAT_SHOW), tool };
+  const offset = Math.min(Math.max(0, Number(st.historyOffset)||0), Math.max(0, all.length-1));
+  const end = all.length-offset, start = Math.max(0,end-(offset?CHAT_PAGE:CHAT_SHOW));
+  return { all, shown: all.slice(start,end), tool, start, end, offset };
 }
 
 // 사용자 입력은 원문 개행을 유지하고 fenced code만 별도 스크롤 영역으로 분리한다. 답변은 mdHTML(core/markdown.js)로 그린다.
@@ -47,7 +50,8 @@ function chatListHTML(st, shown, tool, act) {
   return `<div class="cmsg"><div class="tx dim">${tool ? "최근 기록에 이 툴을 쓴 턴이 없습니다" : "대화 기록 없음"}</div></div>`;
 }
 
-const chatMoreText = (st, all) => (st.expanded ? `최근 ${CHAT_SHOW}개만 보기` : `이전 대화 더 보기 (${all.length - CHAT_SHOW})`);
+const chatPageLabel = (page) => page.all.length ? `${page.start+1}–${page.end} / ${page.all.length}` : "0 / 0";
+const chatMoreText = (page) => `이전 대화 (${page.start}개 남음)`;
 
 const chatSumHTML = (st) => esc(st.summary)
   + (st.error ? `<div class="cerr"><span>${esc(st.error)}</span>${st.retry ? '<button data-retry="1">다시 시도</button>' : ""}</div>` : "");
@@ -55,12 +59,13 @@ const chatSumHTML = (st) => esc(st.summary)
 function chatBlock(n) {
   const st = chatState(n.id);
   const caps = capsOf(n);
-  const { all, shown, tool } = chatMsgs(n, st);
+  const page = chatMsgs(n, st);
+  const { all, shown, tool } = page;
   const ro = typeof dockReadOnly === "function" && dockReadOnly(n.id);
   return `<div class="chat${ro ? " ro" : ""}">
     ${ro ? '<div class="rodock">메인 카드에 연결된 서브에이전트 — 대화는 읽기 전용입니다</div>' : ""}
     <div class="cfilter"${tool ? "" : " hidden"}><span>${esc(tool)} 사용 턴만 표시 중</span><button data-unfilter="1">해제</button></div>
-    <button class="cmore" data-more="1"${all.length > CHAT_SHOW ? "" : " hidden"}>${esc(chatMoreText(st, all))}</button>
+    <div class="chat-history-nav"><button class="cmore" data-more="1"${page.start>0?"":" disabled"}>${esc(chatMoreText(page))}</button><span class="chat-page-label">${esc(chatPageLabel(page))}</span><button data-newer="1"${page.offset?"":" disabled"}>다음</button><button data-latest="1"${page.offset?"":" disabled"}>최신</button></div>
     <div class="cmsgs">${chatListHTML(st, shown, tool, chatActivityHTML(n.id, st))}</div>
     <div class="casks"></div>
     <div class="cworking" role="status" aria-live="polite"${st.busy || actItems(n.id).running ? "" : " hidden"}><span class="cworking-dot" aria-hidden="true"></span>응답 생성·작업 중</div>
@@ -97,18 +102,27 @@ function paintChat(id) {
   const el = ELS.get(id);
   const node = nodeById(id);
   const box = el && el.querySelector(".chat");
-  if (!box || !node) return;
+  if (!box || !node || !cardContentVisible(id)) return;
   const st = chatState(id);
-  const { all, shown, tool } = chatMsgs(node, st);
+  const page = chatMsgs(node, st);
+  const { all, shown, tool } = page;
   const filter = box.querySelector(".cfilter");
   filter.hidden = !tool;
   filter.firstElementChild.textContent = tool + " 사용 턴만 표시 중";
   const more = box.querySelector(".cmore");
-  more.hidden = all.length <= CHAT_SHOW;
-  more.textContent = chatMoreText(st, all);
+  more.disabled = page.start <= 0;
+  more.textContent = chatMoreText(page);
+  box.querySelector("[data-newer]").disabled = !page.offset;
+  box.querySelector("[data-latest]").disabled = !page.offset;
+  box.querySelector(".chat-page-label").textContent = chatPageLabel(page);
   const list = box.querySelector(".cmsgs");
   const html = chatListHTML(st, shown, tool, chatActivityHTML(id, st));
-  if (list.__html !== html) {
+  const selection = getSelection();
+  const selecting = selection && !selection.isCollapsed && list.contains(selection.anchorNode);
+  if (list.__html !== html && selecting) CHAT_SELECTION_PENDING.add(id);
+  else if (list.__html !== html) {
+    CHAT_SELECTION_PENDING.delete(id);
+    st.renderedMessages = shown;
     // 맨 아래를 보고 있었으면 새 메시지를 따라가고, 위로 올려 둔 위치는 지킨다.
     const wasBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
     const top = list.scrollTop;
@@ -173,11 +187,18 @@ function mountChat(blk, n) {
     else if (b.dataset.compact) compactChat(id);
     else if (b.dataset.clear) clearChat(id);
     else if (b.dataset.retry) retryChat(id);
-    else if (b.dataset.more) { st.expanded = !st.expanded; paintChat(id); }
+    else if (b.dataset.more || b.dataset.newer || b.dataset.latest) {
+      const page = chatMsgs(nodeById(id),st);
+      if (b.dataset.more && page.start) st.historyOffset = page.all.length-page.start;
+      else if (b.dataset.newer) st.historyOffset = page.offset<=CHAT_PAGE ? 0 : Math.max(CHAT_SHOW,page.offset-CHAT_PAGE);
+      else if (b.dataset.latest) st.historyOffset=0;
+      paintChat(id);
+      const list=box.querySelector(".cmsgs");list.scrollTop=st.historyOffset?0:list.scrollHeight;
+    }
     else if (b.dataset.unfilter) toggleChatTool(id, CHAT_TOOL.get(id));
     else if (b.dataset.copy != null) {
       const node = nodeById(id);
-      const m = node && chatMsgs(node, st).shown[+b.dataset.copy];
+      const m = node && (st.renderedMessages || chatMsgs(node, st).shown)[+b.dataset.copy];
       if (m) copyText(m.text, b);
     }
   });
@@ -187,6 +208,7 @@ function mountChat(blk, n) {
     if (cts) cts.textContent = ago(+cts.dataset.ts);
   });
   const list = box.querySelector(".cmsgs");
+  st.renderedMessages = chatMsgs(n,st).shown;
   list.scrollTop = list.scrollHeight;
   mountChatModel(box, id);
   paintChatModel(box, n, st);
@@ -195,3 +217,11 @@ function mountChat(blk, n) {
 }
 
 registerBlock({ type: "chat", slot: "main", flex: 7.4, render: chatBlock, mount: mountChat, paint: (box, n) => paintChat(n.id) });
+
+document.addEventListener("selectionchange",()=>{
+  const s=getSelection();
+  for(const id of [...CHAT_SELECTION_PENDING]){
+    const list=ELS.get(id)?.querySelector(".cmsgs");
+    if(!list || !s || s.isCollapsed || !list.contains(s.anchorNode)){CHAT_SELECTION_PENDING.delete(id);paintChat(id);}
+  }
+});

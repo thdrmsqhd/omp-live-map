@@ -81,19 +81,20 @@ function renderMap(resetView, force) {
   topbarStatus(sessions);
 
   const box = $("nodes");
+  const painted = new Set();
   const pieces = CLUSTERS.map((c) => ({ key: "c:" + clusterKeyOf(c), html: clusterHTML(c) }));
   pieces.push(...hostCards());
   pieces.push(...pendingPieces());
   pieces.push(...JOBS.map((j) => ({ key: "j:" + jobKeyOf(j), html: jobCard(j, { x: 0, y: 0 }) })));
   for (const n of NODES) {
     if (!agentKind(n.kind)) pieces.push({ key: "n:" + n.id, html: plainCard(n) });
-    if (openIds.has(n.id)) pieces.push({ key: "b:" + n.id, html: bigCard(n), keep: ".body" });
+    if (openIds.has(n.id)) { const piece = cardRenderPiece(n, force); pieces.push(piece); if (!piece.retain && !piece.virtual) painted.add(n.id); }
   }
   patchPieces(box, pieces);
   ELS.clear();
   box.querySelectorAll(".node[data-id]").forEach((el) => ELS.set(el.dataset.id, el));
   drawEdges(NODES);
-  for (const id of openIds) mountBlocks(nodeById(id), ELS.get(id));
+  for (const id of painted) { mountBlocks(nodeById(id), ELS.get(id)); restoreCardScroll(id, ELS.get(id)); }
   box.querySelectorAll("input.rename").forEach(wireRename);
   paintSelection();
   renderSessionList(sessions);
