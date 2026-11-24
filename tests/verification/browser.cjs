@@ -11,10 +11,13 @@ const { withLegacyHttp } = require("../helpers/legacy-http");
 test("existing map opens a session card, restores panel state and renders updates",
   { timeout: 50000 }, (t) => withLegacyHttp(t, async ({ directory, config }) => {
     const browser = await chromium.launch();
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
     try {
-      const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-      const errors = [];
-      page.on("pageerror", (error) => errors.push(error.message));
       const { scan } = require("../../server/tail");
       const { broadcast } = require("../../server/sse");
       const folder = path.join(config.SESSIONS, "timing");
@@ -32,7 +35,8 @@ test("existing map opens a session card, restores panel state and renders update
       scan();
       const filter = { timeout: 8000 };
       await page.goto(`http://127.0.0.1:${config.PORT}`);
-      const first = page.locator("#slList .sl-row.main").filter({ hasText: /^Timing 0/ });
+      const sessionName = (title) => page.getByText(title, { exact: true }).and(page.locator("#slList .sl-row.main .nm"));
+      const first = sessionName("Timing 0");
       await first.click(filter);
       await page.waitForSelector("#slList .sl-row.open", filter);
       await page.waitForFunction(() => document.querySelector("#nodes").innerText.includes("Timing 0"), null, filter);
@@ -54,7 +58,7 @@ test("existing map opens a session card, restores panel state and renders update
         const start = performance.now();
         scan();
         broadcast();
-        await page.getByText(title, { exact: true }).and(page.locator("#slList .sl-row.main .nm")).waitFor(filter);
+        await sessionName(title).waitFor(filter);
         times.push(performance.now() - start);
       }
       times.sort((a, b) => a - b);
@@ -62,6 +66,9 @@ test("existing map opens a session card, restores panel state and renders update
       console.log(`10 fixture sessions, 20 samples, scan → SSE → DOM p95: ${p95.toFixed(1)} ms`);
       assert.ok(p95 < 1000, `p95 exceeded 1 second: ${p95.toFixed(1)} ms`);
       assert.deepEqual(errors, []);
+    } catch (error) {
+      const panel = await page.locator("#slList").textContent({ timeout: 2000 }).catch(() => "");
+      throw new Error(`${error.message}\nSession panel: ${panel}\nConsole: ${errors.join(" | ")}`, { cause: error });
     } finally {
       await browser.close();
     }

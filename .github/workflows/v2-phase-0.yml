@@ -3,6 +3,7 @@ name: V2 Phase 0 verification
 on:
   push:
     branches: ['v2/phase-0-baseline']
+    paths-ignore: ['docs/**']
 
 permissions:
   contents: read
@@ -22,9 +23,13 @@ jobs:
         run: node --test
       - name: SQLite recovery probe
         run: node tests/verification/sqlite.cjs
-      - name: Prepare Chromium
+      - name: Prepare Electron and Chromium
+        id: prepare
         run: |
-          npm install --no-save --package-lock=false playwright@1.56.1
-          npx playwright install chromium
+          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
+          npx playwright install --only-shell chromium
+      - name: Electron desktop lifecycle proof
+        run: node tests/verification/electron.cjs
       - name: Browser regression and 10-session measurement
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/browser.cjs
