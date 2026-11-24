@@ -80,7 +80,8 @@ function catalog(db) {
       const duplicate = db.prepare("SELECT id FROM project WHERE root=?").get(resolved);
       if (duplicate && duplicate.id !== id) throw problem(409, "Git root already registered");
       if (body.id && project(id).root !== resolved &&
-          db.prepare("SELECT 1 FROM task WHERE project=? LIMIT 1").get(id)) {
+          (db.prepare("SELECT 1 FROM task WHERE project=? LIMIT 1").get(id) ||
+           db.prepare("SELECT 1 FROM workflow_run r JOIN workflow w ON r.workflow=w.id WHERE w.project=? LIMIT 1").get(id))) {
         throw problem(409, "A project with run history cannot change its Git root");
       }
       db.prepare(`INSERT INTO project VALUES (?,?,?,?,0)

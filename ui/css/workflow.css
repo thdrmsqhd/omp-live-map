@@ -15,3 +15,7 @@
 #workflow-edges button { margin-left: .5rem; }
 #workflow-lines path { fill: none; stroke: #84b6e5; }
 #workflow-lines text { fill: #84b6e5; font: 11px system-ui; }
+#sdlc-board { display: grid; gap: .65rem; grid-template-columns: repeat(6, minmax(180px, 1fr)); overflow-x: auto; }
+#sdlc-board section { border: 1px solid #56647b; border-radius: .5rem; padding: .65rem; }
+#sdlc-board h3, #sdlc-board h4 { overflow-wrap: anywhere; }
+#sdlc-board article { margin-bottom: .65rem; padding: .55rem; border: 1px solid #56647b; border-radius: .35rem; }

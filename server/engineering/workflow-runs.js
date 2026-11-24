@@ -5,13 +5,14 @@ const { event } = require("./catalog");
 const { transaction } = require("./database");
 const { string, integer } = require("./definitions");
 const { problem, redact } = require("./state");
+const { sdlcTasks } = require("./sdlc-tasks");
 
-function workflowRuns(db, catalog, workflows) {
+function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, workflows)) {
   function get(id) {
     const run = db.prepare(`SELECT r.*,w.project FROM workflow_run r
       JOIN workflow w ON r.workflow=w.id WHERE r.id=?`).get(id);
     if (!run) throw problem(404, "Workflow run not found");
-    const { idempotency_key, request_hash, ...publicRun } = run;
+    const { idempotency_key, request_hash, sdlc_instruction, ...publicRun } = run;
     return publicRun;
   }
   function setStatus(id, from, to, error = null) {
@@ -19,6 +20,7 @@ function workflowRuns(db, catalog, workflows) {
     if (!from.includes(current.status)) throw problem(409, "Workflow run changed state");
     db.prepare("UPDATE workflow_run SET status=?,error=? WHERE id=?").run(to, error ? redact(error) : null, id);
     event(db, "workflow.run", { id, status: to });
+    tasks.followRun(id, to);
   }
   function setNode(run, node, status, outcome) {
     db.prepare(`INSERT INTO workflow_node VALUES (?,?,?,?,?) ON CONFLICT(run,node)
@@ -27,6 +29,8 @@ function workflowRuns(db, catalog, workflows) {
     event(db, "workflow.node", { id: run, node, status });
   }
   function create(input, idempotencyKey) {
+    const task = input.task ? tasks.get(string(input.task, "task id")) : null;
+    if (task) input = { ...input, project: task.project, workflow: task.workflow, version: task.workflow_version, title: task.title };
     const project = string(input.project, "project");
     const id = string(input.workflow, "workflow");
     const version = integer(input.version, "workflow version", 1, Number.MAX_SAFE_INTEGER);
@@ -34,7 +38,7 @@ function workflowRuns(db, catalog, workflows) {
     const timeout = integer(input.timeoutMs, "workflow timeout", 100, 3600000);
     const budget = integer(input.budgetCents, "workflow budget", 0, 100000);
     const key = string(idempotencyKey, "idempotency key");
-    const hash = createHash("sha256").update(JSON.stringify([project,id,version,title,timeout,budget])).digest("hex");
+    const hash = createHash("sha256").update(JSON.stringify([project,id,version,title,timeout,budget,task?.id ?? null,task?.instruction ?? null])).digest("hex");
     return transaction(db, () => {
       const existing = db.prepare("SELECT id,request_hash FROM workflow_run WHERE idempotency_key=?").get(key);
       if (existing) {
@@ -43,9 +47,12 @@ function workflowRuns(db, catalog, workflows) {
       }
       workflows.get(project, id, version);
       if (catalog.project(project).archived) throw problem(409, "Project is archived");
+      if (task && tasks.get(task.id).status !== "ready") throw problem(409, "Development task must be Ready");
       const run = randomUUID(), now = Date.now();
-      db.prepare("INSERT INTO workflow_run VALUES (?,?,?,?, 'queued',NULL,?,?,?,?,?,NULL)")
-        .run(run, id, version, title, now, now + timeout, budget, key, hash);
+      db.prepare(`INSERT INTO workflow_run (id,workflow,version,title,status,created,deadline,budget,idempotency_key,request_hash,sdlc_task,sdlc_instruction)
+        VALUES (?,?,?,?,'queued',?,?,?,?,?,?,?)`)
+        .run(run, id, version, title, now, now + timeout, budget, key, hash, task?.id ?? null, task?.instruction ?? null);
+      tasks.followRun(run, "queued");
       event(db, "workflow.created", { id: run, project, workflow: id, version });
       return { run: get(run), created: true };
     });
@@ -62,6 +69,7 @@ function workflowRuns(db, catalog, workflows) {
   }
   return {
     create, get, nodes,
+    taskInstruction: (id) => db.prepare("SELECT sdlc_instruction FROM workflow_run WHERE id=?").get(id)?.sdlc_instruction ?? "",
     list(project) {
       return db.prepare(`SELECT r.id,r.title,r.status,r.created,r.workflow,r.version FROM workflow_run r JOIN workflow w
         ON r.workflow=w.id WHERE w.project=? ORDER BY r.created DESC,r.id LIMIT 100`).all(project);
@@ -116,6 +124,8 @@ function workflowRuns(db, catalog, workflows) {
             failed.outcome?.passed !== false || run.deadline <= Date.now()) {
           throw problem(409, "Only a failed node with a known result and time remaining can be retried");
         }
+        if (run.sdlc_task && db.prepare("SELECT id FROM workflow_run WHERE sdlc_task=? ORDER BY created DESC,rowid DESC LIMIT 1")
+          .get(run.sdlc_task).id !== id) throw problem(409, "The task already has a newer workflow run");
         if (history.some((item) => descendants.has(item.node) && item.status !== "skipped")) {
           throw problem(409, "A downstream node already executed; start a new workflow run");
         }

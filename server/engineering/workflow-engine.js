@@ -38,7 +38,9 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       operating.delete(node);
     }
     async function executeExternal(node, location, remaining) {
-      let result = await runNode(node, run.project, location, Math.max(0, remaining), signal);
+      const task = store.taskInstruction(id);
+      const input = task && node.instruction ? { ...node, instruction: node.instruction + "\n\nDevelopment task:\n" + task } : node;
+      let result = await runNode(input, run.project, location, Math.max(0, remaining), signal);
       if (result.status === "succeeded" && node.outputs.length) {
         try { result.artifacts = await collectOutputs(location, node, signal); } catch (error) {
           result = { ...result, status: "failed", interrupted: true, error: redact(error.message) };

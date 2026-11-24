@@ -1,5 +1,6 @@
 import { bindRuntimeControls } from "./engineering-runtime.js";
 import { bindWorkflow } from "./workflow-editor.js";
+import { bindSdlc } from "./sdlc.js";
 
 const find = (id) => document.getElementById(id);
 const status = find("status");
@@ -12,6 +13,7 @@ let definitions = [];
 let projects = [];
 let currentRunRequest = null;
 let workflow;
+let sdlc;
 
 async function request(endpoint, params, payload) {
   if (!window.engineeringDesktop) throw new Error("데스크톱 앱에서 Engineering을 열어 주세요.");
@@ -77,6 +79,7 @@ async function refreshDefinitions(chosen) {
   options(loop, definitions.filter((entry) => entry.kind === "loop"), "Loop 선택");
   showDefinition();
   await workflow?.selectProject(selected?.id ?? "");
+  await sdlc?.selectProject(selected?.id ?? "");
   await refreshRuns();
 }
 
@@ -154,9 +157,10 @@ find("actions").addEventListener("click", report(async (event) => {
     await refreshRuns();
   }
 }));
-for (const view of ["design", "workflow", "execution"]) {
+const views = ["design", "workflow", "sdlc", "execution"];
+for (const view of views) {
   find(view + "-nav").addEventListener("click", () => {
-    for (const name of ["design", "workflow", "execution"]) {
+    for (const name of views) {
       find(name).hidden = view !== name;
       find(name + "-nav").setAttribute("aria-pressed", String(view === name));
     }
@@ -164,6 +168,10 @@ for (const view of ["design", "workflow", "execution"]) {
 }
 if (window.engineeringDesktop) {
   workflow = bindWorkflow({ find, request, report, definitions: () => definitions });
+  sdlc = bindSdlc({ find, request, report, showRun: async (id) => {
+    find("workflow-nav").click();
+    await workflow.showRun(id);
+  } });
   const runtimeStatus = bindRuntimeControls({ find, request, report, status, formValues });
   report(async () => { await Promise.all([refreshProjects(), runtimeStatus()]); })();
   setInterval(() => {

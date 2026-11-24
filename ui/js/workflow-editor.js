@@ -188,7 +188,7 @@ export function bindWorkflow({ find, request, report, definitions }) {
       }
     }));
   }
-  return { async selectProject(id) {
+  return { showRun: runs.refresh, async selectProject(id) {
     if (id === project) return;
     project = id;
     selector.value = "";

@@ -8,6 +8,7 @@ const { workflowCatalog } = require("./workflow-catalog");
 const { workflowRuns } = require("./workflow-runs");
 const { workflowEngine } = require("./workflow-engine");
 const { workflowTemplates } = require("./workflow-templates");
+const { sdlcTasks } = require("./sdlc-tasks");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
@@ -56,11 +57,12 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const definitions = catalog(db);
       const runs = runStore(db, definitions);
       const workflows = workflowCatalog(db, definitions);
-      const flowRuns = workflowRuns(db, definitions, workflows);
+      const tasks = sdlcTasks(db, definitions, workflows);
+      const flowRuns = workflowRuns(db, definitions, workflows, tasks);
       const workspace = worktrees(path.resolve(directory, "worktrees"));
       runs.recover();
       flowRuns.recover();
-      services = { definitions, workflows, runs, flowRuns,
+      services = { definitions, workflows, runs, flowRuns, tasks,
         templates: workflowTemplates(definitions, workflows),
         flow: workflowEngine(flowRuns, workflows, definitions, runner, workspace),
         loop: loopEngine(runs, definitions, runner, workspace) };
@@ -73,12 +75,13 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
       if (req.method === "GET") {
         if (endpoint === "projects") result = definitions.projects();
+        if (endpoint === "tasks") result = tasks.list(query("project"));
         if (endpoint === "workflows") result = workflows.list(query("project"));
         if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
         if (endpoint === "workflow-run") {
@@ -133,6 +136,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = runner.status();
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
+        if (endpoint === "tasks") result = tasks.save(input);
+        if (endpoint === "tasks/move") result = tasks.move(string(input.id, "task"), input.status, input.revision);
         if (endpoint === "workflows") result = workflows.save(input);
         if (endpoint === "workflows/import") {
           result = templates.import(string(input.project, "project"), input.template, input.name);

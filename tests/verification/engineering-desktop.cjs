@@ -108,6 +108,17 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
     await page.getByRole("button", { name: "저장된 버전 실행" }).click();
     await page.waitForFunction(() => document.querySelector("#workflow-run-status").textContent === "succeeded");
     assert.match(await page.locator("#workflow-run-nodes").textContent(), /End · succeeded/);
+    await page.getByRole("button", { name: "개발 Task", exact: true }).click();
+    const task = page.locator("#sdlc-form");
+    await task.getByLabel("업무 제목").fill("CI development task");
+    await task.getByLabel("요구사항").fill("Maintain the baseline");
+    await task.getByLabel("Workflow 버전").selectOption({ label: "CI workflow · v1" });
+    await task.getByRole("button", { name: "Task 저장" }).click();
+    const card = page.locator("#sdlc-board article").filter({ hasText: "CI development task" });
+    await card.getByRole("button", { name: "준비로 이동" }).click();
+    await card.getByRole("button", { name: "Workflow 실행", exact: true }).click();
+    await page.locator("#workflow").waitFor();
+    await page.waitForFunction(() => document.querySelector("#workflow-run-list").selectedOptions[0]?.textContent === "CI development task · succeeded");
     await page.getByRole("button", { name: "실행", exact: true }).click();
     assert.equal(await page.getByRole("heading", { name: "Loop 실행" }).isVisible(), true);
     const unauthenticated = await fetch(origin + "/api/engineering/projects");

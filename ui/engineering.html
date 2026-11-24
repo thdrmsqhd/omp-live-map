@@ -15,6 +15,7 @@
     <nav aria-label="워크스페이스">
       <button id="design-nav" aria-pressed="true">설계</button>
       <button id="workflow-nav" aria-pressed="false">Workflow</button>
+      <button id="sdlc-nav" aria-pressed="false">개발 Task</button>
       <button id="execution-nav" aria-pressed="false">실행</button>
       <a href="/">관측</a>
     </nav>
@@ -110,6 +111,20 @@
         <div><button name="decision" value="approved">승인</button> <button name="decision" value="rejected">거절</button></div>
       </form>
       <ol id="workflow-run-nodes"></ol>
+    </section>
+    <section id="sdlc" hidden>
+      <h2>개발 Task</h2>
+      <form id="sdlc-form">
+        <label>업무 제목 <input name="title" maxlength="240" required></label>
+        <label>요구사항 <textarea name="instruction" rows="4" maxlength="12000" required></textarea></label>
+        <label>Workflow 버전 <select name="workflow" required></select></label>
+        <div><button>Task 저장</button> <button type="button" id="sdlc-new">새 Task</button></div>
+      </form>
+      <div class="workflow-controls">
+        <label>실행 시간 한도(분) <input id="sdlc-minutes" type="number" min="1" max="60" value="20"></label>
+        <label>실행 예산(센트) <input id="sdlc-budget" type="number" min="0" max="100000" value="300"></label>
+      </div>
+      <div id="sdlc-board" aria-label="개발 Task 칸반"></div>
     </section>
     <section id="execution" hidden>
       <h2>Loop 실행</h2>
