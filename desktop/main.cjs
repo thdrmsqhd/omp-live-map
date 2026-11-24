@@ -24,7 +24,7 @@ function startServer() {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1",
       OMP_MAP_ENGINEERING_TOKEN: token, OMP_MAP_ENGINEERING_DATA: data,
       ...(app.isPackaged ? { OMP_MAP_STATE: path.join(data, "legacy-state") } : {}) },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   return new Promise((resolve, reject) => {
     let output = "", errors = "";
@@ -92,6 +92,13 @@ app.on("before-quit", (event) => {
   if (!child?.pid || child.exitCode !== null || child.signalCode !== null || shutdown) return;
   event.preventDefault();
   shutdown = true;
-  child.once("close", () => app.quit());
-  child.kill();
+  const owned = child;
+  const deadline = setTimeout(() => {
+    if (process.platform === "win32" && owned.pid) {
+      const kill = spawn("taskkill", ["/pid", String(owned.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      kill.once("error", () => owned.kill());
+    } else owned.kill();
+  }, 7000);
+  owned.once("close", () => { clearTimeout(deadline); app.quit(); });
+  owned.send({ type: "desktop-shutdown" }, (error) => { if (error) owned.kill(); });
 });

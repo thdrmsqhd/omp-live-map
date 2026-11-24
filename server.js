@@ -52,6 +52,8 @@ try {
   /* polling covers it */
 }
 
+require("./server/desktop-shutdown").enableDesktopShutdown(server);
+
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`omp live map: http://127.0.0.1:${PORT}  (sessions: ${SESSIONS})`);
 });

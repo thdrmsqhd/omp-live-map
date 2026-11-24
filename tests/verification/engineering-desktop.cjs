@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { spawn } = require("node:child_process");
+const { spawn, execFileSync } = require("node:child_process");
 const { once } = require("node:events");
 const fs = require("node:fs/promises");
 const os = require("node:os");
@@ -42,6 +42,24 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
       assert.match(monaco.headers.get("content-type"), /javascript/);
     }
     await page.getByText("격리 검증을 통과한 실행 하네스가 없습니다.", { exact: false }).waitFor({ timeout: 8000 });
+    const repository = path.join(directory, "fixture-repo");
+    await fs.mkdir(repository);
+    for (const command of [["init", "-b", "main"], ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
+      "commit", "--allow-empty", "-m", "start"]]) execFileSync("git", command, { cwd: repository });
+    const form = page.locator("#project-form");
+    await form.locator("[name=name]").fill("desktop fixture");
+    await form.locator("[name=root]").fill(repository);
+    await form.locator("[name=branch]").fill("main");
+    await form.getByRole("button", { name: "등록 또는 수정" }).click();
+    const registered = page.locator("#project option").filter({ hasText: "desktop fixture" });
+    await registered.waitFor({ state: "attached", timeout: 8000 });
+    await page.locator("#payload").fill(JSON.stringify({ name: "test profile", provider: "fixture", model: "fake-1" }));
+    await page.getByRole("button", { name: "버전 저장" }).click();
+    await page.locator("#definition option").filter({ hasText: "test profile" }).waitFor({ state: "attached", timeout: 8000 });
+    await page.reload();
+    await registered.waitFor({ state: "attached", timeout: 8000 });
+    await page.locator("#project").selectOption({ label: "desktop fixture" });
+    await page.locator("#definition option").filter({ hasText: "test profile" }).waitFor({ state: "attached", timeout: 8000 });
     await page.getByRole("button", { name: "실행", exact: true }).click();
     assert.equal(await page.getByRole("heading", { name: "Loop 실행" }).isVisible(), true);
     const unauthenticated = await fetch("http://127.0.0.1:7800/api/engineering/projects");

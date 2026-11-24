@@ -38,7 +38,10 @@ function definition(kind, body) {
       if (!check || !Array.isArray(check.args) || check.args.length > 24) throw problem(400, "Invalid check arguments");
       return {
         command: string(check.command, "check command"),
-        args: check.args.map((arg) => string(arg, "check argument", 1000)),
+        args: check.args.map((arg) => {
+          if (typeof arg !== "string" || arg.length > 1000 || arg.includes("\0")) throw problem(400, "Invalid check argument");
+          return arg;
+        }),
         code: integer(check.code ?? 0, "exit code", 0, 255),
       };
     }),

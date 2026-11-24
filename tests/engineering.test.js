@@ -146,3 +146,35 @@ test("verified fixture runner fails checks twice, succeeds, and preserves a dirt
     t.after(() => fs.rm(directory, { recursive: true, force: true, maxRetries: 3 }));
   }
 });
+
+test("active Loop cancels without another attempt and budget blocks verification", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-controls-"));
+  try {
+    const { body, definitions, store } = await fixture(t, directory);
+    const tools = worktrees(path.join(directory, "worktrees"));
+    let verified = 0;
+    const commands = { enforced: true, allows: () => true, async execute() { verified++; return { code: 0 }; } };
+    const agent = { enforced: true, supports: () => true,
+      async run({ signal }) {
+        await delay(5000, null, { signal });
+        return { costCents: 0 };
+      },
+    };
+    const engine = loopEngine(store, definitions, secureRunner(new Map([["omp", agent]]), commands), tools);
+    const cancelled = engine.start(body, randomUUID());
+    const deadline = Date.now() + 3000;
+    while (!store.attempts(cancelled.id).length && Date.now() < deadline) await delay(15);
+    assert.equal(store.attempts(cancelled.id).length, 1);
+    engine.action(cancelled.id, "cancel");
+    await awaitStatus(store, cancelled.id, "cancelled");
+    assert.deepEqual(store.attempts(cancelled.id).map(({ status }) => status), ["cancelled"]);
+
+    agent.run = async () => ({ costCents: 5 });
+    const limited = engine.start(body, randomUUID());
+    await awaitStatus(store, limited.id, "limit_exceeded");
+    assert.equal(store.attempts(limited.id)[0].outcome.costCents, 5);
+    assert.equal(verified, 0);
+  } finally {
+    t.after(() => fs.rm(directory, { recursive: true, force: true, maxRetries: 3 }));
+  }
+});
