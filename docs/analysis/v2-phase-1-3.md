@@ -8,11 +8,13 @@ Phase 0의 Windows 회귀 기준선에서 출발했습니다. 기존 세션·터
 
 ## 검증 및 완료 판정
 
-| 범위 | 구현 및 검증 | 남은 제품 인수 조건 |
+**Phase 3 완료**를 기록합니다. 실제 OMP와 Claude Code의 자동 Loop 통합 테스트와 Windows 설치·실행 검증 결과를 근거로, 사용자 요청에 따라 현재 범위에서 Phase 3를 종료했습니다. 실제 Anthropic 과금 계정으로 실행하는 검증, Windows Docker Desktop 실연동 검증, MCP·Hooks 적용 및 세션 카드 통합 관측은 후속 작업으로 남깁니다.
+
+| 범위 | 구현 및 검증 | 후속 작업 |
 | --- | --- | --- |
 | Phase 1 | SQLite 스키마·트랜잭션·백업 및 재오픈, 정의 버전과 참조 보존, 상태 전이, 이벤트 커서, 멱등 실행 요청, 데스크톱·기존 맵, 프로젝트 등록/수정/보관, 토큰 기반 Engineering API | Windows Docker Desktop 및 실제 계정 인수 검증 |
 | Phase 2 | 실제 OMP RPC와 Claude stream-json, 모델·하네스 버전 편집, 제한된 Worktree와 Anthropic 중계기, DPAPI 키 저장, AGENTS.md·Skills 지시 반영 | 세션 카드를 잇는 통합 관측, 실제 과금 검증, MCP·Hooks 적용 |
-| Phase 3 | Loop 정의·실행 이력 UI, 구조화된 검증 명령, 재시도·한도·취소·중단 상태, 재시작 시 불확실한 시도 재실행 차단, 실제 두 CLI와 격리된 Node 검증 프로세스로 실패 2회 후 성공 확인 | 테스트 중 모델 서비스는 검증용 응답을 사용. 실제 계정과 Windows Docker Desktop 조합의 인수 검증 |
+| Phase 3 · 완료 | Loop 정의·실행 이력 UI, 구조화된 검증 명령, 재시도·한도·취소·중단 상태, 재시작 시 불확실한 시도 재실행 차단, 실제 두 CLI와 격리된 Node 검증 프로세스로 실패 2회 후 성공 확인 | 테스트 중 모델 서비스는 검증용 응답을 사용. 실제 계정과 Windows Docker Desktop 조합의 인수 검증 |
 
 ## 최종 개발 빌드 검증
 
