@@ -18,6 +18,7 @@ function termLog(id, lines) {
   const st = TERM.get(id);
   if (!st) return;
   st.lines.push(...lines);
+  if (lines.some((l)=>l.c==="cmd")) st.historyOffset=0;
   if (st.lines.length > 300) st.lines = st.lines.slice(-300);
   paintTerm(id, lines.some((l) => l.c === "cmd"));
 }

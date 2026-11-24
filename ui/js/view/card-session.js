@@ -31,21 +31,25 @@ function modelChip(n) {
   return `<span class="mod" title="${esc(n.provider ? n.provider + " · " : "")}${esc(m || "?")}">${esc(modelShort(m))}</span>`;
 }
 
+const CARD_METRICS_OPEN = new Set();
 function sessionChrome(n) {
   const isLocal = n.kind === "local";
   const series = n.series || [];
   const maxOut = series.length ? Math.max(...series.map((s) => s.out || 0)) : 0;
+  const ctx=ctxUsage(n),r=n.res,detail=CARD_METRICS_OPEN.has(n.id);
+  const metric=(label,value)=>`<div><small>${label}</small><strong>${esc(value)}</strong></div>`;
+  const summary=`<div class="card-summary">${metric("CPU",r?`${r.cpu}%`:"—")}${metric("RAM",r?memSize(r.mb):"—")}${metric("컨텍스트",ctx?.text||"—")}${metric("토큰",fmt(n.tokens?.total||0))}${metric("비용",krw(n.cost))}${metric("오류",String(n.errors||0))}<button data-metrics-toggle="1" aria-expanded="${detail}">${detail?"지표 접기":"상세 지표"}</button></div>`;
   return `<div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i>
       ${nameField(n)}
       ${isLocal ? "" : harnessChip(n)}
       ${askBadge(n.id)}<span class="attn-badge"></span>
       ${!isLocal && n.startedAt ? `<span class="since" title="시작 ${esc(new Date(n.startedAt).toLocaleString("ko-KR"))}">시작 ${ago(n.startedAt)}</span>` : ""}
       <button class="x" data-rename="${esc(n.id)}" title="이름 변경${isLocal ? "" : " (비우면 원래 이름)"}">✎</button>
-      ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제">🗑</button>` : `<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">세션 닫기</button>`}
+      ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제" aria-label="카드 삭제">🗑</button>` : n.kind === "main" ? `<button class="x danger session-close" data-dismiss="1" ${STOP_PENDING.has(n.id) ? "disabled" : ""} title="세션 종료 요청 (카드 유지)">${STOP_PENDING.has(n.id) ? "종료 요청 중…" : "세션 종료"}</button>` : ""}
       ${profileChip(n)}${typeof dockTag === "function" ? dockTag(n) : ""}${isLocal ? `<span class="mod">local</span>` : n.kind === "sub" || !cardBlockTypes(n).includes("chat") ? modelChip(n) : ""}
-      <button class="x" data-close="1" title="큰 카드 축소 (Esc)" aria-label="큰 카드 축소">−</button></div>
+      ${n.kind!=="sub"?`<button class="x" data-card-editor="1" title="코드 편집기 열기">코드</button>`:""}${cardWindowActions(n.id)}</div>
     <div class="sub-t${SUB_OPEN.has(n.id) ? " open" : ""}" data-subtoggle="${esc(n.id)}" title="${esc(subtitleFull(n, isLocal))}">${esc(subtitleOf(n, isLocal))}</div>
-    ${isLocal ? resRow(n, true) : `${tokenSection(n)}
+    ${isLocal ? resRow(n, true) : `${summary}<div class="card-metrics-detail"${detail?"":" hidden"}>${tokenSection(n)}
     <div class="sparkwrap" style="height:34px">
       <span class="rate">${n.liveTokPerSec} t/s</span>
       ${spark(series, BIG_W - 40, 30, "#2fbf9b", true, n.id)}
@@ -54,7 +58,7 @@ function sessionChrome(n) {
     ${ctxBlock(n)}
     ${sessionCtxBlock(n)}
     <div class="chips">${toolChips(n)}${progChips(programs(n))}</div>
-    ${resRow(n, true)}`}`;
+    ${resRow(n, true)}</div>`}`;
 }
 
 function infraChrome(n) {
@@ -62,7 +66,7 @@ function infraChrome(n) {
   const acts = infraActions(n, true);
   return `<div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(n.name)}</span>
       <span class="mod">${esc(n.kind)}</span>
-      <button class="x" data-close="1" title="닫기 (Esc)">✕</button></div>
+      ${cardWindowActions(n.id)}</div>
     <div class="sub-t">${esc([n.meta1, n.meta2].filter(Boolean).join(" · "))}</div>
     ${c ? `<div class="chips">
       <span class="chip">image ${esc(modelShort(c.image))}</span>
@@ -74,7 +78,7 @@ function infraChrome(n) {
 
 function bigCard(n) {
   const box = SATS.get(n.id);
-  const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px`;
+  const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px;--edcol:${cardSplit(n.id)}%`;
   const chrome = agentKind(n.kind) || n.kind === "local" ? sessionChrome(n) : infraChrome(n);
   const side = renderBlocks(n, "side");
   const edit = renderBlocks(n, "edit");
@@ -98,6 +102,7 @@ function bigCard(n) {
 function chromeClick(target, id) {
   const pick = (attr) => target.closest(`[${attr}]`);
   const toggle = (set) => { if (set.has(id)) set.delete(id); else set.add(id); renderMap(false, true); return true; };
+  if (pick("data-metrics-toggle")) return toggle(CARD_METRICS_OPEN);
   if (pick("data-ctxmore")) return toggle(CTX_OPEN);
   if (pick("data-toolsmore")) return toggle(TOOLS_OPEN);
   if (pick("data-subtoggle")) return toggle(SUB_OPEN);
@@ -121,7 +126,7 @@ function commitRename(id, value) {
     if (value) { L.title = value; saveLocals(); }
   } else {
     const n = nodeById(id);
-    const base = n && (n.kind === "main" ? "main" : n.name);
+    const base = n && (n.kind === "main" ? n.sessionTitle || "main" : n.name);
     if (value && value !== base) ALIAS.set(id, value); else ALIAS.delete(id);
     saveAlias();
   }

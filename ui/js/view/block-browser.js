@@ -13,7 +13,7 @@ function browserBlock(n, key = "browser") {
       <button data-bgo="1" style="padding:0 6px;font-size:10px">열기</button></div>
     <input class="bin" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8080 · C:\\폴더\\index.html · file:///…" value="${esc(st.url)}">
     <div class="berr" hidden></div>
-    <iframe class="bframe" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+    <iframe class="bframe" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
   </div>`;
 }
 
@@ -101,13 +101,13 @@ function mountBrowser(box, n) {
 // 키운 양은 u.fit[key] 에 남겨 블록을 뺄 때 unfitBrowserCard 가 되돌린다.
 // 두 번째 인스턴스는 카드를 더 키우지 않고 첫 블록과 남은 공간을 나눠 쓴다.
 function fitBrowserCard(id, key = "browser") {
-  if (!openIds.has(id)) openNode(id);
+  if (!openIds.has(id) || ELS.get(id)?.dataset.virtual) openNode(id);
   const u = cardUI(id);
   if (u.collapsed[key]) { delete u.collapsed[key]; saveCardUI(); renderMap(false, true); }
   if (key !== "browser") return;
   const box = BIGPOS.get(id);
   const blk = $("nodes").querySelector(`.node.big[data-id="${CSS.escape(id)}"] .blk[data-bkey="${CSS.escape(key)}"]`);
-  if (!box || !blk) return;
+  if (!box || !blk || mapMode !== "map") return;
   const r = blk.getBoundingClientRect();
   const k = view.k || 1;
   // 대화가 있는 카드는 브라우저가 왼쪽 열(.col-left, 고정 폭 blockW)로 새로 붙는다: 열 폭 + 간격(10)만큼 카드를 넓혀 대화·편집기 폭을 그대로 둔다.

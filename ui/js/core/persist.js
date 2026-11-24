@@ -101,8 +101,10 @@ for (const [id, v] of Object.entries(readJSON("omp-map-cardui", {}))) {
   for (const [t, f] of Object.entries(v.fit || {})) {
     if (f && Number.isFinite(f.w) && Number.isFinite(f.h)) fit[t] = { w: Math.max(0, f.w), h: Math.max(0, f.h) };
   }
-  const order = { main: strList(v.order && v.order.main), side: strList(v.order && v.order.side) };
-  CARD_UI.set(id, { collapsed, order, h, fit });
+  const order = Object.fromEntries(["main", "side", "edit", "left"].map((slot) => [slot, strList(v.order?.[slot])]));
+  const slots = Object.fromEntries(Object.entries(v.slots || {}).filter(([,slot]) => ["main","edit","side","left"].includes(slot)));
+  const split = Number.isFinite(v.split) ? Math.max(25, Math.min(80, v.split)) : undefined;
+  CARD_UI.set(id, { collapsed, order, h, fit, slots, split });
 }
 
 const saveCardUI = () => writeJSON("omp-map-cardui", Object.fromEntries(CARD_UI));

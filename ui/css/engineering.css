@@ -1,0 +1,15 @@
+:root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }
+body { margin: 0; }
+header { display: flex; align-items: center; gap: 2rem; padding: .8rem 1.5rem; border-bottom: 1px solid GrayText; }
+nav { display: flex; align-items: center; gap: .8rem; }
+nav button[aria-pressed="true"] { font-weight: 700; }
+main { max-width: 56rem; margin: auto; padding: 0 1.5rem 3rem; }
+section { border-top: 1px solid GrayText; margin: 1.4rem 0; padding-top: .8rem; }
+form { display: grid; gap: .7rem; margin: .6rem 0 1.1rem; }
+form > button, form > div { justify-self: start; }
+label { display: grid; gap: .2rem; }
+input, textarea, select, button { font: inherit; padding: .35em .55em; }
+textarea { font-family: ui-monospace, monospace; resize: vertical; }
+#status { min-height: 1.5em; color: LinkText; }
+#actions { display: flex; gap: .5rem; margin: 1em 0; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }

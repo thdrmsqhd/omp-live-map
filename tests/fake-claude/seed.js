@@ -7,7 +7,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { seedSession, sessionFile } = require("./fake-claude");
 
-const home = process.env.USERPROFILE || process.env.HOME || os.homedir();
+const home = process.env.FAKE_CLAUDE_HOME || process.env.USERPROFILE || process.env.HOME || os.homedir();
 const cwd = process.env.FAKE_CLAUDE_SEED_CWD || "C:\\workspace\\omp-live-map";
 const id = crypto.randomUUID();
 const file = seedSession(cwd, id, "가짜 Claude 기록", "이 세션의 대화 기록이 카드에 보이는지 확인해 주세요.",

@@ -2,16 +2,20 @@
 
 // 큰 카드 열기. 이미 열려 있으면 닫지 않고 그 카드로 화면을 옮긴다(닫기는 toggleCard·카드 − 버튼·목록 ✕).
 function openNode(id) {
+  if (typeof mapMode !== "undefined" && mapMode === "overview") setMapMode("workspace", false);
   const was = openIds.has(id);
   if (!was) {
     openIds.add(id);
     if (typeof dockOnOpen === "function") dockOnOpen(id);   // 메인을 다시 열면 그 세션 서브를 다시 붙인다
     saveOpenCards();
   }
+  activateCard(id);
   renderMap(false, true);
   if (!openIds.has(id)) return;
-  if (was) { focusCluster(id); flashCard(id); }
-  else revealCard(id);
+  if (mapMode === "map") {
+    if (was) { focusCluster(id); flashCard(id); }
+    else revealCard(id);
+  }
   loadBg(id);
 }
 
@@ -51,8 +55,10 @@ function flashCard(id) {
 
 // 카드 하나를 화면 가운데로 가져와 잠깐 강조한다(세션 컨텍스트 목록·알림에서 이동). 닫혀 있으면 연다.
 function focusCard(id) {
-  if (typeof attnClear === "function") attnClear(id);   // 카드로 이동해 보면 주의는 끝난다
+  activateCard(id);
   if (!openIds.has(id)) { if (nodeInData(id)) openNode(id); return; }
+  if (mapMode === "overview") { setMapMode("workspace"); return; }
+  if (mapMode === "workspace") { renderMap(false, true); return; }
   const g = SATS.get(id);
   if (!g) return;
   const st = $("stage").getBoundingClientRect();

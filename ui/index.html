@@ -19,11 +19,18 @@
   <link rel="stylesheet" href="css/attention.css">
   <link rel="stylesheet" href="css/editor.css">
   <link rel="stylesheet" href="css/explorer.css">
+  <link rel="stylesheet" href="css/monitor.css">
+  <link rel="stylesheet" href="css/card-readability.css">
+  <link rel="stylesheet" href="css/chat-ux.css">
+  <link rel="stylesheet" href="css/prompt-composer.css">
 </head>
 <body>
 <div id="app">
   <div id="topbar">
     <span class="brand"><b>omp</b> / live map</span>
+    <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">관제</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">Live Map</button></nav>
+    <button id="new-session-action" title="새 세션">＋ 세션</button>
+    <button id="power-save" title="화면 밖 카드의 무거운 블록을 해제합니다">절전</button>
     <div class="filters" id="filters">
       <button data-f="live" class="on" title="실행 중이거나 30분 안에 활동한 세션">활성</button>
       <button data-f="2h">2시간</button>
@@ -37,8 +44,9 @@
     <button id="unhide" title="숨긴 세션 복원" hidden></button>
     <button id="doneSubs" title="완료된 서브에이전트를 맵과 카드 목록에서 숨김"></button>
     <span id="conn" hidden title="서버와의 실시간 연결이 끊겼습니다. 화면 값은 마지막으로 받은 상태입니다.">연결 끊김 · 다시 연결 중…</span>
+    <span id="globalResources" aria-label="호스트 자원"></span>
     <span id="spath"></span>
-    <div class="zoom">
+    <div class="zoom"><select id="layout-preset" aria-label="배치 프리셋"><option value="grid">격자</option><option value="horizontal">가로</option><option value="vertical">세로</option></select><button id="layout-apply">정렬</button><button id="layout-save">배치 저장</button><button id="layout-restore">복원</button><button id="layout-undo">Undo</button><button id="layout-redo">Redo</button>
       <button id="zout" title="축소 (-)">−</button><button id="zk" title="현재 배율 · 클릭: 100% (1)">100%</button><button id="zin" title="확대 (+)">+</button>
       <button id="zfit" title="전체 보기 (0)">fit</button>
     </div>
@@ -52,12 +60,29 @@
       <div id="slGrip" title="끌어서 폭 조절"></div>
     </aside>
     <div id="stage">
+      <div id="workspace-empty" hidden>왼쪽 세션 목록에서 작업할 카드를 선택하세요.</div>
       <div id="wrapper">
         <svg id="edges"></svg>
         <svg id="guides"></svg>
         <div id="nodes"></div>
       </div>
     </div>
+    <section id="overview" hidden aria-label="프로젝트 관제">
+      <div class="overview-toolbar">
+        <h1>프로젝트 관제 <small id="mon-total"></small></h1><button id="mon-sidebar" aria-pressed="false">세션 목록</button><label class="mon-search"><input id="mon-search" type="search" placeholder="세션·프로젝트 검색" aria-label="관제 검색"></label><button id="mon-settings" aria-expanded="false">설정</button>
+        <label>표시 밀도 <select id="overview-density"><option value="compact">Compact</option><option value="standard">Standard</option><option value="detailed">Detailed</option></select></label>
+        <label>정렬 <select id="overview-sort"><option value="stable">고정 순서</option><option value="attention">주의 우선</option><option value="memory">메모리</option><option value="recent">최근 활동</option><option value="name">이름</option></select></label>
+        <div id="mon-settings-panel" hidden><label title="세션에 귀속된 프로세스의 메모리 경고 기준">RAM 경고(MB) <input id="overview-memory" type="number" min="128" max="1048576" step="128"></label>
+        <label title="해제된 브라우저 블록은 다시 열 때 페이지를 재로드합니다"><input id="suspend-frames" type="checkbox">비활성 브라우저 해제</label>
+        </div>
+      </div>
+      <div id="mon-summary" aria-label="관제 상태 필터"></div>
+      <div id="mon-batch"><button id="overview-select-all">표시 항목 선택</button><span id="mon-selected"></span><button id="overview-close-selected">카드 닫기</button><button id="overview-pin-selected">세션 고정</button><button id="mon-clear">선택 해제</button>
+      </div>
+      <div id="overview-attention" aria-label="주의 필요"></div>
+      <div id="overview-projects"></div>
+      <p id="overview-source" role="status"></p>
+    </section>
   </div>
 </div>
 
@@ -71,6 +96,8 @@
   <script src="js/model/layout.js"></script>
   <script src="js/model/route.js"></script>
   <script src="js/model/harness.js"></script>
+  <script src="js/model/monitor.js"></script>
+  <script src="js/viewmodel/prompt-composer.js"></script>
   <script src="js/viewmodel/map.js"></script>
   <script src="js/viewmodel/store.js"></script>
   <script src="js/viewmodel/term.js"></script>
@@ -91,6 +118,7 @@
   <script src="js/view/job-card.js"></script>
   <script src="js/view/card-compact.js"></script>
   <script src="js/view/spark-hover.js"></script>
+  <script src="js/view/card-controller.js"></script>
   <script src="js/view/panel.js"></script>
   <script src="js/view/sub-dock.js"></script>
   <script src="js/view/blocks.js"></script>
@@ -102,6 +130,7 @@
   <script src="js/view/attach.js"></script>
   <script src="js/view/plink.js"></script>
   <script src="js/view/chat-agents.js"></script>
+  <script src="js/view/prompt-composer.js"></script>
   <script src="js/view/block-chat.js"></script>
   <script src="js/view/block-term.js"></script>
   <script src="js/view/block-bg.js"></script>
@@ -123,6 +152,7 @@
   <script src="js/view/stage-input.js"></script>
   <script src="js/view/stage-layout-history.js"></script>
   <script src="js/view/stage-cluster-move.js"></script>
+  <script src="js/view/layout-presets.js"></script>
   <script src="js/view/stage-card-drag.js"></script>
   <script src="js/view/stage-card-resize.js"></script>
   <script src="js/view/minimap.js"></script>
@@ -136,8 +166,13 @@
   <script src="js/view/topbar.js"></script>
   <script src="js/view/attn-toast.js"></script>
   <script src="js/view/attn-card.js"></script>
+  <script src="js/view/patch-card-body.js"></script>
   <script src="js/view/patch-nodes.js"></script>
+  <script src="js/view/card-virtualization.js"></script>
   <script src="js/view/render-map.js"></script>
+  <script src="js/view/monitor.js"></script>
+  <script src="js/view/monitor-projects.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/engineering-link.js"></script>
 </body>
 </html>

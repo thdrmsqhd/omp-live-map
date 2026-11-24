@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Engineering · OMP Live Map</title>
+  <link rel="stylesheet" href="/css/engineering.css">
+  <link rel="stylesheet" href="/css/workflow.css">
+  <script type="module" src="/js/engineering.js"></script>
+</head>
+<body>
+  <header>
+    <strong>OMP Live Map</strong>
+    <nav aria-label="워크스페이스">
+      <button id="design-nav" aria-pressed="true">설계</button>
+      <button id="workflow-nav" aria-pressed="false">Workflow</button>
+      <button id="sdlc-nav" aria-pressed="false">개발 Task</button>
+      <button id="execution-nav" aria-pressed="false">실행</button>
+      <a href="/">관측</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Engineering</h1>
+    <p id="status" role="status"></p>
+    <p id="runtime-status" role="status"></p>
+    <button id="prepare-runtime" type="button">실행 환경 준비</button>
+    <button id="check-runtime" type="button">인증 다시 확인</button>
+    <button id="console-login" type="button" disabled>Claude Console 로그인</button>
+    <p id="console-login-status" role="status"></p>
+    <form id="provider-key" method="post">
+      <label>Anthropic API 키 <input name="value" type="password" autocomplete="off" required></label>
+      <div><button>키 저장</button> <button id="remove-key" type="button">키 삭제</button></div>
+    </form>
+    <section>
+      <h2>프로젝트</h2>
+      <form id="project-form">
+        <label>이름 <input name="name" required></label>
+        <label>로컬 Git 루트 <input name="root" placeholder="C:\workspace\project" required></label>
+        <label>기준 브랜치 <input name="branch" placeholder="현재 브랜치"></label>
+        <button>등록 또는 수정</button>
+      </form>
+      <label>프로젝트 선택 <select id="project"></select></label>
+      <button id="archive" type="button">보관</button>
+    </section>
+    <section id="design">
+      <h2>정의 편집</h2>
+      <form id="definition-form">
+        <label>종류 <select id="kind" name="kind">
+          <option value="model">모델</option><option value="harness">하네스</option><option value="loop">Loop</option>
+        </select></label>
+        <label>기존 정의 <select id="definition"></select></label>
+        <label>저장 버전 <select id="definition-version"></select></label>
+        <p id="harness-assets" hidden>AGENTS.md와 Skills는 실행 지시에 반영됩니다. MCP와 Hooks는 설정 초안으로 저장됩니다.</p>
+        <pre id="definition-diff" aria-label="현재 버전과의 변경 내역" hidden></pre>
+        <label>정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
+        <div><button>버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
+      </form>
+    </section>
+    <section id="workflow" hidden>
+      <h2>Workflow Graph</h2>
+      <div class="workflow-controls">
+        <label>Workflow <select id="workflow-list"></select></label>
+        <label>이름 <input id="workflow-name" maxlength="240"></label>
+        <button id="workflow-plan" type="button">실행 계획 확인</button>
+        <button id="workflow-save" type="button">Workflow 저장</button>
+      </div>
+      <p id="workflow-status" role="status"></p>
+      <details><summary>기본 제공 Workflow</summary>
+        <form id="workflow-preset-form" class="workflow-controls">
+          <label>템플릿 <select name="preset" required></select></label>
+          <label>저장할 이름 <input name="name" maxlength="240"></label>
+          <label>설계 / 문서 하네스 <select name="author"></select></label>
+          <label>리뷰 하네스 <select name="reviewer"></select></label>
+          <label>개발 Loop <select name="loop"></select></label>
+          <button>템플릿으로 생성</button>
+        </form>
+      </details>
+      <div class="workflow-controls">
+        <button id="workflow-export" type="button">템플릿 내보내기</button>
+        <label>템플릿 파일 <input id="workflow-import-file" type="file" accept=".json,application/json"></label>
+        <label>가져올 이름 <input id="workflow-import-name" maxlength="240"></label>
+        <button id="workflow-import" type="button">템플릿 가져오기</button>
+      </div>
+      <div class="workflow-controls">
+        <label>노드 종류 <select id="workflow-type"></select></label>
+        <button id="workflow-add" type="button">노드 추가</button>
+        <label>출발 노드 <select id="workflow-from"></select></label>
+        <label>출력 포트 <select id="workflow-port"></select></label>
+        <label>대상 노드 <select id="workflow-to"></select></label>
+        <button id="workflow-connect" type="button">연결</button>
+      </div>
+      <div class="workflow-scroll" aria-label="Workflow 캔버스">
+        <div id="workflow-canvas"><svg id="workflow-lines" aria-hidden="true"></svg><div id="workflow-nodes"></div></div>
+      </div>
+      <div class="workflow-details">
+        <form id="workflow-node-form" hidden>
+          <label>노드 이름 <input name="label" maxlength="240" required></label>
+          <label>설정 및 입출력 <textarea name="settings" rows="7" spellcheck="false" required></textarea></label>
+          <div><button>노드 적용</button> <button id="workflow-delete" type="button">노드 삭제</button></div>
+        </form>
+        <div><h3>연결</h3><ul id="workflow-edges"></ul></div>
+        <div><h3>실행 계획</h3><ol id="workflow-order"></ol></div>
+      </div>
+      <h3>Workflow 실행</h3>
+      <form id="workflow-run-form" class="workflow-controls">
+        <label>실행 제목 <input name="title" maxlength="240" required></label>
+        <label>최대 시간(분) <input name="minutes" type="number" min="1" max="60" value="20" required></label>
+        <label>예산(센트) <input name="budget" type="number" min="0" max="100000" value="300" required></label>
+        <button>저장된 버전 실행</button>
+      </form>
+      <label>Workflow 실행 이력 <select id="workflow-run-list"></select></label>
+      <div id="workflow-run-actions" hidden>
+        <button type="button" data-action="pause">일시정지</button>
+        <button type="button" data-action="resume">재개</button>
+        <button type="button" data-action="cancel">취소</button>
+        <button type="button" id="workflow-review">변경사항 보기</button>
+      </div>
+      <p id="workflow-run-status" role="status"></p>
+      <pre id="workflow-review-output" hidden></pre>
+      <form id="workflow-approval" hidden>
+        <label>승인 메모 또는 거절 사유 <input name="reason" maxlength="2000"></label>
+        <div><button name="decision" value="approved">승인</button> <button name="decision" value="rejected">거절</button></div>
+      </form>
+      <ol id="workflow-run-nodes"></ol>
+      <details><summary>실행 타임라인</summary><ol id="workflow-timeline"></ol></details>
+      <details id="workflow-delivery" hidden><summary>GitHub PR 및 CI</summary>
+        <p>작업 Worktree에서 검토한 커밋을 만들고 GitHub의 작업 브랜치에 푸시한 뒤 승인하세요.</p>
+        <form id="workflow-delivery-form" class="workflow-controls">
+          <label>GitHub 작업 브랜치 <input name="branch" maxlength="200" required></label>
+          <button>현재 커밋 승인</button>
+        </form>
+        <div id="workflow-delivery-actions">
+          <button type="button" data-delivery="pr">GitHub PR 생성 또는 연결</button>
+          <button type="button" data-delivery="ci">CI 확인</button>
+          <button type="button" data-delivery="release">릴리스 후보 승인</button>
+        </div>
+        <p id="workflow-delivery-status" role="status"></p>
+        <form id="workflow-staging-form" class="workflow-controls" hidden>
+          <label>배포 환경 <select name="environment"><option value="test">test</option><option value="staging">staging</option></select></label>
+          <button>테스트 배포 승인 및 요청</button>
+        </form>
+        <p id="workflow-staging-status" role="status"></p>
+      </details>
+    </section>
+    <section id="sdlc" hidden>
+      <h2>개발 Task</h2>
+      <details><summary>칸반 단계 설정</summary>
+        <form id="sdlc-stage-form" class="workflow-controls">
+          <label>단계 <select name="status"></select></label>
+          <label>표시 이름 <input name="label" required maxlength="64"></label>
+          <label>순서 <input name="position" type="number" min="0" max="20" required></label>
+          <label>단계 기본 Workflow <select name="workflow"></select></label>
+          <button>단계 저장</button>
+        </form>
+      </details>
+      <form id="sdlc-form">
+        <label>업무 제목 <input name="title" maxlength="240" required></label>
+        <label>요구사항 <textarea name="instruction" rows="4" maxlength="12000" required></textarea></label>
+        <label>Workflow 버전 <select name="workflow" required></select></label>
+        <div><button>Task 저장</button> <button type="button" id="sdlc-new">새 Task</button></div>
+      </form>
+      <div class="workflow-controls">
+        <label>실행 시간 한도(분) <input id="sdlc-minutes" type="number" min="1" max="60" value="20"></label>
+        <label>실행 예산(센트) <input id="sdlc-budget" type="number" min="0" max="100000" value="300"></label>
+      </div>
+      <div id="sdlc-board" aria-label="개발 Task 칸반"></div>
+      <section><h3>승인 대기함</h3><ul id="sdlc-inbox"></ul></section>
+      <section>
+        <h3>프로젝트 실행 지표</h3>
+        <label>집계 기간 <select id="sdlc-period"><option value="7">최근 7일</option><option value="30" selected>최근 30일</option><option value="90">최근 90일</option></select></label>
+        <div id="sdlc-metrics"></div>
+      </section>
+      <form id="project-budget-form" class="workflow-controls">
+        <label>프로젝트 예산(센트) <input name="cap" type="number" min="0" max="1000000" required></label>
+        <label>예산 기간(일) <input name="days" type="number" min="1" max="90" value="30" required></label>
+        <div><button>프로젝트 예산 저장</button> <button type="button" id="project-budget-remove">예산 제한 해제</button></div>
+        <p id="project-budget-status" role="status"></p>
+      </form>
+    </section>
+    <section id="execution" hidden>
+      <h2>Loop 실행</h2>
+      <form id="run-form">
+        <label>Loop <select name="definition" id="loop" required></select></label>
+        <label>작업 제목 <input name="title" required></label>
+        <label>작업 지시 <textarea name="instruction" required rows="4"></textarea></label>
+        <button>실행</button>
+      </form>
+      <label>실행 이력 <select id="runs"></select></label>
+      <div id="actions">
+        <button type="button" data-operation="pause">일시정지</button>
+        <button type="button" data-operation="resume">재개</button>
+        <button type="button" data-operation="cancel">취소</button>
+      </div>
+      <p id="run-summary"></p>
+      <ol id="attempts"></ol>
+    </section>
+  </main>
+</body>
+</html>

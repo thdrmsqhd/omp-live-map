@@ -32,14 +32,18 @@ function cancelCardDrag() {
 }
 
 function startCardDrag(e) {
-  if (e.button !== 0 || spaceDown) return;
+  if (mapMode !== "map" || e.button !== 0 || spaceDown) return;
   const el = e.target.closest(".node");
   if (blockPanStart(e) || e.target.closest(CARD_INTERACTIVE)) return;   // 블록 본문은 맵 이동(stage-input)
   const mode = dragModeOf(el);
   const c = dragClusterAt(e.target, el);
   if (mode === "cluster" && !c) return;
   e.preventDefault();
-  if (c) {
+  if (mode === "big") {
+    const id = el.dataset.id;
+    if (e.shiftKey) { if (GROUP_CARDS.has(id)) GROUP_CARDS.delete(id); else GROUP_CARDS.add(id); paintGroupCards(); return; }
+    if (!GROUP_CARDS.has(id)) { GROUP_CARDS.clear(); GROUP_CARDS.add(id); paintGroupCards(); }
+  } else if (c) {
     const key = clusterKeyOf(c);
     if (e.shiftKey) {
       if (SELECTED.has(key)) SELECTED.delete(key); else SELECTED.add(key);
@@ -52,9 +56,11 @@ function startCardDrag(e) {
   const d = { mode, id, owner: c, sx: e.clientX, sy: e.clientY, moved: false, dx: 0, dy: 0,
     grip: el || e.target.closest(".cluster .ch") };
   if (mode === "big") {
-    const docked = typeof dockDragExtras === "function" && id ? dockDragExtras(id) : [];
-    d.items = d.restore = [itemOf(el), ...docked];
-    d.rect = SATS.get(id);
+    d.ids = [...GROUP_CARDS].filter(x => SATS.has(x));
+    const all = new Map();
+    for (const x of d.ids) { const root = ELS.get(x); if (root) all.set(root, itemOf(root)); for (const extra of dockDragExtras(x)) all.set(extra.el, extra); }
+    d.items = d.restore = [...all.values()];
+    d.rect = boundsOf(d.ids.map(x => SATS.get(x)));
     d.skip = () => false;
   } else {
     // 포인터 시작 시 대상을 고정한다. 이동 중 새로 생긴 카드는 합류시키지 않는다.
@@ -80,7 +86,7 @@ function moveCardDrag(e) {
     d.grip.setPointerCapture(e.pointerId);
     d.grip.classList.add("dragging");
     // 첫 유효 이동 직전 상태를 이력으로 잡아 둔다(도킹 서브 자리는 렌더가 메인 옆으로 다시 맞춘다).
-    d.snap = layoutSnapshot(d.mode === "big" ? { big: [d.id] } : clusterKeys(d.list));
+    d.snap = layoutSnapshot(d.mode === "big" ? { big: d.ids, dock: d.ids } : clusterKeys(d.list));
   }
   const snap = snapDelta(d.rect, dx, dy, d.skip);
   d.dx = snap.dx;
@@ -102,8 +108,7 @@ function finishCardDrag() {
   if (!d.moved) return;
   pushHistory(d.snap);
   if (d.mode === "big") {
-    BIGPOS.set(d.id, { x: d.rect.x + d.dx, y: d.rect.y + d.dy, w: d.rect.w, h: d.rect.h });
-    if (typeof dockOnMoved === "function") dockOnMoved(d.id);   // 서브를 직접 끌면 도킹 해제(연결선은 유지)
+    for (const id of d.ids) { const b = SATS.get(id); if (!b) continue; BIGPOS.set(id, {...b,x:b.x+d.dx,y:b.y+d.dy}); if (!d.ids.includes(SUBDOCK.get(id))) dockOnMoved(id); }   // 서브를 직접 끌면 도킹 해제(연결선은 유지)
   } else moveClusters(d.list, d.dx, d.dy);
   saveLocals();
   saveManual();

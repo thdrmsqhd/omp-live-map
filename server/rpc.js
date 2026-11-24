@@ -21,10 +21,10 @@ function killTree(child) {
 
 // omp 를 띄운다. resume(세션 파일 경로)을 주면 그 세션을 이어 붙인다.
 // 반환: { child, send(cmd) → 응답 프레임 Promise, onEvent(fn) 모든 프레임 구독, close() }
-function open({ cwd, resume }) {
-  const args = ["--mode", "rpc-ui", "--append-system-prompt", MAIN_PROMPT];
+function open({ cwd, resume, launch = spawn, terminate = killTree, mainPrompt = MAIN_PROMPT }) {
+  const args = ["--mode", "rpc-ui", "--append-system-prompt", mainPrompt];
   if (resume) args.push("-r", resume);
-  const child = spawn("omp", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const child = launch("omp", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   const pending = new Map(); // 명령 id -> { resolve, reject, timer }
   const listeners = [];
   let seq = 0, buf = "", dead = null, readyOk, readyFail;
@@ -104,7 +104,7 @@ function open({ cwd, resume }) {
   const close = () => {
     if (dead) return;
     try { child.stdin.end(); } catch {}
-    const timer = setTimeout(() => killTree(child), KILL_MS);
+    const timer = setTimeout(() => terminate(child), KILL_MS);
     child.once("close", () => clearTimeout(timer));
   };
 

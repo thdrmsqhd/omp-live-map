@@ -94,22 +94,29 @@ function track(file, cutoff) {
 }
 
 // ~/.claude/projects/<슬러그>/*.jsonl 만 읽는다(중첩 폴더의 sidechain 파일은 쓰지 않는다).
-function scan() {
+function* scanSteps() {
   const cutoff = Date.now() - Math.max(HOURS, 24) * 3_600_000;
   let dirs;
   try { dirs = fs.readdirSync(CLAUDE_PROJECTS, { withFileTypes: true }); } catch { return; }
+  yield;
   for (const d of dirs) {
     if (!d.isDirectory()) continue;
     let names;
     try { names = fs.readdirSync(path.join(CLAUDE_PROJECTS, d.name), { withFileTypes: true }); } catch { continue; }
+    yield;
     for (const ent of names) {
       if (!ent.isFile() || !ent.name.endsWith(".jsonl")) continue;
       const file = path.join(CLAUDE_PROJECTS, d.name, ent.name);
-      track(file, cutoff);
+      try { track(file, cutoff); } catch { /* file rotated mid-read */ }
       const sessionId = path.basename(file, ".jsonl");
       require("./claude-sub").scanDir(path.join(CLAUDE_PROJECTS, d.name, sessionId, "subagents"), sessionId, file, cutoff);
+      yield;
     }
   }
+}
+
+function scan() {
+  for (const step of scanSteps()) { /* preserve synchronous callers */ }
 }
 
 function states() {
@@ -121,5 +128,5 @@ function stateOf(file) {
   return rec ? rec.st : null;
 }
 
-module.exports = { scan, states, stateOf, newState, ingestLine, pendingOf: pending.of, beginPending: pending.begin,
+module.exports = { scan, scanSteps, states, stateOf, newState, ingestLine, pendingOf: pending.of, beginPending: pending.begin,
   slug, dirOf, fileFor };

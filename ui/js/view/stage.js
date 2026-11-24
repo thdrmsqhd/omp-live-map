@@ -5,6 +5,7 @@ function applyView() {
   $("wrapper").style.transform = `translate(${Math.round(view.x)}px,${Math.round(view.y)}px) scale(${view.k})`;
   $("zk").textContent = Math.round(view.k * 100) + "%";
   paintMinimap();
+  if (typeof queueCardVisibility === "function") queueCardVisibility();
 }
 
 function stopMomentum() {

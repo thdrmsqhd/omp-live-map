@@ -3,9 +3,12 @@
 const reEscape = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // 터미널 출력 HTML. 검색어가 있으면 일치 부분을 <mark> 로 감싸고 개수를 센다.
+const TERM_PAGE = 80;
 function termBody(st) {
   const q = st.q || "";
-  if (!q) return { html: st.lines.map((l) => `<div class="${l.c || ""}">${esc(l.t)}</div>`).join(""), hits: 0 };
+  const end = Math.max(0,st.lines.length-Math.min(st.historyOffset||0,Math.max(0,st.lines.length-1)));
+  const start = Math.max(0,end-TERM_PAGE);
+  if (!q) return { start, end, html: st.lines.slice(start,end).map((l) => `<div class="${l.c || ""}">${esc(l.t)}</div>`).join(""), hits: 0 };
   const re = new RegExp(reEscape(q), "gi");
   let hits = 0;
   const html = st.lines.map((l) => {
@@ -33,11 +36,11 @@ function paintTerm(id, stick) {
   const el = ELS.get(id);
   const st = TERM.get(id);
   const pre = el && el.querySelector(".tout");
-  if (!pre || !st) return;
+  if (!pre || !st || !cardContentVisible(id)) return;
   const top = pre.scrollTop;
   const atBottom = top + pre.clientHeight >= pre.scrollHeight - 8;
-  const { html, hits } = termBody(st);
-  pre.innerHTML = html;
+  const { html, hits, start, end } = termBody(st);
+  if (pre.__html !== html) { pre.innerHTML = html; pre.__html = html; }
   if (st.q) {
     // 검색 중에는 하단으로 끌고 가지 않는다. 검색어 변경·Enter 때만 현재 일치로 이동.
     if (!((st.qi || 0) < hits)) st.qi = 0;
@@ -48,6 +51,8 @@ function paintTerm(id, stick) {
   } else {
     pre.scrollTop = stick || atBottom ? pre.scrollHeight : top;
   }
+  const nav=el.querySelector(".term-history-nav");
+  if(nav){nav.hidden=!!st.q;nav.querySelector("[data-term-older]").disabled=!start;nav.querySelector("[data-term-latest]").disabled=!st.historyOffset;nav.querySelector("span").textContent=(end?start+1:0)+"–"+(end||0)+" / "+st.lines.length;}
   const cnt = el.querySelector(".term .tqn");
   if (cnt) cnt.textContent = termCount(st, hits);
   const cwdEl = el.querySelector(".term .cwd");
@@ -56,13 +61,14 @@ function paintTerm(id, stick) {
 
 function termBlock(n) {
   const st = termState(n);
-  const { html, hits } = termBody(st);
+  const { html, hits, start, end } = termBody(st);
   return `<div class="term">
     <div class="tinfo"><span>terminal</span><span>·</span><span>Git Bash</span>
       <span class="cwd" title="클릭: 경로 복사">${esc(st.cwd || "-")}</span>
       <input class="tq" autocomplete="off" spellcheck="false" placeholder="검색" value="${esc(st.q || "")}">
       <span class="tqn">${termCount(st, hits)}</span>
       <button data-clear="1" style="padding:0 6px;font-size:10px">clear</button></div>
+    <div class="term-history-nav"${st.q?" hidden":""}><button data-term-older="1"${start?"":" disabled"}>이전 출력</button><span>${end?start+1:0}–${end||0} / ${st.lines.length}</span><button data-term-latest="1"${st.historyOffset?"":" disabled"}>최신</button></div>
     <pre class="tout">${html}</pre>
     <div class="tline"><span>$</span><input class="tin" autocomplete="off" spellcheck="false" placeholder="명령 입력 후 Enter (Shift+Enter: 백그라운드, ↑↓: 기록)"></div>
   </div>`;
@@ -121,7 +127,9 @@ function mountTerm(box, n) {
   });
   const cwd = box.querySelector(".cwd");
   cwd.addEventListener("click", () => copyText(st.cwd || "", cwd));
-  box.querySelector("[data-clear]").addEventListener("click", () => { st.lines = []; paintTerm(id); });
+  box.querySelector("[data-clear]").addEventListener("click", () => { st.lines = []; st.historyOffset=0; paintTerm(id); });
+  box.querySelector("[data-term-older]").onclick=()=>{const page=termBody(st);if(page.start){st.historyOffset=st.lines.length-page.start;paintTerm(id);pre.scrollTop=0;}};
+  box.querySelector("[data-term-latest]").onclick=()=>{st.historyOffset=0;paintTerm(id,true);};
   if (st.q) { st.qJump = true; paintTerm(id); } else pre.scrollTop = pre.scrollHeight;
 }
 

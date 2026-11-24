@@ -15,7 +15,7 @@ function attachEditor(box, n) {
   if (s.editor) {
     s.editor.layout();
     if (s.focus) s.editor.focus();   // 바디 재생성으로 잃은 포커스(커서는 Monaco 가 유지)
-  }
+  } else if (s.active) void edResume(s);
 }
 
 // 바디가 유지된 채 스냅샷만 바뀐 경우에는 편집기 DOM·커서·포커스를 건드리지 않는다(paint 없음).

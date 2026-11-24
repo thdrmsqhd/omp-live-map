@@ -15,6 +15,9 @@
 // 상태·순서·높이는 인스턴스 키로 저장하고, 정의 조회는 기본 타입(blockBase)으로 한다.
 
 const BLOCKS = new Map();
+const BLOCK_FOCUS = new Map();
+const BLOCK_TITLES = { chat: "채팅", context: "컨텍스트", terminal: "터미널", bg: "백그라운드 잡", editor: "코드 편집기", browser: "브라우저", db: "DB 조회", memo: "메모" };
+const BLOCK_SLOTS = { main: "중앙", edit: "오른쪽", side: "보조", left: "왼쪽" };
 
 // 카드당 허용 인스턴스 수. 여기 없는 타입은 1개.
 const BLOCK_MAX = { browser: 2 };
@@ -32,8 +35,8 @@ function registerBlock(def) {
 // 서브에이전트 카드는 chat 만 기본: 터미널 등은 블록 메뉴로 직접 더한다.
 // editor 블록(VS Code형: 탐색기+탭+Monaco)이 파일 트리를 대신한다. 서브에이전트 카드에는 넣지 않는다.
 const BLOCK_DEFAULTS = (n) => (n.kind === "sub" ? ["chat"]
-  : n.kind === "main" ? ["editor", "chat", "terminal"]
-  : n.kind === "local" ? ["editor", "terminal"] : ["terminal"]);
+  : n.kind === "main" ? ["chat", "terminal"]
+  : n.kind === "local" ? ["terminal"] : ["terminal"]);
 
 function cardBlockTypes(n) {
   const base = BLOCK_DEFAULTS(n);
@@ -64,15 +67,19 @@ function cardBlockTypes(n) {
 
 function cardUI(nodeId) {
   let u = CARD_UI.get(nodeId);
-  if (!u) { u = { collapsed: {}, order: { main: [], side: [] }, h: {}, fit: {} }; CARD_UI.set(nodeId, u); }
+  if (!u) { u = { collapsed: {}, order: { main: [], side: [], edit: [], left: [] }, h: {}, fit: {} }; CARD_UI.set(nodeId, u); }
   if (!u.fit) u.fit = {};
+  if (!u.slots) u.slots = {};
+  for (const slot of Object.keys(BLOCK_SLOTS)) if (!Array.isArray(u.order[slot])) u.order[slot]=[];
   return u;
 }
 
 // 한 슬롯에 그릴 블록을 저장된 순서대로 돌려준다. 순서에 없는 블록은 기본 순서대로 뒤에 붙는다.
 // 반환: [{ b: 정의, key: 인스턴스 키 }]
 // 블록이 실제로 놓이는 슬롯. 편집기는 대화(chat)가 있는 카드에서만 대화 오른쪽 열(edit)에 놓이고, 없으면 main 에 쌓인다.
-const slotOf = (n, b) => {
+const slotOf = (n, b, key = b.type) => {
+  const override = CARD_UI.get(n.id)?.slots?.[key];
+  if (Object.hasOwn(BLOCK_SLOTS, override)) return override;
   const hasChat = cardBlockTypes(n).includes("chat");
   return b.type === "editor" && hasChat ? "edit" : b.type === "browser" && hasChat ? "left" : b.slot;
 };
@@ -83,7 +90,7 @@ function slotBlocks(n, slot) {
   const rank = (t, i) => { const k = order.indexOf(t); return k >= 0 ? k : order.length + i; };
   return cardBlockTypes(n)
     .map((key) => ({ b: BLOCKS.get(blockBase(key)), key }))
-    .filter((x) => x.b && slotOf(n, x.b) === slot)
+    .filter((x) => x.b && slotOf(n, x.b, x.key) === slot)
     .map((x, i) => ({ ...x, r: rank(x.key, i) }))
     .sort((a, z) => a.r - z.r)
     .map(({ b, key }) => ({ b, key }));
@@ -108,10 +115,18 @@ function blockShell(n, b, key, ui) {
   const h = ui && ui.h[key];
   const style = collapsed ? "flex:0 0 auto" : h ? `flex:0 0 auto;height:${h}px` : `flex:${b.flex ?? 1}`;
   const cls = "blk" + (collapsed ? " collapsed" : h ? " sized" : "");
-  return `<div class="${cls}" data-blk="${base}" data-bkey="${k}" data-slot="${esc(slotOf(n, b))}" style="${style}">
-    <div class="bctl"><button class="bgrip" data-bgrip="${k}" title="끌어서 순서 변경">⋮⋮</button><button class="bchev" data-bchev="${k}" title="${collapsed ? "펼치기" : "접기"}">${collapsed ? "▸" : "▾"}</button></div>
+  const slot = slotOf(n, b, key);
+  const name = (BLOCK_TITLES[b.type] || b.type) + (key.includes("#") ? " " + key.split("#")[1] : "");
+  const options = Object.entries(BLOCK_SLOTS).map(([v, label]) => `<option value="${v}"${slot === v ? " selected" : ""}>${label}</option>`).join("");
+  return `<div class="${cls}" data-blk="${base}" data-bkey="${k}" data-slot="${esc(slot)}" style="${style}">
+    <div class="bheader"><button class="bgrip" data-bgrip="${k}" title="블록 이동" aria-label="블록 이동">⋮⋮</button><strong>${esc(name)}</strong>
+      <div class="bctl"><select data-bslot="${k}" aria-label="블록 배치">${options}</select>
+      <button data-bmax="${k}" title="집중 보기 / 복원" aria-label="블록 집중 보기">⛶</button>
+      <button class="bchev" data-bchev="${k}" title="${collapsed ? "펼치기" : "접기"}" aria-label="${collapsed ? "펼치기" : "접기"}" aria-expanded="${!collapsed}">${collapsed ? "▸" : "▾"}</button>
+      <button data-bremove="${k}" title="블록 제거" aria-label="블록 제거"${cardBlockTypes(n).length <= 1 ? " disabled" : ""}>✕</button></div>
+    </div>
     ${b.render(n, key)}
-    <button class="bresize" data-bresize="${k}" title="끌어서 높이 조절 · 더블클릭으로 원래대로"></button>
+    <button class="bresize" data-bresize="${k}" title="끌어서 높이 조절 · 더블클릭으로 원래대로" aria-label="블록 높이 조절"></button>
   </div>`;
 }
 
@@ -145,7 +160,29 @@ function toggleBlock(nodeId, key) {
   CARD_BLOCKS.set(nodeId, { add: cur.filter((t) => !base.includes(t)), remove: base.filter((t) => !cur.includes(t)) });
   saveBlocks();
   const def = BLOCKS.get(blockBase(key));
+  if (i >= 0 && BLOCK_FOCUS.get(nodeId) === key) BLOCK_FOCUS.delete(nodeId);
   if (i >= 0 && def && def.onRemove) def.onRemove(nodeId, key);
   renderMap(false, true);
   if (i < 0 && def && def.onAdd) def.onAdd(nodeId, key);
+}
+
+function paintBlockFocus(card) {
+  const body = card.querySelector(":scope > .body");
+  if (!body) return;
+  const selected = BLOCK_FOCUS.get(card.dataset.id);
+  const blocks = [...body.querySelectorAll(".blk[data-bkey]")];
+  const valid = selected && blocks.some((b) => b.dataset.bkey === selected);
+  body.classList.toggle("has-block-focus", !!valid);
+  for (const b of blocks) {
+    b.classList.toggle("block-focused", !!valid && b.dataset.bkey === selected);
+    b.querySelector("[data-bmax]")?.setAttribute("aria-pressed", String(!!valid && b.dataset.bkey === selected));
+  }
+}
+
+// 편집기는 사용자가 명시적으로 요청한 카드에서만 활성화한다.
+function showCardEditor(id){
+  const n=nodeById(id);if(!n||!["main","local"].includes(n.kind))return;
+  if(!cardBlockTypes(n).includes("editor"))toggleBlock(id,"editor");
+  const u=cardUI(id);if(u.collapsed.editor){delete u.collapsed.editor;saveCardUI();}
+  renderMap(false,true);
 }

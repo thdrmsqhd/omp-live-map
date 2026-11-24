@@ -10,7 +10,7 @@ function bindCardResize() {
   let rs = null;
 
   box.addEventListener("pointerdown", (e) => {
-    const grip = e.button === 0 && !spaceDown && e.target.closest(".rsz");
+    const grip = mapMode === "map" && e.button === 0 && !spaceDown && e.target.closest(".rsz");
     if (!grip) return;
     const el = grip.closest(".node.big");
     const id = el && el.dataset.id;
@@ -46,7 +46,23 @@ function bindCardResize() {
     renderMap(false, true);
   };
   box.addEventListener("pointerup", finish);
-  box.addEventListener("pointercancel", finish);
+  const cancel = () => {
+    if (!rs) return;
+    const d = rs;
+    rs = null;
+    DEFER = false;
+    d.el.style.width = d.w + "px";
+    d.el.style.height = d.h + "px";
+    scheduleEdges();
+    renderMap(false, true);
+  };
+  box.addEventListener("pointercancel", cancel);
+  addEventListener("keydown", (e) => {
+    if (!rs || e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    cancel();
+  }, true);
 
   box.addEventListener("dblclick", (e) => {
     const el = e.target.closest(".rsz") && e.target.closest(".node.big");

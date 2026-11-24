@@ -9,29 +9,38 @@ function layoutSnapshot(keys) {
     manual: (keys.manual || []).map((k) => [k, copy(MANUAL[k])]),
     big: (keys.big || []).map((id) => [id, copy(BIGPOS.get(id))]),
     locals: (keys.locals || []).map((id) => LOCALS.find((l) => l.id === id)).filter(Boolean).map((L) => [L.id, L.x, L.y]),
+    dock: (keys.dock || []).map(id => [id, DOCK_FREE.has(id)]),
+    ui: (keys.ui || []).map((id) => [id, CARD_UI.has(id) ? JSON.parse(JSON.stringify(CARD_UI.get(id))) : null]),
   };
 }
 
+const REDO_LAYOUT = [];
 function pushHistory(snap) {
+  REDO_LAYOUT.length = 0;
   HISTORY.push(snap);
   if (HISTORY.length > HIST_MAX) HISTORY.shift();
 }
 
-function undoLayout() {
-  const prev = HISTORY.pop();
-  if (!prev) return false;
+function applyLayoutHistory(prev) {
+  const inverse = layoutSnapshot({manual:prev.manual.map(x=>x[0]),big:prev.big.map(x=>x[0]),locals:prev.locals.map(x=>x[0]),ui:(prev.ui||[]).map(x=>x[0]),dock:(prev.dock||[]).map(x=>x[0])});
+  for (const [id, free] of prev.dock || []) { if (free) DOCK_FREE.add(id); else DOCK_FREE.delete(id); }
+  saveDock();
   for (const [k, v] of prev.manual) if (v) MANUAL[k] = v; else delete MANUAL[k];
   for (const [id, v] of prev.big) if (v) BIGPOS.set(id, v); else BIGPOS.delete(id);
   for (const [id, x, y] of prev.locals) {
     const L = LOCALS.find((l) => l.id === id);
     if (L) { L.x = x; L.y = y; }
   }
+  for (const [id, u] of prev.ui || []) { if (u) CARD_UI.set(id, u); else CARD_UI.delete(id); }
+  saveCardUI();
   saveManual();
   saveLocals();
   saveOpenCards();
   renderMap(false, true);
-  return true;
+  return inverse;
 }
+function undoLayout(){const p=HISTORY.pop();if(!p)return false;REDO_LAYOUT.push(applyLayoutHistory(p));return true;}
+function redoLayout(){const p=REDO_LAYOUT.pop();if(!p)return false;HISTORY.push(applyLayoutHistory(p));return true;}
 
 // 8px(화면 기준) 안에 들어오면 다른 클러스터의 변에 붙는다. r 은 움직이는 사각형(카드 또는 클러스터).
 function snapDelta(r, dx, dy, skip) {

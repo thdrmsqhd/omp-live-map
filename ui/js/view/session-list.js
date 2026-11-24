@@ -45,11 +45,10 @@ function rowHTML({ n, depth }, s) {
   const open = openIds.has(n.id);
   const main = n.kind === "main";
   const name = ALIAS.get(n.id) || (main ? s.title : n.name);
-  const close = main
-    ? `<button class="x danger sl-x" data-slclose="1" title="세션 종료 · 리소스 정리 · 목록에서 제거">✕</button>`
-    : open ? `<button class="x sl-x" data-slclose="1" title="큰 카드 닫기">✕</button>` : "";
+  const close = open ? `<button class="x sl-x" data-slclose="1" title="카드 닫기 (세션 유지)" aria-label="카드 닫기">✕</button>` : "";
+  const menu = `<button class="x sl-menu" data-slmenu="1" title="카드 메뉴" aria-label="카드 메뉴">⋯</button>`;
   return `<div class="sl-row ${n.kind} ${n.status}${open ? " open" : ""}" data-id="${esc(n.id)}" style="padding-left:${8 + depth * 14}px" title="${esc(rowTip(n, s))}">
-    <div class="sl-l1"><i class="dot ${n.status}"></i><span class="nm">${esc(name)}</span>${harnessChip(n)}${askBadge(n.id)}<span class="attn-badge"></span>${subBadge(n)}${close}</div>
+    <div class="sl-l1"><i class="dot ${n.status}"></i><span class="nm">${esc(name)}</span>${harnessChip(n)}${askBadge(n.id)}<span class="attn-badge"></span>${subBadge(n)}${close}${menu}</div>
     ${nowLine(n)}</div>`;
 }
 
@@ -92,16 +91,17 @@ function bindSessionList() {
       if (LIST_DONE.has(key)) LIST_DONE.delete(key); else LIST_DONE.add(key);
       return renderSessionList(filteredSessions());
     }
+    const unpin = e.target.closest("[data-unpin]");
+    if (unpin) { PINNED.delete(decodeURIComponent(unpin.dataset.unpin)); savePinned(); return renderMap(false, true); }
     const row = e.target.closest(".sl-row");
     if (!row) return;
     const id = row.dataset.id;
+    const menu = e.target.closest("[data-slmenu]");
+    if (menu) { const r = menu.getBoundingClientRect(); return openCardMenu(r.left, r.bottom, id); }
     if (e.target.closest("[data-slclose]")) {
-      const n = nodeById(id) || nodeInData(id);
-      if (n && n.kind === "main") return closeSession(id);
       closeCard(id);
       return renderMap(false, true);
     }
-    if (typeof attnClear === "function") attnClear(id);   // 목록에서 눌러 본 세션의 주의는 끝난다
     openNode(id);
   });
   $("slList").addEventListener("contextmenu", (e) => {

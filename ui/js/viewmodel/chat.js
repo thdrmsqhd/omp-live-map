@@ -66,14 +66,19 @@ function commitStream(st, fallback) {
 
 // 서버는 받자마자 ok 를 돌려준다. 답변 확정과 busy 해제는 SSE done(handleChatEvent)이 맡는다. 도는 중이면 추가 지시로 간다.
 // 첨부(st.files)는 함께 보내고, 실패하면 입력창 아래로 되돌린다.
-async function sendChat(id) {
-  if (typeof attnClear === "function") attnClear(id);   // 프롬프트를 보내면 그 카드의 주의는 끝난다
+async function sendChat(id,entryOverride=null) {
   const st = chatState(id);
-  const text = (st.draft || "").trim();
-  const files = st.files;
-  if (!text && !files.length) return;
+  if(st.sending||!promptConnected()||askPending(id))return false;
+  const text = (entryOverride?.text ?? st.draft ?? "").trim();
+  const files = entryOverride?.files || st.files;
+  const priorBusy=st.busy;
+  if (!text && !files.length) return false;
   const bad = attachProblem(files);
-  if (bad) { st.error = bad; st.retry = ""; paintChat(id); return; }
+  if (bad) { st.error = bad; st.retry = ""; paintChat(id); return false; }
+  if(typeof attnClear==="function")attnClear(id);
+  st.sending=true;
+  st.historyOffset=0;st.search="";
+  const search=ELS.get(id)?.querySelector(".chat-search");if(search)search.value="";
   commitStream(st);
   const since = Date.now();
   // 사용자가 붙인 이미지는 보내는 즉시 말풍선에 그린다. 서버 기록이 올라오기 전까지는 blob 미리보기를,
@@ -85,7 +90,8 @@ async function sendChat(id) {
     attach: files.length > 0, images, previews };
   // 모델 변경 안내는 새 턴이 시작되면 끝난 이야기다(도는 중 추가 지시는 같은 턴).
   if (!st.busy) st.modelNote = "";
-  Object.assign(st, { busy: true, draft: "", files: [], error: "", retry: "", lastText: text, since });
+  Object.assign(st, { busy: true, error: "", retry: "", lastText: text, since });
+  if(!entryOverride){st.draft="";st.files=[];}
   st.log.push(entry);
   paintChat(id);
   let out = {};
@@ -95,16 +101,16 @@ async function sendChat(id) {
   } catch (err) {
     out = { ok: false, out: err.message };
   }
-  if (out.ok) { clearAttachments(files, new Set(previews)); return; }
+  st.sending=false;
+  if (out.ok) { clearAttachments(files, new Set(previews)); rememberPrompt(id,text);persistPromptDraft(id,st);paintChat(id); return true; }
   // 전달되지 않은 입력은 대화 목록에서 빼고 입력창에 되돌려 다시 시도할 수 있게 한다.
   const i = st.log.indexOf(entry);
   if (i >= 0) st.log.splice(i, 1);
-  if (!st.draft) st.draft = text;
-  st.files = files.concat(st.files);
-  st.busy = false;
+  if(!entryOverride){st.draft=st.draft?text+"\n\n"+st.draft:text;st.files=files.concat(st.files);}
+  st.busy = priorBusy;
   st.error = "전송 실패: " + (out.out || "응답 없음");
-  st.retry = "send";
-  paintChat(id);
+  st.retry = entryOverride?"":"send";
+  persistPromptDraft(id,st);paintChat(id);return false;
 }
 
 async function cancelChat(id) {
@@ -199,7 +205,7 @@ function retryChat(id) {
   st.error = "";
   st.retry = "";
   if (kind === "sum") summarize(id);
-  else if (kind === "send") { st.draft = st.lastText || st.draft; sendChat(id); }
+  else if (kind === "send") { if(!st.draft)st.draft=st.lastText||"";persistPromptDraft(id,st);submitPrompt(id); }
   else paintChat(id);
 }
 
@@ -227,6 +233,7 @@ function handleChatEvent(c) {
   } else if (c.kind === "done") {
     commitStream(st, c.text);
     st.busy = false;
+    queuePromptDone(c.node,!c.cancelled&&!c.code);
     if (c.cancelled) { st.error = "응답 생성을 취소했습니다"; st.retry = "send"; }
     else if (c.code) {
       const n = nodeById(c.node);

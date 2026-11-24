@@ -10,13 +10,10 @@
  */
 "use strict";
 
-const fs = require("fs");
 const http = require("http");
 const { SESSIONS, PORT } = require("./server/config");
-const { scan } = require("./server/tail");
-const claude = require("./server/harness/claude");
-const { refreshProc } = require("./server/proc");
-const { broadcast } = require("./server/sse");
+const desktop = PORT === 0 && process.connected;
+if (desktop) process.send({ type: "desktop-starting" });
 const { handle } = require("./server/routes");
 
 const server = http.createServer((req, res) => {
@@ -26,32 +23,11 @@ const server = http.createServer((req, res) => {
   });
 });
 
-scan();
-claude.scan();
-refreshProc();
-require("./server/active").start();
-require("./server/ext-live").start();
-setInterval(() => { refreshProc(); }, 4000);
-setInterval(() => {
-  scan();
-  claude.scan();
-  broadcast();
-}, 2000);
-
-let watchDebounce = null;
-try {
-  fs.watch(SESSIONS, { recursive: true }, () => {
-    if (watchDebounce) return;
-    watchDebounce = setTimeout(() => {
-      watchDebounce = null;
-      scan();
-      broadcast();
-    }, 300);
-  });
-} catch {
-  /* polling covers it */
-}
+require("./server/desktop-shutdown").enableDesktopShutdown(server);
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`omp live map: http://127.0.0.1:${PORT}  (sessions: ${SESSIONS})`);
+  const { port } = server.address();
+  if (desktop) process.send({ type: "desktop-ready", port });
+  console.log(`omp live map: http://127.0.0.1:${port}  (sessions: ${SESSIONS})`);
+  setImmediate(() => require("./server/observation").startObservation());
 });

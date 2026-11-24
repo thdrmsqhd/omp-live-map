@@ -103,7 +103,7 @@ function edPaintFile(path) {
   for (const id of f.refs) { const s = ED.get(id); if (s) edPaintTabs(s); }
 }
 
-function edShow(s, path) {
+function edShow(s, path, focus = true) {
   const f = ED_FILES.get(path);
   if (!f || !s.editor || !s.tabs.has(path)) return;
   if (s.active && s.active !== path && s.tabs.has(s.active)) s.tabs.set(s.active, s.editor.saveViewState());
@@ -111,7 +111,7 @@ function edShow(s, path) {
   s.editor.setModel(f.model);
   const vs = s.tabs.get(path);
   if (vs) s.editor.restoreViewState(vs);
-  s.editor.focus();
+  if (focus) s.editor.focus();
   edPaintTabs(s);
   exSelect(s);
   edSetMsg(s, f.dirty ? "수정됨" : "저장됨", f.dirty ? "dirty" : "");
