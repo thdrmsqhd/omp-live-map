@@ -66,6 +66,16 @@
         <button id="workflow-save" type="button">Workflow 저장</button>
       </div>
       <p id="workflow-status" role="status"></p>
+      <details><summary>기본 제공 Workflow</summary>
+        <form id="workflow-preset-form" class="workflow-controls">
+          <label>템플릿 <select name="preset" required></select></label>
+          <label>저장할 이름 <input name="name" maxlength="240"></label>
+          <label>설계 / 문서 하네스 <select name="author"></select></label>
+          <label>리뷰 하네스 <select name="reviewer"></select></label>
+          <label>개발 Loop <select name="loop"></select></label>
+          <button>템플릿으로 생성</button>
+        </form>
+      </details>
       <div class="workflow-controls">
         <button id="workflow-export" type="button">템플릿 내보내기</button>
         <label>템플릿 파일 <input id="workflow-import-file" type="file" accept=".json,application/json"></label>

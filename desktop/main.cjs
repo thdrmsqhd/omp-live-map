@@ -15,7 +15,7 @@ if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
 const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
 const endpoints = new Set([
   "projects", "projects/archive", "definitions", "definitions/remove", "definitions/version",
-  "workflows", "workflow", "workflows/plan", "workflows/export", "workflows/import",
+  "workflows", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages",
   "workflow-approvals", "workflow-dashboard", "workflow-review",
@@ -87,6 +87,12 @@ ipcMain.handle("engineering:request", async (event, { endpoint, params, payload 
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
+  const importPath = app.commandLine.getSwitchValue("import-v2-data-dir");
+  if (path.isAbsolute(importPath) || (app.isPackaged && !userData && !app.commandLine.hasSwitch("skip-v2-import"))) {
+    stage = "copying V2 data";
+    const source = importPath || path.join(app.getPath("appData"), "OMP Live Map V2");
+    require(path.join(root, "server", "engineering", "v2-migration.js")).migrateFromV2(source, app.getPath("userData"));
+  }
   await startServer();
   stage = "opening the app window";
   const key = credentials.load();

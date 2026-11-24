@@ -25,7 +25,7 @@ export function bindWorkflow({ find, request, report, definitions }) {
   let project = "", workflow, selected, documentState = blank(), runDetail, workflows = [];
   const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project,
     onStatus(detail) { runDetail = detail; showRunStates(); } });
-  bindTemplateButtons({ el, request, report, current: () => workflow, projectId: () => project, async imported(record) {
+  bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
     await loadList(record.project); if (record.project === project) { selector.value = record.id; open(record); }
   } });
   choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end"].includes(type)));

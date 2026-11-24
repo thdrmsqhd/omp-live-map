@@ -12,6 +12,7 @@ const { sdlcTasks } = require("./sdlc-tasks");
 const { sdlcStages } = require("./sdlc-stages");
 const { workflowObservability } = require("./workflow-observability");
 const { workflowDelivery } = require("./workflow-delivery");
+const { buildPreset, listPresets } = require("./workflow-presets");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
@@ -94,6 +95,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflow-dashboard") result = observability.dashboard(query("project"));
         if (endpoint === "workflow-review") result = await observability.review(query("id"));
         if (endpoint === "workflows") result = workflows.list(query("project"));
+        if (endpoint === "workflows/presets") result = listPresets();
         if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
         if (endpoint === "workflow-run") {
           const id = query("id");
@@ -151,6 +153,10 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "sdlc-stages") result = stages.save(input);
         if (endpoint === "tasks/move") result = tasks.move(string(input.id, "task"), input.status, input.revision);
         if (endpoint === "workflows") result = workflows.save(input);
+        if (endpoint === "workflows/presets") {
+          const payload = buildPreset(input.preset, input.refs ?? {});
+          result = workflows.save({ project: input.project, payload: { ...payload, name: input.name || payload.name } });
+        }
         if (endpoint === "workflows/import") {
           result = templates.import(string(input.project, "project"), input.template, input.name);
         }

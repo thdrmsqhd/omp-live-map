@@ -1,6 +1,6 @@
 {
-  "name": "omp-live-map-desktop",
-  "version": "2.0.0-dev",
+  "name": "omp-live-map-v3-desktop",
+  "version": "3.0.0-dev",
   "private": true,
   "main": "main.cjs",
   "scripts": {
@@ -12,11 +12,11 @@
     "electron-builder": "26.0.12",
     "monaco-editor": "0.52.2"
   },
-  "description": "OMP Live Map V2 desktop development build",
+  "description": "OMP Live Map V3 desktop development build",
   "author": "OMP Live Map",
   "build": {
-    "appId": "dev.omplivemap.v2",
-    "productName": "OMP Live Map V2",
+    "appId": "dev.omplivemap.v3",
+    "productName": "OMP Live Map V3",
     "files": [
       "main.cjs",
       "preload.cjs",
@@ -48,10 +48,11 @@
     "win": {
       "target": "nsis",
       "signAndEditExecutable": false,
-      "artifactName": "OMP-Live-Map-V2-Setup.${ext}"
+      "artifactName": "OMP-Live-Map-V3-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
+      "deleteAppDataOnUninstall": false,
       "perMachine": false
     }
   }
