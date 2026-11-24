@@ -6,8 +6,10 @@ const { transaction } = require("./database");
 const { string, integer } = require("./definitions");
 const { problem, redact } = require("./state");
 const { sdlcTasks } = require("./sdlc-tasks");
+const { projectBudget } = require("./project-budget");
 
 function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, workflows)) {
+  const quota = projectBudget(db);
   function get(id) {
     const run = db.prepare(`SELECT r.*,w.project FROM workflow_run r
       JOIN workflow w ON r.workflow=w.id WHERE r.id=?`).get(id);
@@ -48,6 +50,7 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
       workflows.get(project, id, version);
       if (catalog.project(project).archived) throw problem(409, "Project is archived");
       if (task && tasks.get(task.id).status !== "ready") throw problem(409, "Development task must be Ready");
+      quota.check(project, budget);
       const run = randomUUID(), now = Date.now();
       db.prepare(`INSERT INTO workflow_run (id,workflow,version,title,status,created,deadline,budget,idempotency_key,request_hash,sdlc_task,sdlc_instruction)
         VALUES (?,?,?,?,'queued',?,?,?,?,?,?,?)`)
@@ -66,6 +69,10 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
       throw problem(409, "Workflow node already started");
     }
     setNode(id, node, status, outcome);
+  }
+  function retries(id) {
+      return db.prepare("SELECT node,attempt,outcome,created FROM workflow_retry WHERE run=? ORDER BY created,node,attempt").all(id)
+        .map((item) => ({ ...item, outcome: JSON.parse(item.outcome) }));
   }
   return {
     create, get, nodes,
@@ -111,10 +118,7 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
         setNode(id, node, "succeeded", { ...previous, port: decision, reason: redact(explanation) });
       });
     },
-    retries(id) {
-      return db.prepare("SELECT node,attempt,outcome,created FROM workflow_retry WHERE run=? ORDER BY created,node,attempt").all(id)
-        .map((item) => ({ ...item, outcome: JSON.parse(item.outcome) }));
-    },
+    retries,
     retry(id, node, descendants) {
       transaction(db, () => {
         const run = get(id);
@@ -129,6 +133,8 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
         if (history.some((item) => descendants.has(item.node) && item.status !== "skipped")) {
           throw problem(409, "A downstream node already executed; start a new workflow run");
         }
+        const used = [...history, ...retries(id)].reduce((total, item) => total + (item.outcome?.costCents ?? 0), 0);
+        quota.check(run.project, Math.max(0, run.budget - used));
         const count = db.prepare("SELECT COUNT(*) AS n FROM workflow_retry WHERE run=? AND node=?").get(id, node).n;
         if (count >= 3) throw problem(409, "Workflow node retry limit reached");
         db.prepare("INSERT INTO workflow_retry VALUES (?,?,?,?,?)").run(id, node, count + 1, JSON.stringify(failed.outcome), Date.now());

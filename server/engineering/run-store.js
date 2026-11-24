@@ -4,9 +4,11 @@ const { randomUUID, createHash } = require("node:crypto");
 const { event } = require("./catalog");
 const { transaction } = require("./database");
 const { string } = require("./definitions");
+const { projectBudget } = require("./project-budget");
 const { checkTransition, problem } = require("./state");
 
 function runStore(db, catalog) {
+  const quota = projectBudget(db);
   function get(id) {
     const result = db.prepare(`SELECT r.*,t.title,t.instruction,t.project FROM run r
       JOIN task t ON t.id=r.task WHERE r.id=?`).get(id);
@@ -37,6 +39,7 @@ function runStore(db, catalog) {
       const owner = catalog.project(request.project);
       const loop = catalog.versionOf(request.definition);
       if (owner.archived || loop.project !== owner.id || loop.kind !== "loop") throw problem(400, "Active project and its loop are required");
+      quota.check(owner.id, loop.payload.budgetCents);
       const task = randomUUID(), id = randomUUID(), now = Date.now();
       db.prepare("INSERT INTO task VALUES (?,?,?,?)").run(task, owner.id, request.title, request.instruction);
       db.prepare(`INSERT INTO run VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, task, loop.id, loop.version, "queued", null,

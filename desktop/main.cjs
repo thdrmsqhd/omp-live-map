@@ -17,9 +17,9 @@ const endpoints = new Set([
   "projects", "projects/archive", "definitions", "definitions/remove", "definitions/version",
   "workflows", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
-  "tasks", "tasks/move", "sdlc-stages",
+  "tasks", "tasks/move", "sdlc-stages", "project-budget",
   "workflow-approvals", "workflow-dashboard", "workflow-review",
-  "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release",
+  "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
 ]);
 

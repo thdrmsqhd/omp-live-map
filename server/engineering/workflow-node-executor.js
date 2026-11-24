@@ -31,7 +31,8 @@ function nodeExecutor(catalog, runner) {
           model: model.payload, feedback, budgetCents: budget - spent, signal: timeout });
         if (!Number.isFinite(output.costCents) || output.costCents < 0) throw new Error("Missing valid runtime usage");
         spent += output.costCents;
-        attempts.push({ costCents: output.costCents, costBasis: output.costBasis, sessionId: output.sessionId });
+        attempts.push({ costCents: output.costCents, costBasis: output.costBasis, sessionId: output.sessionId,
+          model: model.payload.model, agent: harness.payload.adapter });
         if (spent > budget) break;
         timeout.throwIfAborted();
         feedback = checks.length ? await runner.verify(checks, workspace, timeout) : [];

@@ -79,8 +79,22 @@ function workflowDelivery(db, runs, catalog, workspaceRoot, gh = githubCli, gitC
     return result;
   }
 
+  async function remoteHead(row) {
+    const branch = row.head.split("/").map(encodeURIComponent).join("/");
+    const remote = await gh(`repos/${row.repository}/git/ref/heads/${branch}`);
+    if (remote?.object?.sha !== row.sha) throw problem(409, "Push the exact approved commit to the named GitHub branch");
+  }
   return {
     get,
+    withStaging(id, action) { return withRun(id, async () => {
+      const row = approved(id);
+      if (!row.release_approved) throw problem(409, "Approve the release candidate before staging deployment");
+      return action(row, async () => {
+        await assertCurrent(id, row);
+        if (await ci(row) !== "passed") throw problem(409, "CI must still pass before staging deployment");
+        await remoteHead(row);
+      });
+    }); },
     approve(id, branch) { return withRun(id, async () => {
       const candidate = await commit(id);
       const head = string(branch, "head branch", 200);
@@ -97,16 +111,16 @@ function workflowDelivery(db, runs, catalog, workspaceRoot, gh = githubCli, gitC
       const row = approved(id);
       await assertCurrent(id, row);
       if (row.state === "created") return row;
-      const branch = row.head.split("/").map(encodeURIComponent).join("/");
-      const remote = await gh(`repos/${row.repository}/git/ref/heads/${branch}`);
-      if (remote?.object?.sha !== row.sha) throw problem(409, "Push the exact approved commit to the named GitHub branch");
+      await remoteHead(row);
       const owner = row.repository.split("/")[0];
       const existing = await gh(`repos/${row.repository}/pulls`, "GET", { state: "all", head: owner + ":" + row.head, base: row.base });
       if (existing.length > 1) throw problem(409, "More than one pull request matches this head and base");
       let pr = existing[0];
       if (!pr) {
         if (row.state === "creating") throw problem(409, "Previous PR attempt is uncertain; this operation will only reconcile an existing PR");
-        db.prepare("UPDATE workflow_delivery SET state='creating' WHERE run=?").run(id);
+        const claim = db.prepare("UPDATE workflow_delivery SET state='creating' WHERE run=? AND state='approved' AND approved=?")
+          .run(id, row.approved);
+        if (!claim.changes) throw problem(409, "PR request already claimed; reconcile the existing request");
         pr = await gh(`repos/${row.repository}/pulls`, "POST", { title: runs.get(id).title, head: row.head, base: row.base,
           body: "Created for the approved workflow commit " + row.sha });
       }

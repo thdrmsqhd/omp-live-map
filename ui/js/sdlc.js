@@ -95,10 +95,12 @@ export function bindSdlc({ find, request, report, showRun }) {
     const owner = project;
     if (!owner) { tasks = []; workflows = []; formOptions(); render(); return; }
     const loadMetrics = loadWorkflows || Date.now() - lastMetrics >= 15000;
-    const [rows, saved, approvals, metrics, settings] = await Promise.all([request("tasks", { project: owner }),
+    const [rows, saved, approvals, metrics, settings, budget] = await Promise.all([request("tasks", { project: owner }),
       loadWorkflows ? request("workflows", { project: owner }) : Promise.resolve(null),
-      request("workflow-approvals", { project: owner }), loadMetrics ? request("workflow-dashboard", { project: owner }) : null,
-      loadWorkflows ? request("sdlc-stages", { project: owner }) : null]);
+      request("workflow-approvals", { project: owner }),
+      loadMetrics ? request("workflow-dashboard", { project: owner, days: find("sdlc-period").value }) : null,
+      loadWorkflows ? request("sdlc-stages", { project: owner }) : null,
+      loadWorkflows ? request("project-budget", { project: owner }) : null]);
     if (owner !== project) return;
     tasks = rows;
     if (settings) {
@@ -108,6 +110,7 @@ export function bindSdlc({ find, request, report, showRun }) {
       if (stages.some(({ status }) => status === previous)) stageForm.elements.status.value = previous;
     }
     if (saved) { workflows = saved; formOptions(); stageValues(); }
+    if (budget) showBudget(budget.current);
     render();
     find("sdlc-inbox").replaceChildren(...approvals.map((approval) => {
       const item = document.createElement("li");
@@ -118,13 +121,37 @@ export function bindSdlc({ find, request, report, showRun }) {
     lastMetrics = Date.now();
     const categories = { reported: "보고 비용", reserved: "예약 비용", unknown_basis: "출처 미확인", missing: "비용 미수집" };
     find("sdlc-metrics").replaceChildren(...[
+      "완료 " + metrics.measures.completed + "/" + metrics.measures.count + "건 · 노드 재시도 " + metrics.measures.retries +
+        "건 · 승인·거절 " + metrics.measures.decisions + "건",
+      ...(metrics.measures.averageMs === null ? [] : ["완료 실행 평균 소요 " + (metrics.measures.averageMs / 1000).toFixed(1) + "초"]),
       ...metrics.states.map(({ status, count }) => status + " " + count + "건"),
-      ...metrics.usage.map(({ category, count, costCents }) =>
-        categories[category] + " " + count + "건" + (costCents === null ? "" : " · $" + (costCents / 100).toFixed(2))),
+      ...metrics.usage.map(({ category, model, agent, count, costCents }) =>
+        [categories[category], model, agent, count + "건", costCents === null ? "" : "$" + (costCents / 100).toFixed(2)].filter(Boolean).join(" · ")),
     ].map((label) => { const line = document.createElement("p"); line.textContent = label; return line; }));
   }
 
   find("sdlc-new").onclick = () => edit(null);
+  const budgetForm = find("project-budget-form");
+  function showBudget(current) {
+    budgetForm.elements.cap.value = current?.cap ?? "";
+    budgetForm.elements.days.value = current?.days ?? 30;
+    find("project-budget-status").textContent = current
+      ? "사용 및 실행 중인 예약 " + Math.ceil(current.committed) + " / " + current.cap + "센트"
+      : "프로젝트 예산 제한 없음";
+  }
+  budgetForm.addEventListener("submit", report(async () => {
+    if (!project) throw new Error("프로젝트를 선택해 주세요.");
+    const owner = project, { cap, days } = budgetForm.elements;
+    const result = await request("project-budget", {}, { project: owner, cap: Number(cap.value), days: Number(days.value) });
+    if (owner === project) showBudget(result.current);
+  }));
+  find("project-budget-remove").onclick = report(async () => {
+    if (!project) return;
+    const owner = project;
+    const result = await request("project-budget", {}, { project: owner, remove: true });
+    if (owner === project) showBudget(result.current);
+  });
+  find("sdlc-period").onchange = report(async () => { lastMetrics = 0; await refresh(); });
   stageForm.elements.status.onchange = stageValues;
   stageForm.addEventListener("submit", report(async () => {
     if (!project) throw new Error("프로젝트를 선택해 주세요.");

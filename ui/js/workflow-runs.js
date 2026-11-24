@@ -1,6 +1,7 @@
 export function bindWorkflowRuns({ el, request, report, current, projectId, onStatus }) {
   const list = el("run-list"), approval = el("approval");
   const deliveryForm = el("delivery-form"), deliveryActions = el("delivery-actions");
+  const stageForm = el("staging-form");
   let pending, selected, refreshing = false;
 
   async function refresh(preferred = list.value) {
@@ -24,6 +25,7 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
     actions.hidden = !detail;
     const status = detail?.run.status;
     const delivery = detail?.delivery;
+    const deployment = detail?.staging;
     el("delivery").hidden = status !== "succeeded" || !detail.run.workspace;
     deliveryForm.hidden = Boolean(delivery && delivery.state !== "approved");
     deliveryActions.querySelector('[data-delivery="pr"]').disabled = !delivery || delivery.state === "created";
@@ -32,6 +34,12 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
     el("delivery-status").textContent = delivery
       ? [delivery.sha, delivery.pr_url, delivery.ci_status && "CI " + delivery.ci_status, delivery.release_approved && "릴리스 후보 승인됨"]
         .filter(Boolean).join(" · ") : "";
+    stageForm.hidden = !delivery?.release_approved;
+    stageForm.elements.environment.disabled = Boolean(deployment);
+    if (deployment) stageForm.elements.environment.value = deployment.environment;
+    stageForm.querySelector("button").textContent = deployment ? "테스트 배포 상태 확인" : "테스트 배포 승인 및 요청";
+    el("staging-status").textContent = deployment
+      ? [deployment.environment, deployment.state, deployment.conclusion, deployment.url].filter(Boolean).join(" · ") : "";
     actions.querySelector('[data-action="pause"]').disabled = status !== "running";
     actions.querySelector('[data-action="resume"]').disabled = !["paused", "interrupted"].includes(status) ||
       detail?.nodes.some((node) => node.status === "interrupted");
@@ -95,6 +103,11 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
   deliveryActions.addEventListener("click", report(async (event) => {
     if (!selected || !event.target.dataset.delivery) return;
     await request("workflow-delivery/" + event.target.dataset.delivery, {}, { id: selected.run.id });
+    await refresh();
+  }));
+  stageForm.addEventListener("submit", report(async () => {
+    if (!selected) return;
+    await request("workflow-delivery/staging", {}, { id: selected.run.id, environment: stageForm.elements.environment.value });
     await refresh();
   }));
   el("review").onclick = report(async () => {

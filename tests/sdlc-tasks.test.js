@@ -56,6 +56,7 @@ test("Task runs pin workflow and instructions and move the board through approva
 test("stage settings and delivery reconcile an uncertain PR and gate the release on CI", async () => {
   const { sdlcStages } = require("../server/engineering/sdlc-stages");
   const { workflowDelivery } = require("../server/engineering/workflow-delivery");
+  const { workflowStaging } = require("../server/engineering/workflow-staging");
   const { workflowObservability } = require("../server/engineering/workflow-observability");
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-delivery-test-"));
   const db = openDatabase(path.join(directory, "engineering.sqlite"));
@@ -75,8 +76,8 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
     runs.workspace(run.id, workspace);
     runs.change(run.id, ["queued"], "succeeded");
     const commit = "1".repeat(40), repo = "example/fixture";
-    let creates = 0, posted, ci = "failure";
-    const gh = async (endpoint, method) => {
+    let creates = 0, dispatches = 0, posted, dispatched, ci = "failure";
+    const gh = async (endpoint, method, fields) => {
       if (endpoint.includes("/git/ref/heads/")) return { object: { sha: commit } };
       if (endpoint.endsWith("/pulls") && method === "POST") {
         creates++;
@@ -89,6 +90,16 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
       if (endpoint.endsWith("/pulls/42")) return posted;
       if (endpoint.includes("/check-runs")) return { total_count: 1, check_runs: [{ status: "completed", conclusion: ci }] };
       if (endpoint.includes("/status")) return { total_count: 0, state: "pending" };
+      if (endpoint.includes("/contents/")) return { type: "file", path: ".github/workflows/omp-staging.yml" };
+      if (endpoint.endsWith("/dispatches")) {
+        dispatches++;
+        assert.equal(fields.inputs.environment, "staging");
+        assert.equal(fields.inputs.approved_sha, commit);
+        dispatched = { id: 765, head_sha: commit, head_branch: "feature/workflow", display_title: "omp-" + run.id,
+          html_url: "https://github.com/example/fixture/actions/runs/765", conclusion: "success" };
+        return null;
+      }
+      if (endpoint.endsWith("/runs")) return { workflow_runs: dispatched ? [dispatched] : [] };
       throw new Error("Unexpected endpoint " + endpoint);
     };
     const gitCall = async (_, args) => {
@@ -97,6 +108,7 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
       return "";
     };
     const delivery = workflowDelivery(db, runs, definitions, directory, gh, gitCall);
+    const staging = workflowStaging(db, delivery, gh);
     await assert.rejects(delivery.createPR(run.id), /Approve/);
     await delivery.approve(run.id, "feature/workflow");
     await assert.rejects(delivery.createPR(run.id), /connection lost/);
@@ -104,12 +116,54 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
     assert.equal((await delivery.createPR(run.id)).pr_number, 42);
     assert.equal(creates, 1);
     await assert.rejects(delivery.approveRelease(run.id), /CI checks/);
+    await assert.rejects(staging.dispatch(run.id, "staging"), /Approve the release/);
     ci = "success";
     assert.ok((await delivery.approveRelease(run.id)).release_approved);
+    await assert.rejects(async () => staging.dispatch(run.id, "production"), /Choose test or staging/);
+    assert.equal((await staging.dispatch(run.id, "staging")).state, "dispatched");
+    assert.equal((await staging.dispatch(run.id, "staging")).workflow_run, 765);
+    assert.equal(dispatches, 1);
     const observation = workflowObservability(db, runs, directory);
     assert.ok(observation.timeline(run.id).some(({ kind }) => kind === "workflow.release.approved"));
     assert.deepEqual(observation.dashboard("one").states.map(({ status, count }) => ({ status, count })),
       [{ status: "succeeded", count: 1 }]);
+  } finally {
+    db.close();
+    fs.rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("the project cap reserves budget across both V2 Loop and V3 Workflow launches", () => {
+  const { projectBudget } = require("../server/engineering/project-budget");
+  const { runStore } = require("../server/engineering/run-store");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-quota-test-"));
+  const db = openDatabase(path.join(directory, "engineering.sqlite"));
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Quota", "main");
+    const definitions = catalog(db);
+    const graph = workflowCatalog(db, definitions);
+    const runs = workflowRuns(db, definitions, graph);
+    const legacyRuns = runStore(db, definitions);
+    const quota = projectBudget(db);
+    const flow = graph.save({ project: "one", payload: { name: "Smoke",
+      nodes: [{ id: "s", type: "start", label: "Start" }, { id: "e", type: "end", label: "End" }], edges: [{ from: "s", to: "e" }] } });
+    const res = definitions.saveDefinition({ project: "one", kind: "model", payload: { name: "M", provider: "fixture", model: "fixture" } });
+    const harness = definitions.saveDefinition({ project: "one", kind: "harness",
+      payload: { name: "H", adapter: "claude", model: res.id, role: "team" } });
+    const loop = definitions.saveDefinition({ project: "one", kind: "loop", payload: {
+      name: "L", harness: harness.id, attempts: 2, timeoutMs: 7000, budgetCents: 70,
+      checks: [{ command: "node", args: ["--test"], code: 0 }],
+    } });
+    quota.save("one", { cap: 100, days: 30 });
+    const v3 = { project: "one", workflow: flow.id, version: 1, title: "Graph", timeoutMs: 7000, budgetCents: 50 };
+    const v2 = { project: "one", definition: loop.id, title: "Loop", instruction: "Review fixture" };
+    const run = runs.create(v3, "graph").run;
+    assert.equal(quota.get("one").committed, 50);
+    assert.throws(() => legacyRuns.create(v2, "loop"), /budget/);
+    runs.change(run.id, ["queued"], "cancelled");
+    legacyRuns.create(v2, "loop");
+    assert.equal(quota.get("one").committed, 70);
+    assert.throws(() => runs.create(v3, "too-much"), /budget/);
   } finally {
     db.close();
     fs.rmSync(directory, { force: true, recursive: true });

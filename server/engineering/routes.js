@@ -13,6 +13,8 @@ const { sdlcStages } = require("./sdlc-stages");
 const { workflowObservability } = require("./workflow-observability");
 const { workflowDelivery } = require("./workflow-delivery");
 const { buildPreset, listPresets } = require("./workflow-presets");
+const { projectBudget } = require("./project-budget");
+const { workflowStaging } = require("./workflow-staging");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
@@ -22,12 +24,10 @@ const { problem } = require("./state");
 
 const prefix = "/api/engineering/";
 const limit = 64 * 1024;
-
 function reply(res, status, payload) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   res.end(JSON.stringify(payload));
 }
-
 async function body(req) {
   const chunks = [];
   let size = 0;
@@ -44,14 +44,12 @@ async function body(req) {
     throw problem(400, "JSON object required");
   }
 }
-
 function authenticated(req, token) {
   if (!token) return false;
   const supplied = Buffer.from(String(req.headers["x-omp-engineering-token"] ?? ""));
   const expected = Buffer.from(token);
   return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
-
 function createEngineeringRoutes({ token, directory, runner = secureRunner() }) {
   let services;
   function initialize() {
@@ -65,12 +63,14 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const flowRuns = workflowRuns(db, definitions, workflows, tasks);
       const workspaceRoot = path.resolve(directory, "worktrees");
       const workspace = worktrees(workspaceRoot);
+      const delivery = workflowDelivery(db, flowRuns, definitions, workspaceRoot);
       runs.recover();
       flowRuns.recover();
       services = { definitions, workflows, runs, flowRuns, tasks,
+        budget: projectBudget(db),
         stages: sdlcStages(db, definitions, workflows),
         observability: workflowObservability(db, flowRuns, workspaceRoot),
-        delivery: workflowDelivery(db, flowRuns, definitions, workspaceRoot),
+        delivery, staging: workflowStaging(db, delivery),
         templates: workflowTemplates(definitions, workflows),
         flow: workflowEngine(flowRuns, workflows, definitions, runner, workspace),
         loop: loopEngine(runs, definitions, runner, workspace) };
@@ -83,7 +83,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
@@ -92,7 +92,9 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "tasks") result = tasks.list(query("project"));
         if (endpoint === "sdlc-stages") result = stages.list(query("project"));
         if (endpoint === "workflow-approvals") result = observability.approvals(query("project"));
-        if (endpoint === "workflow-dashboard") result = observability.dashboard(query("project"));
+        if (endpoint === "workflow-dashboard") result = observability.dashboard(query("project"),
+          integer(Number(url.searchParams.get("days") ?? 30), "metrics period", 1, 90));
+        if (endpoint === "project-budget") result = { current: budget.get(query("project")) ?? null };
         if (endpoint === "workflow-review") result = await observability.review(query("id"));
         if (endpoint === "workflows") result = workflows.list(query("project"));
         if (endpoint === "workflows/presets") result = listPresets();
@@ -101,7 +103,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const id = query("id");
           const run = flowRuns.get(id);
           const workflow = workflows.get(run.project, run.workflow, run.version);
-          result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id), timeline: observability.timeline(id), delivery: delivery.get(id),
+          result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id), timeline: observability.timeline(id),
+            delivery: delivery.get(id), staging: staging.get(id),
             labels: Object.fromEntries(workflows.executionPlan(run.project, workflow.payload, run.workflow)
               .document.nodes.map(({ id, label }) => [id, label])) };
         }
@@ -149,6 +152,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = runner.status();
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
+        if (endpoint === "project-budget") result = budget.save(string(input.project, "project"), input);
         if (endpoint === "tasks") result = tasks.save(input);
         if (endpoint === "sdlc-stages") result = stages.save(input);
         if (endpoint === "tasks/move") result = tasks.move(string(input.id, "task"), input.status, input.revision);
@@ -172,6 +176,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflow-delivery/pr") result = await delivery.createPR(string(input.id, "run"));
         if (endpoint === "workflow-delivery/ci") result = await delivery.checkCI(string(input.id, "run"));
         if (endpoint === "workflow-delivery/release") result = await delivery.approveRelease(string(input.id, "run"));
+        if (endpoint === "workflow-delivery/staging") result = await staging.dispatch(string(input.id, "run"), input.environment);
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
         if (endpoint === "definitions/remove") {

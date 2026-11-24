@@ -49,6 +49,7 @@ function loopEngine(store, catalog, runner, worktrees) {
           const passed = !overBudget && results.every((result) => result.passed);
           store.finishAttempt(id, number, passed ? "passed" : "rejected", {
             checks: results, costCents: output.costCents, costBasis: output.costBasis ?? "reported", sessionId: output.sessionId ?? null,
+            model: model.model, agent: harness.adapter,
           });
           if (overBudget) return store.change(id, "limit_exceeded");
           if (passed) return store.change(id, "succeeded");
