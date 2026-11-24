@@ -48,9 +48,14 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
       const monaco = await fetch(origin + "/vendor/monaco/vs/loader.js");
       assert.equal(monaco.status, 200);
       assert.match(monaco.headers.get("content-type"), /javascript/);
+      const ant = path.join(path.dirname(installed), "resources", "runtime", "vendor", "ant", "ant.exe");
+      assert.match(execFileSync(ant, ["--version"], { encoding: "utf8", timeout: 10000 }), /2\.13\.0/);
     }
     await page.getByRole("button", { name: "실행 환경 준비" }).waitFor({ timeout: 8000 });
     await page.waitForFunction(() => Boolean(document.querySelector("#runtime-status")?.textContent));
+    const login = page.getByRole("button", { name: "Claude Console 로그인" });
+    assert.equal(await login.isVisible(), true);
+    if (installed) assert.equal(await login.isEnabled(), true);
     const testKey = "sk-ant-v2-fixture-12345678901234567890";
     await page.locator("#provider-key input").fill(testKey);
     await page.getByRole("button", { name: "키 저장" }).click();

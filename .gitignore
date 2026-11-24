@@ -10,3 +10,4 @@
 # Desktop build dependencies and output
 /desktop/node_modules/
 /desktop/dist/
+/desktop/.vendor/

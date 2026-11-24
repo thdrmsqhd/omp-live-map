@@ -5,7 +5,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
-    "build:windows": "electron-builder --win nsis --x64"
+    "build:windows": "node prepare-ant.cjs && electron-builder --win nsis --x64"
   },
   "devDependencies": {
     "electron": "43.8.12",
@@ -39,6 +39,10 @@
       {
         "from": "node_modules/monaco-editor/min",
         "to": "runtime/ui/vendor/monaco"
+      },
+      {
+        "from": ".vendor/ant",
+        "to": "runtime/vendor/ant"
       }
     ],
     "win": {

@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Engineering · OMP Live Map</title>
   <link rel="stylesheet" href="/css/engineering.css">
-  <script src="/js/engineering.js" defer></script>
+  <script type="module" src="/js/engineering.js"></script>
 </head>
 <body>
   <header>
@@ -23,6 +23,8 @@
     <p id="runtime-status" role="status"></p>
     <button id="prepare-runtime" type="button">실행 환경 준비</button>
     <button id="check-runtime" type="button">인증 다시 확인</button>
+    <button id="console-login" type="button" disabled>Claude Console 로그인</button>
+    <p id="console-login-status" role="status"></p>
     <form id="provider-key" method="post">
       <label>Anthropic API 키 <input name="value" type="password" autocomplete="off" required></label>
       <div><button>키 저장</button> <button id="remove-key" type="button">키 삭제</button></div>

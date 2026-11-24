@@ -1,4 +1,4 @@
-"use strict";
+import { bindRuntimeControls } from "./engineering-runtime.js";
 
 const find = (id) => document.getElementById(id);
 const status = find("status");
@@ -159,36 +159,9 @@ for (const view of ["design", "execution"]) {
     }
   });
 }
-async function runtimeStatus() {
-  const current = await request("runtime");
-  find("runtime-status").textContent = current.detail;
-  find("prepare-runtime").disabled = ["ready", "checking", "building"].includes(current.status);
-  find("check-runtime").disabled = ["checking", "building"].includes(current.status);
-}
-
-find("prepare-runtime").addEventListener("click", report(async () => {
-  await request("runtime", {}, { build: true });
-  await runtimeStatus();
-}));
-find("check-runtime").addEventListener("click", report(async () => {
-  await request("runtime", {}, { build: false });
-  await runtimeStatus();
-}));
-
-find("provider-key").addEventListener("submit", report(async (event) => {
-  const form = event.currentTarget;
-  const { value } = formValues(event);
-  form.reset();
-  await request("runtime/key", {}, { value });
-  status.textContent = "Windows 사용자 비밀 저장소에 키를 저장했습니다.";
-}));
-find("remove-key").addEventListener("click", report(async () => {
-  await request("runtime/key", {}, { remove: true });
-  status.textContent = "저장된 키를 삭제했습니다.";
-}));
-
 if (window.engineeringDesktop) {
-  report(async () => { await refreshProjects(); await runtimeStatus(); })();
+  const runtimeStatus = bindRuntimeControls({ find, request, report, status, formValues });
+  report(async () => { await Promise.all([refreshProjects(), runtimeStatus()]); })();
   setInterval(() => {
     if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {});
     void runtimeStatus().catch(() => {});

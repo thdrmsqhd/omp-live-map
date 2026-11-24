@@ -99,6 +99,10 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           void runner.prepare(input.build === true);
           result = runner.status();
         }
+        if (endpoint === "runtime/login" && runner.login) {
+          runner.login(input.cancel === true);
+          result = runner.status();
+        }
         if (endpoint === "projects") result = await definitions.saveProject(input);
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);

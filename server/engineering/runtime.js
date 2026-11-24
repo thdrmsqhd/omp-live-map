@@ -24,11 +24,13 @@ function localDocker() {
   return { binary, context: windows ? "desktop-linux" : "default" };
 }
 
-function runtime(directory, key) {
+function runtime(directory, key, auth = consoleOAuth()) {
   let status = "unchecked";
   let detail = "런타임 확인이 필요합니다.";
   let delegate = secureRunner();
   let pending;
+  let loginAttempt;
+  let loginStatus = "";
   const runners = new Set();
   async function discover(build) {
     const { binary, context } = localDocker();
@@ -44,18 +46,16 @@ function runtime(directory, key) {
     const workspaceRoot = path.join(directory, "worktrees");
     fs.mkdirSync(workspaceRoot, { recursive: true, mode: 0o700 });
     const apiKey = key;
-    const authenticate = apiKey ? null : consoleOAuth();
     let oauth;
-    if (authenticate) {
-      try { await authenticate(); oauth = authenticate; } catch {}
+    if (auth) {
+      try { await auth.accessToken(); oauth = auth.accessToken; } catch {}
     }
-    delegate = dockerRunner({ image, context, binary, workspaceRoot, key: apiKey, oauth, daemon: expected });
+    delegate = dockerRunner({ image, context, binary, workspaceRoot, key: oauth ? null : apiKey, oauth, daemon: expected });
     runners.add(delegate);
     status = apiKey || oauth ? "ready" : "missing-key";
-    detail = apiKey ? "격리 런타임 사용 가능 · Anthropic API 키" : oauth
-      ? "격리 런타임 사용 가능 · Claude Console OAuth"
-      : authenticate ? "Claude Console에 로그인해 주세요. ant auth login --profile omp-live-map"
-        : "Claude Platform CLI(ant)를 PATH에 추가하거나 Anthropic API 키를 저장해 주세요.";
+    detail = oauth ? "격리 런타임 사용 가능 · Claude Console OAuth" : apiKey
+      ? "격리 런타임 사용 가능 · Anthropic API 키"
+      : "Claude Console에 로그인하거나 Anthropic API 키를 저장해 주세요.";
   }
   function prepare(build = false) {
     if (pending) return pending;
@@ -70,19 +70,49 @@ function runtime(directory, key) {
     }).finally(() => { pending = null; });
     return pending;
   }
+  function refresh() {
+    if (pending) void pending.then(() => prepare());
+    else void prepare();
+  }
+  async function completeLogin(attempt) {
+    const { signal } = attempt;
+    try {
+      await auth.login(signal);
+      await auth.accessToken(signal);
+      signal.throwIfAborted();
+      loginStatus = "Claude Console에 연결되었습니다.";
+      refresh();
+    } catch {
+      loginStatus = signal.aborted ? "Claude Console 로그인을 취소했습니다."
+        : "Claude Console 로그인에 실패했습니다. 브라우저에서 로그인을 완료한 뒤 다시 시도해 주세요.";
+    } finally {
+      loginAttempt = null;
+    }
+  }
   return {
     available: (name) => delegate.available(name),
     requireAdapter: (...args) => delegate.requireAdapter(...args),
     verify: (...args) => delegate.verify(...args),
     prepare,
     snapshot: () => delegate,
+    login(cancel) {
+      if (cancel) { loginAttempt?.abort(); return; }
+      if (loginAttempt) return;
+      if (!auth) throw problem(409, "Claude Console 로그인 도구를 찾을 수 없습니다.");
+      loginAttempt = new AbortController();
+      loginStatus = "브라우저에서 Claude Console 로그인을 완료해 주세요.";
+      void completeLogin(loginAttempt);
+    },
     setKey(value) {
       key = typeof value === "string" ? value : null;
-      if (pending) void pending.then(() => prepare());
-      else void prepare();
+      refresh();
     },
-    shutdown: () => { for (const active of runners) active.shutdown(); },
-    status: () => ({ status, detail, omp: delegate.available("omp"), claude: delegate.available("claude") }),
+    shutdown() {
+      loginAttempt?.abort();
+      for (const active of runners) active.shutdown();
+    },
+    status: () => ({ status, detail, canLogin: Boolean(auth), signingIn: Boolean(loginAttempt), loginStatus,
+      omp: delegate.available("omp"), claude: delegate.available("claude") }),
   };
 }
 

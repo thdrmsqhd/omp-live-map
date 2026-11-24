@@ -51,8 +51,8 @@ Windows 터미널에서 공식 Claude Code CLI의 `claude auth login`으로 Clau
 
 Windows 개발 빌드의 Engineering 화면에서 로컬 Docker Desktop의 Linux 엔진을 실행한 상태로 **실행 환경 준비**를 누릅니다. Docker 이미지는 앱에 포함된 빌드 정의로 준비하며, 이후 실행에는 준비된 로컬 이미지를 사용합니다.
 
-- **Claude Console OAuth**는 [Claude Platform CLI](https://github.com/anthropics/anthropic-cli/releases/latest)의 Windows용 `ant.exe`를 Windows PATH에 추가하고 `ant auth login --profile omp-live-map`으로 로그인합니다. 앱에서 **인증 다시 확인**을 누른 후 `격리 런타임 사용 가능 · Claude Console OAuth`를 확인합니다. API 사용량은 선택한 Console 워크스페이스에 청구됩니다.
-- **Anthropic API 키**는 이전과 같이 Windows 사용자 비밀 저장소에 저장할 수 있습니다. 앱에 기존 키가 등록되어 있으면 키가 우선하므로, OAuth로 전환할 때는 **키 삭제** 후 인증을 다시 확인합니다. 앱을 시작한 환경의 `ANTHROPIC_API_KEY`도 초기 실행에 사용됩니다.
+- **Claude Console OAuth**는 **Engineering → Claude Console 로그인**을 눌러 브라우저에서 연결합니다. Windows 설치 파일에 공식 Claude Platform CLI가 포함되어 있으며, 이전에 연결한 `omp-live-map` 프로필은 계속 사용할 수 있습니다. API 사용량은 선택한 Console 워크스페이스에 청구됩니다.
+- **Anthropic API 키**도 Windows 사용자 비밀 저장소에 저장할 수 있습니다. 런타임을 확인할 때 연결된 Console 프로필을 우선 사용하며, 사용할 수 있는 프로필이 없을 때 저장된 키 또는 앱 시작 환경의 `ANTHROPIC_API_KEY`를 사용합니다.
 
 모델은 `anthropic/claude-sonnet-4-6` 또는 `anthropic/claude-haiku-4-5-20251001`을 선택합니다. 현재 지원하는 검증 명령은 `node --test`, `npm test`, `python3 -m unittest discover`입니다. 작업은 기존 Git 프로젝트에서 분리한 Worktree에 수행되며, 변경 파일은 실행 이력에 표시된 Worktree에 남습니다.
 
