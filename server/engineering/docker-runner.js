@@ -91,7 +91,7 @@ function bridgeProcess(raw, broker, abort) {
   return channel;
 }
 
-function dockerRunner({ image, context, binary, workspaceRoot, key, daemon, upstream, launchProcess = spawn }) {
+function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemon, upstream, launchProcess = spawn }) {
   if (!/^sha256:[a-f0-9]{64}$/.test(image) || !path.isAbsolute(binary) ||
       !["default", "desktop-linux"].includes(context)) throw problem(409, "A local Docker runtime and immutable image are required");
   const root = fs.realpathSync(workspaceRoot);
@@ -102,7 +102,7 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, daemon, upst
   const prefix = daemon ? ["--host", daemon] : ["--context", context];
   const user = process.platform === "win32" ? "1000:1000" : `${process.getuid()}:${process.getgid()}`;
   const cleanup = new Set();
-  const supports = (name, model) => Boolean(key && model.provider === "anthropic" && models.has(model.model) &&
+  const supports = (name, model) => Boolean((key || oauth) && model.provider === "anthropic" && models.has(model.model) &&
     (!model.reasoning || name === "omp"));
 
   function start(program, args, options, { signal, budgetCents = 0, model } = {}) {
@@ -148,7 +148,7 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, daemon, upst
       if (!controller.signal.aborted) controller.abort();
     });
     if (!agent) { raw.stdin.end(); raw.abortIsolation = abort; return raw; }
-    return bridgeProcess(raw, createAnthropicBroker({ model: model.model, key, budgetCents, signal: lifetime, upstream }), abort);
+    return bridgeProcess(raw, createAnthropicBroker({ model: model.model, key, oauth, budgetCents, signal: lifetime, upstream }), abort);
   }
 
   const backend = {

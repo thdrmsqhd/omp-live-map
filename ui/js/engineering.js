@@ -163,10 +163,15 @@ async function runtimeStatus() {
   const current = await request("runtime");
   find("runtime-status").textContent = current.detail;
   find("prepare-runtime").disabled = ["ready", "checking", "building"].includes(current.status);
+  find("check-runtime").disabled = ["checking", "building"].includes(current.status);
 }
 
 find("prepare-runtime").addEventListener("click", report(async () => {
   await request("runtime", {}, { build: true });
+  await runtimeStatus();
+}));
+find("check-runtime").addEventListener("click", report(async () => {
+  await request("runtime", {}, { build: false });
   await runtimeStatus();
 }));
 

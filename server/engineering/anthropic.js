@@ -30,20 +30,22 @@ function checkedRequest(request, model) {
   return { path, body: clean };
 }
 
-function createAnthropicBroker({ model, key, budgetCents, signal, upstream = fetch }) {
+function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstream = fetch }) {
   let remaining = budgetCents;
-  const headers = { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" };
-  function call(path, body) {
+  function call(path, body, headers) {
     return upstream(endpoint + path, { method: "POST", headers, body: JSON.stringify(body),
       redirect: "error", signal });
   }
   return {
     async request(input) {
-      if (!key) throw new Error("ANTHROPIC_API_KEY is required on the desktop host");
+      if (!key && !oauth) throw new Error("Anthropic authentication is required on the desktop host");
       if (typeof input.body !== "string" || input.body.length > 1024 * 1024) throw new Error("Model request is too large");
       const { path, body } = checkedRequest(input, model);
+      const headers = { "content-type": "application/json", "anthropic-version": key ? "2023-06-01" : "2026-10-21" };
+      if (key) headers["x-api-key"] = key;
+      else headers.authorization = "Bearer " + await oauth(signal);
       const countBody = Object.fromEntries(Object.entries(body).filter(([key]) => countFields.has(key)));
-      const counted = await call("/v1/messages/count_tokens", countBody);
+      const counted = await call("/v1/messages/count_tokens", countBody, headers);
       if (!counted.ok) {
         await counted.body?.cancel();
         throw new Error("Anthropic token count failed (HTTP " + counted.status + ")");
@@ -56,7 +58,7 @@ function createAnthropicBroker({ model, key, budgetCents, signal, upstream = fet
       const reserve = ((count + 1024) * 50 + body.max_tokens * 150) / 10000;
       if (!Number.isFinite(remaining) || reserve > remaining) throw new Error("Loop model budget exhausted");
       remaining -= reserve;
-      return call(path, body);
+      return call(path, body, headers);
     },
     spent: () => budgetCents - remaining,
   };

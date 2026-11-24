@@ -5,6 +5,7 @@ const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const { dockerRunner } = require("./docker-runner");
+const { consoleOAuth } = require("./anthropic-oauth");
 const { secureRunner } = require("./runner");
 const { problem } = require("./state");
 
@@ -42,10 +43,19 @@ function runtime(directory, key) {
     if (label !== "engine-v2.1") throw problem(409, "The approved runtime image could not be identified");
     const workspaceRoot = path.join(directory, "worktrees");
     fs.mkdirSync(workspaceRoot, { recursive: true, mode: 0o700 });
-    delegate = dockerRunner({ image, context, binary, workspaceRoot, key, daemon: expected });
+    const apiKey = key;
+    const authenticate = apiKey ? null : consoleOAuth();
+    let oauth;
+    if (authenticate) {
+      try { await authenticate(); oauth = authenticate; } catch {}
+    }
+    delegate = dockerRunner({ image, context, binary, workspaceRoot, key: apiKey, oauth, daemon: expected });
     runners.add(delegate);
-    status = key ? "ready" : "missing-key";
-    detail = key ? "격리 런타임 사용 가능" : "Anthropic API 키를 저장해 주세요.";
+    status = apiKey || oauth ? "ready" : "missing-key";
+    detail = apiKey ? "격리 런타임 사용 가능 · Anthropic API 키" : oauth
+      ? "격리 런타임 사용 가능 · Claude Console OAuth"
+      : authenticate ? "Claude Console에 로그인해 주세요. ant auth login --profile omp-live-map"
+        : "Claude Platform CLI(ant)를 PATH에 추가하거나 Anthropic API 키를 저장해 주세요.";
   }
   function prepare(build = false) {
     if (pending) return pending;
@@ -68,7 +78,8 @@ function runtime(directory, key) {
     snapshot: () => delegate,
     setKey(value) {
       key = typeof value === "string" ? value : null;
-      if (!pending) void prepare();
+      if (pending) void pending.then(() => prepare());
+      else void prepare();
     },
     shutdown: () => { for (const active of runners) active.shutdown(); },
     status: () => ({ status, detail, omp: delegate.available("omp"), claude: delegate.available("claude") }),

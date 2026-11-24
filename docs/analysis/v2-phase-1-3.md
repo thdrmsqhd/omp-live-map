@@ -49,10 +49,13 @@ Windows 터미널에서 공식 Claude Code CLI의 `claude auth login`으로 Clau
 
 ### Docker 자동 Loop
 
-Windows 개발 빌드의 Engineering 화면에서 로컬 Docker Desktop의 Linux 엔진을 실행한 상태로 **실행 환경 준비**를 누릅니다. Windows 사용자 비밀 저장소에 Anthropic API 키를 저장합니다. Docker 이미지는 앱에 포함된 빌드 정의로 준비하며, 이후 실행에는 준비된 로컬 이미지를 사용합니다.
+Windows 개발 빌드의 Engineering 화면에서 로컬 Docker Desktop의 Linux 엔진을 실행한 상태로 **실행 환경 준비**를 누릅니다. Docker 이미지는 앱에 포함된 빌드 정의로 준비하며, 이후 실행에는 준비된 로컬 이미지를 사용합니다.
+
+- **Claude Console OAuth**는 [Claude Platform CLI](https://github.com/anthropics/anthropic-cli/releases/latest)의 Windows용 `ant.exe`를 Windows PATH에 추가하고 `ant auth login --profile omp-live-map`으로 로그인합니다. 앱에서 **인증 다시 확인**을 누른 후 `격리 런타임 사용 가능 · Claude Console OAuth`를 확인합니다. API 사용량은 선택한 Console 워크스페이스에 청구됩니다.
+- **Anthropic API 키**는 이전과 같이 Windows 사용자 비밀 저장소에 저장할 수 있습니다. 앱에 기존 키가 등록되어 있으면 키가 우선하므로, OAuth로 전환할 때는 **키 삭제** 후 인증을 다시 확인합니다. 앱을 시작한 환경의 `ANTHROPIC_API_KEY`도 초기 실행에 사용됩니다.
 
 모델은 `anthropic/claude-sonnet-4-6` 또는 `anthropic/claude-haiku-4-5-20251001`을 선택합니다. 현재 지원하는 검증 명령은 `node --test`, `npm test`, `python3 -m unittest discover`입니다. 작업은 기존 Git 프로젝트에서 분리한 Worktree에 수행되며, 변경 파일은 실행 이력에 표시된 Worktree에 남습니다.
 
-- 에이전트와 검증 명령은 각각 네트워크가 차단된 별도 컨테이너에서 실행합니다. 에이전트의 모델 요청은 데스크톱 호스트 중계기를 통해 승인된 Anthropic 메시지 API로만 전달합니다. API 키는 에이전트나 검증 컨테이너에 전달되지 않습니다.
+- 에이전트와 검증 명령은 각각 네트워크가 차단된 별도 컨테이너에서 실행합니다. 데스크톱 호스트 중계기만 승인된 Anthropic 메시지 API에 OAuth 액세스 토큰 또는 API 키를 전달합니다. Claude Platform CLI가 OAuth 자격 증명 저장과 토큰 갱신을 담당합니다.
 - UI의 비용 기록 중 `reserved`는 요청 전 토큰 수와 출력 한도로 계산한 보수적인 예산 예약액입니다.
 - AGENTS.md와 Skills는 프로필 버전에 저장하며 실행 지시에 반영합니다. MCP·Hooks는 검증된 설정 초안과 이전 버전을 열어 비교할 수 있습니다. 프로젝트 MCP·Hooks의 실행, 임의 런타임 이미지와 의존성 다운로드, 다른 공급자에 대한 모델 요청은 현재 실행 경로에서 제공하지 않습니다. 기존 수동 하네스의 동작은 유지합니다.
