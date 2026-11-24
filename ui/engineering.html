@@ -85,6 +85,25 @@
         <div><h3>연결</h3><ul id="workflow-edges"></ul></div>
         <div><h3>실행 계획</h3><ol id="workflow-order"></ol></div>
       </div>
+      <h3>Workflow 실행</h3>
+      <form id="workflow-run-form" class="workflow-controls">
+        <label>실행 제목 <input name="title" maxlength="240" required></label>
+        <label>최대 시간(분) <input name="minutes" type="number" min="1" max="60" value="20" required></label>
+        <label>예산(센트) <input name="budget" type="number" min="0" max="100000" value="300" required></label>
+        <button>저장된 버전 실행</button>
+      </form>
+      <label>Workflow 실행 이력 <select id="workflow-run-list"></select></label>
+      <div id="workflow-run-actions" hidden>
+        <button type="button" data-action="pause">일시정지</button>
+        <button type="button" data-action="resume">재개</button>
+        <button type="button" data-action="cancel">취소</button>
+      </div>
+      <p id="workflow-run-status" role="status"></p>
+      <form id="workflow-approval" hidden>
+        <label>승인 메모 또는 거절 사유 <input name="reason" maxlength="2000"></label>
+        <div><button name="decision" value="approved">승인</button> <button name="decision" value="rejected">거절</button></div>
+      </form>
+      <ol id="workflow-run-nodes"></ol>
     </section>
     <section id="execution" hidden>
       <h2>Loop 실행</h2>

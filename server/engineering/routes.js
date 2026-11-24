@@ -5,6 +5,8 @@ const path = require("node:path");
 const { openDatabase } = require("./database");
 const { catalog } = require("./catalog");
 const { workflowCatalog } = require("./workflow-catalog");
+const { workflowRuns } = require("./workflow-runs");
+const { workflowEngine } = require("./workflow-engine");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
@@ -52,9 +54,14 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
     try {
       const definitions = catalog(db);
       const runs = runStore(db, definitions);
+      const workflows = workflowCatalog(db, definitions);
+      const flowRuns = workflowRuns(db, definitions, workflows);
+      const workspace = worktrees(path.resolve(directory, "worktrees"));
       runs.recover();
-      services = { definitions, workflows: workflowCatalog(db, definitions), runs,
-        loop: loopEngine(runs, definitions, runner, worktrees(path.resolve(directory, "worktrees"))) };
+      flowRuns.recover();
+      services = { definitions, workflows, runs, flowRuns,
+        flow: workflowEngine(flowRuns, workflows, definitions, runner, workspace),
+        loop: loopEngine(runs, definitions, runner, workspace) };
       return services;
     } catch (error) {
       db.close();
@@ -64,13 +71,21 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
       if (req.method === "GET") {
         if (endpoint === "projects") result = definitions.projects();
         if (endpoint === "workflows") result = workflows.list(query("project"));
+        if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
+        if (endpoint === "workflow-run") {
+          const id = query("id");
+          const run = flowRuns.get(id);
+          const workflow = workflows.get(run.project, run.workflow, run.version);
+          result = { run, nodes: flowRuns.nodes(id),
+            labels: Object.fromEntries(workflow.payload.nodes.map(({ id, label }) => [id, label])) };
+        }
         if (endpoint === "workflow") {
           const version = url.searchParams.get("version");
           result = workflows.get(query("project"), query("id"), version === null ? undefined
@@ -114,6 +129,11 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "projects") result = await definitions.saveProject(input);
         if (endpoint === "workflows") result = workflows.save(input);
         if (endpoint === "workflows/plan") result = workflows.plan(string(input.project, "project"), input.payload);
+        if (endpoint === "workflow-runs") result = flow.start(input, input.key);
+        if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
+        if (endpoint === "workflow-runs/approval") {
+          result = flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
+        }
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
         if (endpoint === "definitions/remove") {

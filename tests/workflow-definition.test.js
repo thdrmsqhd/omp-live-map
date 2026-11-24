@@ -85,3 +85,38 @@ test("a V2 database migrates in place and workflows preserve immutable reference
     fs.rmSync(dir, { force: true, recursive: true });
   }
 });
+
+test("scheduler enables parallel branches and waits for all active join inputs", () => {
+  const { graphScheduler } = require("../server/engineering/graph-scheduler");
+  const scheduler = graphScheduler(compileGraph(graph()));
+  const results = new Map();
+  const ready = () => scheduler.advance(results).ready.map((item) => item.id);
+  const done = (id, outcome) => results.set(id, { status: "succeeded", ...outcome });
+  assert.deepEqual(ready(), ["s"]);
+  done("s"); assert.deepEqual(ready(), ["p"]);
+  done("p"); assert.deepEqual(ready(), ["a", "b"]);
+  done("a", { status: "failed", passed: false });
+  assert.deepEqual(ready(), ["b", "c"]);
+  const condition = graph().nodes.find(({ id }) => id === "c");
+  assert.equal(scheduler.conditionPort(condition, results), "false");
+  done("c", { port: "false" });
+  assert.deepEqual(ready(), ["b"]);
+  done("b"); assert.deepEqual(ready(), ["j"]);
+  done("j"); assert.deepEqual(ready(), ["z"]);
+  assert.equal(scheduler.outcome(results), null);
+  done("z"); assert.equal(scheduler.outcome(results), "succeeded");
+});
+
+test("scheduler leaves approval successors pending until a recorded decision", () => {
+  const { graphScheduler } = require("../server/engineering/graph-scheduler");
+  const plan = compileGraph({ name: "Approval", nodes: [
+    node("s", "start"), node("a", "approval", { prompt: "Review" }), node("w", "command", check), node("z", "end"),
+  ], edges: [edge("s", "a"), edge("a", "w", "approved"), edge("w", "z")] });
+  const scheduler = graphScheduler(plan);
+  const results = new Map([["s", { status: "succeeded" }], ["a", { status: "waiting_approval" }]]);
+  assert.deepEqual(scheduler.advance(results), { ready: [], skipped: [] });
+  results.set("a", { status: "succeeded", port: "rejected" });
+  assert.deepEqual(scheduler.advance(results), { ready: [], skipped: ["w", "z"] });
+  for (const id of ["w", "z"]) results.set(id, { status: "skipped" });
+  assert.equal(scheduler.outcome(results), "failed");
+});

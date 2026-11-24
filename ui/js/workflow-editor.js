@@ -1,3 +1,5 @@
+import { bindWorkflowRuns } from "./workflow-runs.js";
+
 const types = {
   start: "Start", end: "End", agent: "Agent", command: "Command", loop: "Loop",
   condition: "Condition", parallel: "Parallel", join: "Join", approval: "Approval",
@@ -20,6 +22,7 @@ export function bindWorkflow({ find, request, report, definitions }) {
   const el = (name) => find("workflow-" + name);
   const selector = el("list"), form = el("node-form");
   let project = "", workflow, selected, documentState = blank();
+  const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project });
   choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end"].includes(type)));
 
   function draw() {
@@ -178,5 +181,6 @@ export function bindWorkflow({ find, request, report, definitions }) {
     selector.value = "";
     open(null);
     await loadList(id);
+    await runs.refresh();
   } };
 }

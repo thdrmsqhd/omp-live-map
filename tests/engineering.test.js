@@ -54,7 +54,7 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-db-"));
   try {
     const { db, file, definitions, model, project, harness, body, store } = await fixture(t, directory);
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 2);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 3);
     assert.throws(() => definitions.remove(model.id), /referenced/);
     const newer = definitions.saveDefinition({ id: model.id, version: 1, project: project.id, kind: "model",
       payload: { ...model.payload, model: "fake-2" } });

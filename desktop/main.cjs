@@ -16,6 +16,7 @@ const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path
 const endpoints = new Set([
   "projects", "projects/archive", "definitions", "definitions/remove", "definitions/version",
   "workflows", "workflow", "workflows/plan",
+  "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
 ]);
 

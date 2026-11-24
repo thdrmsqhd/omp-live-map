@@ -104,6 +104,10 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
     await page.waitForFunction(() => document.querySelector("#workflow-name").value === "CI workflow");
     assert.equal(await start.evaluate((node) => node.style.left), "85px");
     assert.equal(await page.locator("#workflow-edges li").count(), 1);
+    await page.getByLabel("실행 제목").fill("CI workflow run");
+    await page.getByRole("button", { name: "저장된 버전 실행" }).click();
+    await page.waitForFunction(() => document.querySelector("#workflow-run-status").textContent === "succeeded");
+    assert.match(await page.locator("#workflow-run-nodes").textContent(), /End · succeeded/);
     await page.getByRole("button", { name: "실행", exact: true }).click();
     assert.equal(await page.getByRole("heading", { name: "Loop 실행" }).isVisible(), true);
     const unauthenticated = await fetch(origin + "/api/engineering/projects");
