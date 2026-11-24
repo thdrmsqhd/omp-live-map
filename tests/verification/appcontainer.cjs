@@ -21,7 +21,14 @@ async function main() {
     await fs.mkdir(workspace);
     await fs.writeFile(privateFile, "private fixture");
     const args = [workspace, privateFile, String(listener.address().port), "omp.probe." + randomUUID()];
-    const result = await promisify(execFile)(path.resolve(process.argv[2]), args, { timeout: 25000 });
+    const control = net.connect(listener.address().port, "127.0.0.1");
+    try { await once(control, "connect"); } finally { control.destroy(); }
+    const run = promisify(execFile);
+    const result = await run(path.resolve(process.argv[2]), args, { timeout: 25000 }).catch(async (error) => {
+      const files = await fs.readdir(workspace);
+      console.error("AppContainer exit:", error.code, "checkpoints:", files.join(", "));
+      throw error;
+    });
     assert.ok(await fs.stat(path.join(workspace, "allowed.txt")));
     assert.equal(await fs.readFile(privateFile, "utf8"), "private fixture");
     process.stdout.write(result.stdout);

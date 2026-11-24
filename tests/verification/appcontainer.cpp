@@ -49,6 +49,11 @@ static bool privateFileDenied(const fs::path& file, DWORD access, DWORD disposit
     return false;
 }
 
+static void checkpoint(const wchar_t* name) {
+    const HANDLE file = CreateFileW(name, GENERIC_WRITE, 0, nullptr, CREATE_NEW, 0, nullptr);
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+}
+
 static int sandboxProbe(const fs::path& privateFile, const wchar_t* port) {
     if (!appContainerToken()) return 11;
     HANDLE allowed = CreateFileW(L"allowed.txt", GENERIC_WRITE, 0, nullptr, CREATE_NEW, 0, nullptr);
@@ -57,6 +62,7 @@ static int sandboxProbe(const fs::path& privateFile, const wchar_t* port) {
     if (!privateFileDenied(privateFile, GENERIC_READ, OPEN_EXISTING)) return 13;
     if (!privateFileDenied(privateFile, GENERIC_WRITE, OPEN_EXISTING)) return 14;
 
+    checkpoint(L"private-denied.txt");
     WSADATA winsock{};
     if (WSAStartup(MAKEWORD(2, 2), &winsock) != 0) return 15;
     SOCKET client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -64,12 +70,31 @@ static int sandboxProbe(const fs::path& privateFile, const wchar_t* port) {
     target.sin_family = AF_INET;
     target.sin_port = htons(static_cast<u_short>(std::stoi(port)));
     target.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    const bool connected = client != INVALID_SOCKET &&
-        connect(client, reinterpret_cast<sockaddr*>(&target), sizeof target) == 0;
+    bool connected = false;
+    if (client != INVALID_SOCKET) {
+        u_long nonblocking = 1;
+        if (ioctlsocket(client, FIONBIO, &nonblocking) != 0) {
+            closesocket(client);
+            WSACleanup();
+            return 18;
+        }
+        connected = connect(client, reinterpret_cast<sockaddr*>(&target), sizeof target) == 0;
+        if (!connected && WSAGetLastError() == WSAEWOULDBLOCK) {
+            fd_set writable;
+            FD_ZERO(&writable);
+            FD_SET(client, &writable);
+            timeval deadline{1, 0};
+            if (select(0, nullptr, &writable, nullptr, &deadline) > 0) {
+                int error = 0, size = sizeof error;
+                connected = getsockopt(client, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&error), &size) == 0 && !error;
+            }
+        }
+    }
     if (client != INVALID_SOCKET) closesocket(client);
     WSACleanup();
     if (connected) return 16;
 
+    checkpoint(L"loopback-denied.txt");
     STARTUPINFOEXW child{};
     child.StartupInfo.cb = sizeof(STARTUPINFOW);
     return static_cast<int>(run(fs::current_path() / L"probe.exe", L"--child", fs::current_path(), child, 0));
@@ -129,6 +154,7 @@ static int launchSandbox(const wchar_t* self, const fs::path& workspace, const f
 }
 
 int wmain(int argc, wchar_t** argv) {
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     try {
         if (argc == 2 && std::wstring(argv[1]) == L"--child") return appContainerToken() ? 0 : 17;
         if (argc == 4 && std::wstring(argv[1]) == L"--sandbox") return sandboxProbe(argv[2], argv[3]);
