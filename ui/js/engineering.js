@@ -173,7 +173,13 @@ if (window.engineeringDesktop) {
     await workflow.showRun(id);
   } });
   const runtimeStatus = bindRuntimeControls({ find, request, report, status, formValues });
-  report(async () => { await Promise.all([refreshProjects(), runtimeStatus()]); })();
+  report(async () => {
+    const params = new URLSearchParams(location.search);
+    await Promise.all([refreshProjects(params.get("project") || undefined, true), runtimeStatus()]);
+    const target = params.get("view");
+    if (views.includes(target)) find(target + "-nav").click();
+    if (target === "workflow" && params.get("run") && project.value) await workflow.showRun(params.get("run"));
+  })();
   setInterval(() => {
     if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {});
     void runtimeStatus().catch(() => {});

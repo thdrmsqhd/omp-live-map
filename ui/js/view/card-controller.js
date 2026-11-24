@@ -1,7 +1,6 @@
 /* 공통 카드 활성화·포커스·헤더 제어. 세션 수명과 화면 수명은 분리한다. */
 let activeCardId = null;
 let focusedCardId = null;
-let savedCardView = null;
 
 function activateCard(id) {
   if (!id) return;
@@ -16,25 +15,19 @@ function paintActiveCards() {
   for (const row of document.querySelectorAll(".sl-row")) row.classList.toggle("active-card", row.dataset.id === activeCardId);
 }
 function cardClosed(id) {
-  if (focusedCardId === id) {
-    focusedCardId = null;
-    if (savedCardView) { Object.assign(view, savedCardView); savedCardView = null; applyView(); }
-  }
+  if (focusedCardId === id) focusedCardId = null;
   if (activeCardId === id) activeCardId = [...openIds].at(-1) || null;
 }
 function toggleCardFocus(id) {
   if (!openIds.has(id)) return;
-  if (focusedCardId === id) {
+  if (mapMode === "workspace" && activeCardId === id) {
     focusedCardId = null;
-    if (savedCardView) { Object.assign(view, savedCardView); savedCardView = null; applyView(); }
+    setMapMode("map");
   } else {
-    if (!focusedCardId) savedCardView = { x: view.x, y: view.y, k: view.k };
     focusedCardId = id;
     activateCard(id);
-    const box = SATS.get(id);
-    if (box) fitBox(box, 12, 180);
+    setMapMode("workspace");
   }
-  paintActiveCards();
 }
 function cardWindowActions(id) {
   return `<button class="x" data-card-focus="1" title="카드 집중 보기 / 복원" aria-label="카드 집중 보기 또는 복원">⛶</button>

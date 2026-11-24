@@ -10,7 +10,7 @@ function bindCardResize() {
   let rs = null;
 
   box.addEventListener("pointerdown", (e) => {
-    const grip = e.button === 0 && !spaceDown && e.target.closest(".rsz");
+    const grip = mapMode === "map" && e.button === 0 && !spaceDown && e.target.closest(".rsz");
     if (!grip) return;
     const el = grip.closest(".node.big");
     const id = el && el.dataset.id;

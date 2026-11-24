@@ -100,5 +100,6 @@ function renderMap(resetView, force) {
   paintActiveCards();
   for (const el of box.querySelectorAll(".node.big")) paintBlockFocus(el);
   if (typeof paintAttention === "function") paintAttention();
-  if (resetView) fit(); else paintMinimap();
+  paintMonitor(sessions);
+  if (resetView && mapMode === "map") fit(); else paintMinimap();
 }

@@ -11,6 +11,7 @@ function bindStageInput() {
   let drag = null;
 
   stage.addEventListener("pointerdown", (e) => {
+    if (mapMode !== "map") return;
     const onCard = e.target.closest(".node, .cluster .ch, .jcard");
     const wantPan = e.button === 1 || (e.button === 0 && (spaceDown || !onCard));
     if (!wantPan) return;
@@ -68,6 +69,7 @@ function bindStageInput() {
   });
 
   stage.addEventListener("wheel", (e) => {
+    if (mapMode !== "map") return;
     e.preventDefault();
     stopMomentum();
     const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
@@ -96,8 +98,8 @@ function bindStageInput() {
 
   addEventListener("keydown", (e) => {
     // 입력창·contenteditable·터미널 안의 키(Ctrl+Z 포함)는 지도에서 가로채지 않는다.
-    const typing = e.target && (/input|textarea/i.test(e.target.tagName) || e.target.isContentEditable || !!(e.target.closest && e.target.closest(".term")));
-    if (e.code === "Space" && !e.repeat && !typing) { spaceDown = true; stage.style.cursor = "grab"; }
+    const typing = e.target && (/input|textarea|select/i.test(e.target.tagName) || e.target.isContentEditable || !!(e.target.closest && e.target.closest(".term,.edblk")));
+    if (mapMode === "map" && e.code === "Space" && !e.repeat && !typing) { spaceDown = true; stage.style.cursor = "grab"; }
     if (!typing && (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "n" || e.key === "N")) {
       e.preventDefault();
       const r = stage.getBoundingClientRect();
@@ -111,15 +113,16 @@ function bindStageInput() {
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === "+" || e.key === "=") zoomTo(view.k * 1.25);
-    else if (e.key === "-" || e.key === "_") zoomTo(view.k / 1.25);
-    else if (e.key === "0") fit();
-    else if (e.key === "1") zoomTo(1);
+    if (mapMode === "map" && (e.key === "+" || e.key === "=")) zoomTo(view.k * 1.25);
+    else if (mapMode === "map" && (e.key === "-" || e.key === "_")) zoomTo(view.k / 1.25);
+    else if (mapMode === "map" && e.key === "0") fit();
+    else if (mapMode === "map" && e.key === "1") zoomTo(1);
     else if (e.key === "Escape") {
       if (cancelCardDrag()) return;
       if ($("ctxmenu").classList.contains("open")) closeMenu();
       else if (SELECTED.size) { SELECTED.clear(); paintSelection(); }
-      else if (typeof focusedCardId !== "undefined" && focusedCardId) toggleCardFocus(focusedCardId);
+      else if (activeCardId && BLOCK_FOCUS.has(activeCardId)) { BLOCK_FOCUS.delete(activeCardId); renderMap(false, true); }
+      else if (mapMode === "workspace") { focusedCardId = null; setMapMode("map"); }
       else if (activeCardId && openIds.has(activeCardId)) { closeCard(activeCardId); renderMap(false, true); }
     }
   });
