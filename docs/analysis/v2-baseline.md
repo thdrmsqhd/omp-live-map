@@ -33,18 +33,24 @@ V3는 Phase 4~6의 Graph·SDLC·PR/CI·통합 인수와 설치 업데이트·이
 - Linux Node 24에서 원본 `node --test`는 1건 통과했습니다. README의 수동 검증 외에 자동 테스트도 존재합니다.
 - 기존 ADR-0002의 JSONL 관측 원본 결정은 유지합니다. 신규 실행 상태 저장과 검증 기반 재시도를 허용하는 경계는 T002에서 별도로 결정해야 합니다.
 - Windows 설치·Git Bash·WSL·Docker 동작과 실제 브라우저 카드 조작, 10세션 수신부터 화면 반영까지의 성능은 별도 검증이 필요합니다.
-- T001은 소스 인벤토리와 호환 계약을 갖췄습니다. Gate 0은 T002~T005의 완료 조건이 남아 있습니다.
+- T001은 소스 인벤토리와 호환 계약을 갖췄습니다. Gate 0의 남은 완료 조건은 아래 표에 기록했습니다.
 
 ## Phase 0 검증 현황
 
 | Task | 상태 | 근거 |
 | --- | --- | --- |
 | T001 | 완료 | 위 소스 인벤토리와 호환 계약 |
-| T002 | 검토 중 | [ADR-0003](../adr/0003-v2-desktop-state-and-isolation.md), Linux SQLite 확인. Windows 격리·설치 PoC 필요 |
+| T002 | 검토 중 | [ADR-0003](../adr/0003-v2-desktop-state-and-isolation.md). Windows Electron과 SQLite PoC 통과. 설치 패키지와 실제 CLI 권한 격리 검증 필요 |
 | T003 | 완료 | `node --test`, 임시 상태·JSONL 디렉터리 및 loopback HTTP fixture |
 | T004 | 완료 | 기존 API에서 두 가짜 CLI 실행, OMP 대기·취소, Claude 스트리밍·오류와 메인·서브 수집, SSE 재연결을 자동 검증 |
-| T005 | 진행 중 | 보안 가드·초기 SSE·계보·편집기 저장 충돌·잡 종료 검증. Windows 인프라, 브라우저 카드 조작, 성능 기준선 필요 |
+| T005 | 진행 중 | 기존 API·편집기 저장 충돌·잡 종료, 브라우저 카드·목록 상태, SSE 반영, 모의 WSL/Docker API 검증. 실제 Windows Git Bash·WSL2·Docker 연동은 미검증 |
 
-Linux Node 24의 `node --test` 결과는 9건 통과입니다. 테스트는 임시 홈/상태와 Node로 시작한 가짜 프로세스를 사용합니다.
+### 호스팅 Windows 검증
 
-Chromium 실동작 측정은 실행 환경에서 브라우저 소켓 생성이 거부되어 진행하지 못했습니다. 성능 결과는 확보하지 못했습니다.
+[GitHub Actions 실행 45311233515](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45311233515)의 Windows Server 2025 러너에서 아래 항목을 확인했습니다.
+
+- Node 24 회귀 테스트 10건 통과. 기존 9건과 WSL·Docker 명령 및 응답을 모의한 API 테스트 1건을 실행했습니다.
+- SQLite 파일 DB를 닫고 다시 열었을 때 확정된 실행 상태만 남았습니다.
+- Electron 43.8.12가 별도 Node 자식 프로세스로 기존 서버를 시작하고 Live Map 창을 열었습니다. 포트가 이미 사용 중이면 충돌을 보고하고 기존 서버를 보존했습니다. 종료 후에는 앱이 시작한 서버 PID와 포트가 정리됐습니다.
+- Chromium에서 세션 카드 열기와 새로고침 후 목록 패널 상태 복원을 확인했습니다. 모의 세션 10개에서 JSONL 스캔 시작부터 SSE를 거쳐 브라우저 DOM에 반영되기까지 20회 측정한 p95는 18.3ms였습니다. 이 수치는 호스팅 러너의 기준선입니다.
+- 검증 스크립트는 테스트 전용입니다. 설치형 배포 및 실제 하네스 권한 격리, WSL2·Docker 실연동 증거는 남아 있습니다.
