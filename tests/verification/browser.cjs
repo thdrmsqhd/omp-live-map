@@ -85,6 +85,10 @@ test("existing map opens a session card, restores panel state and renders update
       await first.click(filter);
       await page.locator(".node.big.active-card .cin").fill("unsent fixture");
       assert.equal(await page.locator(".node.big.active-card [data-send]").isEnabled(),true);
+      assert.equal(await page.evaluate(()=>localStorage.getItem("omp-map-draft-v1:"+activeCardId)),JSON.stringify("unsent fixture"));
+      await page.locator(".node.big.active-card [data-prompt-action=preview]").click();
+      assert.equal(await page.locator(".node.big.active-card .prompt-preview").isVisible(),true);
+      await page.locator(".node.big.active-card [data-prompt-action=preview]").click();
       await page.locator(".node.big.active-card .chat-search").fill("no matching fixture");
       assert.equal(await page.locator(".node.big.active-card .cmsgs").innerText(),"검색 결과 없음");
       await page.locator(".node.big.active-card [data-chat-search-clear]").click();

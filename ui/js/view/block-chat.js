@@ -73,12 +73,12 @@ function chatBlock(n) {
     <div class="cworking" role="status" aria-live="polite"${st.busy || actItems(n.id).running ? "" : " hidden"}><span class="cworking-dot" aria-hidden="true"></span>응답 생성·작업 중</div>
     <div class="cmnote" hidden></div>
     ${chatModelPickerHTML()}
-    <div class="chat-composer"><div class="crow"><textarea class="cin" rows="2" placeholder="메시지를 입력하세요 · Ctrl+Enter 전송">${esc(st.draft)}</textarea></div><div class="achips">${attachChipsHTML(st.files)}</div><div class="chat-compose-actions">
+    <div class="chat-composer">${promptToolbarHTML(n,st)}<div class="crow"><textarea class="cin" rows="4" placeholder="작업 지시를 입력하세요 · @파일 · /명령 · #Task">${esc(st.draft)}</textarea></div><div class="prompt-preview" hidden></div><div class="prompt-suggestions" hidden></div><div class="achips">${attachChipsHTML(st.files)}</div><div class="chat-compose-actions">
       <button class="cmodel" data-model="1"${caps.model ? "" : ` disabled title="Claude Code는 대화 중 모델 변경을 지원하지 않습니다"`}>${esc(chatModelLabel(n))}</button>
       <button data-chat-attach="1" title="파일 첨부" aria-label="파일 첨부">＋ 첨부</button><input class="chat-file" type="file" multiple hidden>
-      <span class="chat-compose-spacer"></span><details class="chat-extra"><summary>대화 관리</summary><div><button data-sum="1">요약</button>
+      <select class="prompt-mode" aria-label="전송 방식"><option value="steer">즉시 지시</option><option value="queue">완료 후 실행</option></select><span class="chat-compose-spacer"></span><details class="chat-extra"><summary>대화 관리</summary><div><button data-sum="1">요약</button>
       <button data-compact="1"${caps.compact ? "" : ` disabled title="Claude Code는 컨텍스트 압축을 지원하지 않습니다"`}>${st.compacting ? "압축 중…" : "압축"}</button>
-      <button data-clear="1"${caps.clear ? "" : ` disabled title="Claude Code는 대화 비우기를 지원하지 않습니다"`}>${st.clearing ? "비우는 중…" : "비우기"}</button></div></details><button class="stop" data-cancel="1"${st.busy ? "" : " hidden"}>중단</button><button class="chat-send" data-send="1">보내기 ↑</button></div><div class="chat-hint">Ctrl+Enter 전송 · Enter 줄바꿈 · 파일 붙여넣기</div></div>
+      <button data-clear="1"${caps.clear ? "" : ` disabled title="Claude Code는 대화 비우기를 지원하지 않습니다"`}>${st.clearing ? "비우는 중…" : "비우기"}</button></div></details><button class="stop" data-cancel="1"${st.busy ? "" : " hidden"}>중단</button><button class="chat-send" data-send="1">보내기 ↑</button></div><div class="chat-hint"></div><div class="prompt-queue" hidden></div></div>
     <div class="csum">${chatSumHTML(st)}</div>
   </div>`;
 }
@@ -89,10 +89,11 @@ function fitChatInput(ta) {
   const lh = parseFloat(cs.lineHeight) || 15;
   const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   const bd = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
-  const max = Math.min(120, lh * 5 + pad + bd);
+  const st=chatState(ta.closest(".node").dataset.id);
+  const min=lh*4+pad+bd,max=st.expanded?Math.max(min,ta.closest(".chat").clientHeight*.65):Math.max(min,Math.min(260,lh*10+pad+bd));
   ta.style.height = "auto";
   const want = ta.scrollHeight + bd;
-  ta.style.height = Math.max(lh + pad + bd, Math.min(max, want)) + "px";
+  ta.style.height = Math.max(min,Math.min(max,Math.max(want,st.manualHeight||0,st.expanded?max:0))) + "px";
   ta.style.overflowY = want > max ? "auto" : "hidden";
 }
 
@@ -153,6 +154,7 @@ function paintChat(id) {
   if (ta.value !== st.draft) { ta.value = st.draft; fitChatInput(ta); }
   paintAttachChips(box.querySelector(".achips"), st.files);
   paintChatModel(box, node, st);
+  paintPromptComposer(box,node,st);
 }
 
 function mountChat(blk, n) {
@@ -161,13 +163,11 @@ function mountChat(blk, n) {
   const st = chatState(id);
   const ta = box.querySelector(".cin");
   fitChatInput(ta);
-  ta.addEventListener("input", () => { st.draft = ta.value; fitChatInput(ta); box.querySelector("[data-send]").disabled=!!st.sending||(!ta.value.trim()&&!st.files.length); });
+  mountPromptComposer(box,n,st);
   const search=box.querySelector(".chat-search");search.addEventListener("input",()=>{st.search=search.value;st.historyOffset=0;paintChat(id);});
   box.querySelector(".chat-file").addEventListener("change",e=>{const dt=new DataTransfer();for(const file of e.target.files)dt.items.add(file);box.dispatchEvent(new DragEvent("drop",{bubbles:true,cancelable:true,dataTransfer:dt}));e.target.value="";});
   wireAttach(box, () => st.files, () => paintChat(id));
-  ta.addEventListener("keydown", (e) => {
-    if (!e.isComposing && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendChat(id); }
-  });
+
   box.addEventListener("click", (e) => {
     // 활동 묶음: 툴 출력 펼침과 끝난 턴 요약 행 접기·펼치기.
     const pre = e.target.closest("pre[data-lvout].more");
@@ -185,7 +185,7 @@ function mountChat(blk, n) {
     if (b.dataset.chatAttach) box.querySelector(".chat-file").click();
     else if (b.dataset.chatSearchClear) {search.value="";st.search="";st.historyOffset=0;paintChat(id);}
     else if (b.dataset.chatJump) {st.historyOffset=0;st.search="";search.value="";if(CHAT_TOOL.has(id))CHAT_TOOL.delete(id);paintChat(id);const l=box.querySelector(".cmsgs");l.scrollTop=l.scrollHeight;box.querySelector(".chat-jump").hidden=true;}
-    else if (b.dataset.send) sendChat(id);
+    else if (b.dataset.send) submitPrompt(id);
     else if (b.dataset.model) toggleModelPicker(id);
     else if (b.dataset.pickId) { if (!modelPick(id).loading) pickModel(id, b.dataset.pickP, b.dataset.pickId); }
     else if (b.dataset.cancel) cancelChat(id);
@@ -222,6 +222,7 @@ function mountChat(blk, n) {
   paintChatModel(box, n, st);
   mountChatAsk(box);
   paintChatAsk(box, id);
+  paintPromptComposer(box,n,st);
 }
 
 registerBlock({ type: "chat", slot: "main", flex: 7.4, render: chatBlock, mount: mountChat, paint: (box, n) => paintChat(n.id) });

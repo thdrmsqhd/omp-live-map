@@ -35,4 +35,5 @@ $("filters").addEventListener("click", (e) => {
 // 서버(SSE) 연결 상태. 끊기면 화면 값이 멈춘 것이므로 눈에 띄게 알린다.
 function setConnected(on) {
   $("conn").hidden = on;
+  for(const id of openIds)if(typeof paintChat==="function")paintChat(id);
 }

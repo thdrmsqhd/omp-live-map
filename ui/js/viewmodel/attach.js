@@ -53,6 +53,7 @@ const attachImages = (list) => list
 
 // 보내면 안 되는 이유. 없으면 "".
 function attachProblem(list) {
+  if(list.length>10)return "첨부는 최대 10개입니다";
   const bad = list.find((it) => it.err);
   if (bad) return `첨부 오류(${bad.name}: ${bad.err}) · 칩의 ×로 빼고 보내세요`;
   if (list.some((it) => it.reading)) return "첨부를 아직 읽는 중입니다";

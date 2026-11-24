@@ -125,7 +125,7 @@ function termState(n) {
 }
 
 function chatState(id) {
-  if (!CHAT.has(id)) CHAT.set(id, { draft: "", summary: "", busy: false, log: [], stream: "", files: [], previews: new Map() });
+  if (!CHAT.has(id)) CHAT.set(id, { draft: loadPromptDraft(id), summary: "", busy: false, log: [], stream: "", files: [], previews: new Map() });
   return CHAT.get(id);
 }
 

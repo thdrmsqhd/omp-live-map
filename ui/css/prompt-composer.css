@@ -1,0 +1,17 @@
+/* Prompt editor: readable multiline entry, compact secondary controls */
+.prompt-meta,.prompt-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.prompt-meta{font-size:11px;color:#a9bdcf}
+.prompt-state{color:#8ed9c4;font-weight:650}
+.prompt-cwd{flex:1;min-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.prompt-meta button,.prompt-tools button,.prompt-tools select,.prompt-mode{font-size:11px;min-height:25px;padding:3px 6px}
+.prompt-tools select,.prompt-mode{background:#142332;color:#cddbeb;border:1px solid #34495e;border-radius:5px;max-width:150px}
+.node.big .chat-composer .cin{min-height:105px;max-height:none}
+.node.big .chat-composer .cin[hidden],.prompt-preview[hidden],.prompt-suggestions[hidden],.prompt-queue[hidden]{display:none!important}
+.chat-composer .crow{position:relative}.prompt-grip{position:absolute;right:3px;bottom:3px;cursor:ns-resize;padding:0 4px;color:#8ca3b9}
+.prompt-preview{max-height:240px;min-height:100px;overflow:auto;padding:10px;background:#0b141e;border-radius:6px;font-size:13px;line-height:1.6}
+.prompt-suggestions{max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:3px;background:#0b141e;padding:6px;border:1px solid #34495e;border-radius:6px}
+.prompt-suggestions button{text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.prompt-queue{max-height:180px;overflow:auto;border:1px solid #34495e;padding:6px;border-radius:6px;font-size:11px}
+.prompt-queue header,.prompt-queue-row{display:flex;align-items:center;gap:4px;padding:4px}
+.prompt-queue-row span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prompt-queue button{font-size:11px;padding:3px 5px}
