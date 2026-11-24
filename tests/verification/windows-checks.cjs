@@ -21,7 +21,7 @@ test("Windows verification runner denies private files, local network, and child
     const runtime = path.join(canonical, "runtime");
     const privateFile = path.join(canonical, "private.txt");
     const node = path.join(runtime, "node.exe");
-    const check = { command: "node", args: ["verify.cjs"], code: 0 };
+    const check = { command: "node", args: ["--preserve-symlinks-main", "--preserve-symlinks", "verify.cjs"], code: 0 };
     const denied = { command: "node", args: ["other.cjs"], code: 0 };
     await fs.mkdir(cwd, { recursive: true });
     await fs.mkdir(runtime);
@@ -47,8 +47,14 @@ test("Windows verification runner denies private files, local network, and child
       programs: new Map([["node", node]]), allowlist: [check],
     });
     const signal = AbortSignal.timeout(25000);
+    const control = net.connect(listener.address().port, "127.0.0.1");
+    try { await once(control, "connect"); } finally { control.destroy(); }
     await assert.rejects(runner.execute(denied, cwd, signal), /not allowed/);
     await assert.rejects(runner.execute(check, runtime, signal), /worktree path/);
+    const alias = path.join(cwd, "private-alias.txt");
+    await fs.link(privateFile, alias);
+    try { await assert.rejects(runner.execute(check, cwd, signal), /Hard links are not supported/); }
+    finally { await fs.unlink(alias); }
     process.env.OMP_TEST_PRIVATE_SECRET = "parent-only";
     const result = await runner.execute(check, cwd, signal);
     delete process.env.OMP_TEST_PRIVATE_SECRET;

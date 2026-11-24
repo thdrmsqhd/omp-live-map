@@ -27,7 +27,6 @@ static std::wstring quote(const std::wstring& value) {
     out.append(slashes * 2, L'\\');
     return out + L"\"";
 }
-
 struct Handle {
     HANDLE value = nullptr;
     ~Handle() { if (value && value != INVALID_HANDLE_VALUE) CloseHandle(value); }
