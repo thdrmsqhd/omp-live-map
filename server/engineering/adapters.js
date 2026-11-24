@@ -45,6 +45,10 @@ async function omp(backend, context) {
   const done = new Promise((resolve, reject) => {
     rpc.onEvent((frame) => {
       if (frame.type === "turn_end") {
+        if (frame.message?.stopReason === "error" || frame.message?.stopReason === "aborted") {
+          reject(new Error("OMP turn failed: " + redact(frame.message.errorMessage ?? frame.message.stopReason)));
+          return;
+        }
         const usd = frame.message?.usage?.cost?.total;
         if (!Number.isFinite(usd) || usd < 0) reject(new Error("OMP returned no valid cost"));
         else { costCents += usd * 100; turns++; }

@@ -91,12 +91,15 @@ async function repairFixture(adapter) {
       execFileSync("git", args, { cwd: projectRoot });
     }
     let attempts = 0;
+    const requests = [];
     const modelName = "claude-sonnet-4-6";
     const runner = dockerRunner({ image: process.env.OMP_RUNTIME_TEST_IMAGE, context: "default",
       binary: "/usr/bin/docker", workspaceRoot, key: "host-fixture-key",
       upstream: (url, options) => {
         const body = JSON.parse(options.body);
         if (url.endsWith("count_tokens")) return Response.json({ input_tokens: 500 });
+        requests.push({ tools: body.tools?.map(({ name, input_schema }) => ({ name, properties: Object.keys(input_schema?.properties ?? {}) })),
+          last: body.messages.at(-1)?.content });
         const last = body.messages.at(-1);
         if (Array.isArray(last.content) && last.content.some((block) => block.type === "tool_result")) {
           return providerFixture(url, options, []);
@@ -126,7 +129,12 @@ async function repairFixture(adapter) {
     while (store.get(id).status === "running" && Date.now() < deadline) await delay(200);
     const result = store.get(id);
     const history = store.attempts(id);
-    assert.equal(result.status, "succeeded", JSON.stringify(history));
+    const files = result.workspace ? await fs.readdir(result.workspace) : [];
+    assert.equal(result.status, "succeeded", JSON.stringify({
+      attempts, files, requests: requests.map(({ tools, last }) => ({
+        tools, last: Array.isArray(last) ? last.filter((item) => item.type === "tool_result") : undefined,
+      })), history: history.map(({ status, outcome }) => ({ status, error: outcome?.error })),
+    }));
     assert.deepEqual(history.map(({ status }) => status), ["rejected", "rejected", "passed"]);
     assert.equal(await fs.readFile(path.join(result.workspace, "attempt-3.txt"), "utf8"), "fixed");
     assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: projectRoot, encoding: "utf8" }), "");
