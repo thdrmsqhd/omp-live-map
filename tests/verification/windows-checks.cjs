@@ -32,6 +32,7 @@ test("Windows verification runner denies private files, local network, and child
       const fs = require("node:fs");
       const cp = require("node:child_process");
       const net = require("node:net");
+      assert.equal(process.env.OMP_TEST_PRIVATE_SECRET, undefined);
       fs.writeFileSync("verified.txt", "inside");
       assert.throws(() => fs.readFileSync(${JSON.stringify(privateFile)}));
       assert.throws(() => fs.writeFileSync(${JSON.stringify(privateFile)}, "changed"));
@@ -48,7 +49,9 @@ test("Windows verification runner denies private files, local network, and child
     const signal = AbortSignal.timeout(25000);
     await assert.rejects(runner.execute(denied, cwd, signal), /not allowed/);
     await assert.rejects(runner.execute(check, runtime, signal), /worktree path/);
+    process.env.OMP_TEST_PRIVATE_SECRET = "parent-only";
     const result = await runner.execute(check, cwd, signal);
+    delete process.env.OMP_TEST_PRIVATE_SECRET;
     assert.equal(result.code, 0, result.log);
     assert.match(result.log, /isolated/);
     assert.equal(await fs.readFile(path.join(cwd, "verified.txt"), "utf8"), "inside");
@@ -58,6 +61,7 @@ test("Windows verification runner denies private files, local network, and child
     await assert.rejects(runner.execute(check, cwd, AbortSignal.timeout(8000)), { name: "TimeoutError" });
     await assert.rejects(fs.stat(path.join(cwd, "late.txt")), { code: "ENOENT" });
   } finally {
+    delete process.env.OMP_TEST_PRIVATE_SECRET;
     listener.close();
     await fs.rm(directory, { recursive: true, force: true, maxRetries: 4 });
   }

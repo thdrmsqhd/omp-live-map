@@ -3,12 +3,12 @@
 #include <userenv.h>
 #include <sddl.h>
 #include <objbase.h>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
-
 namespace fs = std::filesystem;
 static void requireWin(BOOL success, const char* operation) {
     if (!success) throw std::runtime_error(std::string(operation) + ": " + std::to_string(GetLastError()));
@@ -111,7 +111,6 @@ struct Grants {
         runtimeGranted = true;
     }
 };
-
 static void rejectLinks(const fs::path& root) {
     auto check = [](const fs::path& path) {
         const DWORD attrs = GetFileAttributesW(path.c_str());
@@ -125,7 +124,6 @@ static void rejectLinks(const fs::path& root) {
         if (entry.is_regular_file() && fs::hard_link_count(entry.path()) > 1) throw std::runtime_error("Hard links are not supported");
     }
 }
-
 static int execute(const fs::path& workspace, const fs::path& executable, int argc, wchar_t** argv) {
     const auto runtime = executable.parent_path();
     const auto relative = runtime.lexically_relative(workspace);
@@ -169,14 +167,18 @@ static int execute(const fs::path& workspace, const fs::path& executable, int ar
     PROCESS_INFORMATION process{};
     std::wstring command = quote(executable.wstring());
     for (int i = 3; i < argc; ++i) command += L" " + quote(argv[i]);
-    std::wstring environment = L"PATH=" + systemDirectory();
-    environment += L'\0';
-    environment += L"SystemRoot=" + fs::path(systemDirectory()).parent_path().wstring();
-    environment += L'\0';
-    environment += L"TEMP=" + workspace.wstring();
-    environment += L'\0';
-    environment += L"TMP=" + workspace.wstring();
-    environment += L'\0';
+    std::wstring environment;
+    auto variable = [&](const wchar_t* name, const std::wstring& value) {
+        environment += std::wstring(name) + L"=" + value;
+        environment += L'\0';
+    };
+    const auto systemRoot = fs::path(systemDirectory()).parent_path().wstring();
+    variable(L"LOCALAPPDATA", _wgetenv(L"LOCALAPPDATA") ? _wgetenv(L"LOCALAPPDATA") : workspace.wstring());
+    variable(L"PATH", systemDirectory());
+    variable(L"SystemRoot", systemRoot);
+    variable(L"TEMP", workspace.wstring());
+    variable(L"TMP", workspace.wstring());
+    variable(L"USERPROFILE", _wgetenv(L"USERPROFILE") ? _wgetenv(L"USERPROFILE") : workspace.wstring());
     requireWin(CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, TRUE,
         EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW,
         environment.data(), workspace.c_str(), &startup.StartupInfo, &process), "Launch AppContainer process");
@@ -186,7 +188,6 @@ static int execute(const fs::path& workspace, const fs::path& executable, int ar
     requireWin(GetExitCodeProcess(child.value, &code), "Read command exit code");
     return static_cast<int>(code);
 }
-
 int wmain(int argc, wchar_t** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     if (argc < 3) return 125;
