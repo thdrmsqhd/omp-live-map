@@ -13,7 +13,7 @@ const iso = (ms) => new Date(ms).toISOString();
 const argv = process.argv.slice(2);
 const argOf = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] || "" : ""; };
 
-const home = process.env.USERPROFILE || process.env.HOME || os.homedir();
+const home = process.env.FAKE_CLAUDE_HOME || process.env.USERPROFILE || process.env.HOME || os.homedir();
 const slug = (cwd) => String(cwd || "").replace(/[^A-Za-z0-9]/g, "-");
 const sessionFile = (cwd, id) => path.join(home, ".claude", "projects", slug(cwd), id + ".jsonl");
 
@@ -92,6 +92,7 @@ function main() {
     const { text, images } = input;
     const now = Date.now();
     if (!resume) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, "");
       append(file, { type: "custom-title", sessionId: id, timestamp: iso(now), customTitle: "가짜 Claude 세션" });
     }
