@@ -27,7 +27,11 @@ function patchPieces(box, pieces) {
 function patchKeeping(old, el, keep) {
   const kept = old.querySelector(":scope > " + keep);
   const fresh = el.querySelector(":scope > " + keep);
-  if (!kept || !fresh || kept.dataset.sig !== fresh.dataset.sig) return false;
+  if (!kept || !fresh) return false;
+  if (kept.dataset.sig !== fresh.dataset.sig) {
+    if (keep !== ".body") return false;
+    patchCardBody(kept, fresh);
+  }
   old.className = el.className;
   old.style.cssText = el.style.cssText;
   for (const ch of [...old.children]) if (ch !== kept) ch.remove();

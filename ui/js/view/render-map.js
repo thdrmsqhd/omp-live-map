@@ -96,8 +96,9 @@ function renderMap(resetView, force) {
   for (const id of openIds) mountBlocks(nodeById(id), ELS.get(id));
   box.querySelectorAll("input.rename").forEach(wireRename);
   paintSelection();
-  paintActiveCards();
   renderSessionList(sessions);
+  paintActiveCards();
+  for (const el of box.querySelectorAll(".node.big")) paintBlockFocus(el);
   if (typeof paintAttention === "function") paintAttention();
   if (resetView) fit(); else paintMinimap();
 }

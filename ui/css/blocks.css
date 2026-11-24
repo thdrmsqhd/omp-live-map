@@ -149,3 +149,24 @@
     font-size: 12px; box-shadow: 0 8px 20px #0009; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     opacity: 0; pointer-events: none; transition: opacity .15s; }
   #plToast.on { opacity: 1; } #plToast.bad { border-color: var(--error); }
+
+/* 공통 헤더: 실제 내용과 제어 영역을 분리하고 접힌 블록도 동일한 제목을 유지한다. */
+.node.big .blk > .bheader { flex:none; min-width:0; display:flex; align-items:center; gap:6px; min-height:26px; padding:3px 4px; color:var(--muted); border-bottom:1px solid var(--border); }
+.node.big .bheader strong { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.node.big .bheader > .bgrip { cursor:grab; }
+.node.big .blk .bheader > .bctl { position:static; opacity:1; align-items:center; display:flex; gap:4px; }
+.node.big .bheader button,.node.big .bheader select { min-height:22px; font-size:11px; }
+.node.big .bheader select { max-width:70px; background:var(--panel); color:var(--fg); border:1px solid var(--border); border-radius:4px; }
+.node.big .blk > .bresize { height:7px; }
+.node.big .blk[data-blk="chat"],.node.big .blk[data-blk="bg"],.node.big .blk[data-blk="context"] { padding-top:0; }
+.node.big .blk .brow .tinfo,.node.big .blk .term .tinfo,.node.big .blk .db .dbtop,.node.big .blk .ctxblk .cthead { padding-right:0; }
+.node.big .blk.collapsed[data-blk] { height:auto; min-height:30px; }
+.node.big .blk.collapsed::before { content:none; }
+.node.big .blk.collapsed > .bheader { display:flex; }
+.node.big .block-drop { outline:2px dashed var(--accent); outline-offset:-2px; }
+.node.big .body.has-block-focus .blk:not(.block-focused) { display:none; }
+.node.big .body.has-block-focus :is(.col-main,.col-ed,.col-left,.col-tree):not(:has(.block-focused)) { display:none; }
+.node.big .body.has-block-focus .col-rest:not(:has(.block-focused)),.node.big .body.has-block-focus .edsplit { display:none; }
+.node.big .body.has-block-focus :is(.col-main,.col-ed,.col-left,.col-tree):has(.block-focused) { flex:1; width:auto; min-width:0; }
+.node.big .body.has-block-focus .block-focused { flex:1!important; height:auto!important; }
+.node.big .body.has-block-focus .block-focused > .bresize { display:none; }

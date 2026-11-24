@@ -41,7 +41,7 @@ function deleteLocal(id) {
   renderMap(false, true);
 }
 
-const BLOCK_LABELS = { chat: "채팅", context: "컨텍스트", terminal: "터미널", bg: "백그라운드 잡", editor: "코드 편집기", browser: "브라우저", db: "DB 조회", memo: "메모" };
+const BLOCK_LABELS = BLOCK_TITLES;
 
 // 카드 종류별로 붙일 수 있는 블록. 로컬 카드는 세션이 아니라 채팅이 없고, 인프라 카드는 사이드 컬럼(파일)을 쓰지 않는다.
 const blockChoices = (n) => (agentKind(n.kind) ? Object.keys(BLOCK_LABELS).filter((t) => (t !== "context" || capsOf(n).context) && (t !== "editor" || n.kind !== "sub"))

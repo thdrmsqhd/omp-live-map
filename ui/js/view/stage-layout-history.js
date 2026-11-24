@@ -9,6 +9,7 @@ function layoutSnapshot(keys) {
     manual: (keys.manual || []).map((k) => [k, copy(MANUAL[k])]),
     big: (keys.big || []).map((id) => [id, copy(BIGPOS.get(id))]),
     locals: (keys.locals || []).map((id) => LOCALS.find((l) => l.id === id)).filter(Boolean).map((L) => [L.id, L.x, L.y]),
+    ui: (keys.ui || []).map((id) => [id, CARD_UI.has(id) ? JSON.parse(JSON.stringify(CARD_UI.get(id))) : null]),
   };
 }
 
@@ -26,6 +27,8 @@ function undoLayout() {
     const L = LOCALS.find((l) => l.id === id);
     if (L) { L.x = x; L.y = y; }
   }
+  for (const [id, u] of prev.ui || []) { if (u) CARD_UI.set(id, u); else CARD_UI.delete(id); }
+  saveCardUI();
   saveManual();
   saveLocals();
   saveOpenCards();

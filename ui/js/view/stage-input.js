@@ -107,7 +107,7 @@ function bindStageInput() {
     }
     if (typing) return;
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
-      if (cancelCardDrag() || undoLayout()) e.preventDefault();   // 이동 중이면 되돌리기 대신 이동만 취소한다
+      if ((cancelBlockGesture && (cancelBlockGesture(), true)) || cancelCardDrag() || undoLayout()) e.preventDefault();   // 이동 중이면 되돌리기 대신 이동만 취소한다
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;

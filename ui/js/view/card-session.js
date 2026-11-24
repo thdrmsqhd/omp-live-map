@@ -74,7 +74,7 @@ function infraChrome(n) {
 
 function bigCard(n) {
   const box = SATS.get(n.id);
-  const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px`;
+  const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px;--edcol:${cardSplit(n.id)}%`;
   const chrome = agentKind(n.kind) || n.kind === "local" ? sessionChrome(n) : infraChrome(n);
   const side = renderBlocks(n, "side");
   const edit = renderBlocks(n, "edit");
