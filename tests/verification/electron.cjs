@@ -24,6 +24,7 @@ test("Electron owns the existing local server and handles a port collision",
         ...process.env,
         OMP_PROBE_DIRECTORY: directory,
         OMP_PROBE_PORT: String(port),
+        OMP_PROBE_NODE: process.execPath,
         OMP_PROBE_RESULT: resultFile,
       };
       await run(executable, [target], { env, timeout: 25000 });

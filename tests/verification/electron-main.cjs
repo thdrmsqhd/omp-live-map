@@ -1,8 +1,9 @@
 "use strict";
 
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
-const { app, BrowserWindow, utilityProcess } = require("electron");
+const { app, BrowserWindow } = require("electron");
 
 const { OMP_PROBE_DIRECTORY: directory, OMP_PROBE_RESULT: resultFile } = process.env;
 const port = Number(process.env.OMP_PROBE_PORT);
@@ -19,9 +20,11 @@ function finish(result) {
 }
 
 async function probe() {
-  server = utilityProcess.fork(path.resolve(__dirname, "../../server.js"), ["--port", String(port)], {
+  const args = [path.resolve(__dirname, "../../server.js"), "--port", String(port)];
+  server = spawn(process.env.OMP_PROBE_NODE, args, {
     env: { ...process.env, USERPROFILE: directory, OMP_MAP_STATE: directory },
-    stdio: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
   const result = await new Promise((resolve) => {
     let stderr = "";
@@ -31,7 +34,8 @@ async function probe() {
       if (stdout.includes(`omp live map: http://127.0.0.1:${port}`)) resolve({ ready: true });
     });
     server.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    server.once("exit", (code) => resolve({ code, error: stderr.trim() || "Server exited" }));
+    server.once("error", (error) => resolve({ error: error.stack }));
+    server.once("close", (code) => resolve({ code, error: stderr.trim() || "Server exited" }));
   });
   if (!result.ready) return result;
 
@@ -52,7 +56,7 @@ async function probe() {
 
 app.whenReady().then(probe).then(finish, (error) => finish({ error: error.stack }));
 app.on("before-quit", (event) => {
-  if (!server?.pid) return;
+  if (!server?.pid || server.exitCode !== null || server.signalCode !== null) return;
   event.preventDefault();
   const owned = server;
   server = undefined;
