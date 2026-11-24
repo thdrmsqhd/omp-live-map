@@ -69,6 +69,7 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator("#slToggle").click();
       await page.waitForFunction(() => document.querySelectorAll("#slList .sl-row.main").length === 10, null, filter);
 
+      await fs.mkdir("artifacts/v4-ux",{recursive:true});
       // V4 modes, drafts, layout and card lifecycle.
       await page.locator('[data-mode="workspace"]').click();
       await first.click(filter);
@@ -76,15 +77,18 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator('[data-mode="overview"]').click();
       await page.waitForSelector("#overview .mon-card",filter);
       assert.equal(await page.locator("#overview .mon-card").count(),10);
+      await page.screenshot({path:"artifacts/v4-ux/01-overview.png"});
       await page.locator('[data-mode="workspace"]').click();
       await first.click(filter);
       assert.equal(await page.locator(".node.big.active-card .cin").inputValue(),"unsent fixture");
+      await page.screenshot({path:"artifacts/v4-ux/02-workspace.png"});
       await page.locator(".node.big.active-card [data-bslot=chat]").selectOption("side");
       await page.waitForSelector('.node.big.active-card .blk[data-bkey=chat][data-slot=side]',filter);
       assert.equal(await page.locator(".node.big.active-card .cin").inputValue(),"unsent fixture");
       await page.locator(".node.big.active-card [data-bslot=chat]").selectOption("main");
       await page.locator('[data-mode="map"]').click();
       await sessionName("Timing 1").click(filter);
+      await page.screenshot({path:"artifacts/v4-ux/03-live-map.png"});
       const before = await page.evaluate(()=>JSON.stringify([...BIGPOS]));
       await page.locator("#layout-preset").selectOption("vertical");
       await page.locator("#layout-apply").click();

@@ -56,6 +56,13 @@ jobs:
       - name: Browser regression and 10-session measurement
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/browser.cjs
+      - name: Upload V4 UX screenshots
+        if: ${{ !cancelled() && github.ref_name == 'v4/ui-ux-improvements' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: V4-UX-screenshots
+          path: artifacts/v4-ux/*.png
+          if-no-files-found: error
       - name: Product desktop UI and protected API
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/engineering-desktop.cjs
