@@ -67,9 +67,10 @@ function cardBlockTypes(n) {
 
 function cardUI(nodeId) {
   let u = CARD_UI.get(nodeId);
-  if (!u) { u = { collapsed: {}, order: { main: [], side: [] }, h: {}, fit: {} }; CARD_UI.set(nodeId, u); }
+  if (!u) { u = { collapsed: {}, order: { main: [], side: [], edit: [], left: [] }, h: {}, fit: {} }; CARD_UI.set(nodeId, u); }
   if (!u.fit) u.fit = {};
   if (!u.slots) u.slots = {};
+  for (const slot of Object.keys(BLOCK_SLOTS)) if (!Array.isArray(u.order[slot])) u.order[slot]=[];
   return u;
 }
 

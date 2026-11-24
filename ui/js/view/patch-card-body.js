@@ -23,7 +23,10 @@ function patchCardBody(body, next) {
         if (fresh.title) el.title = fresh.title;
         syncChildren(el, fresh);
       }
-      if (el !== cursor) parent.insertBefore(el, cursor);
+      if (el !== cursor) {
+        if (el.isConnected && parent.isConnected && typeof parent.moveBefore === "function") parent.moveBefore(el,cursor);
+        else parent.insertBefore(el,cursor);
+      }
       cursor = el.nextElementSibling;
     }
     while (cursor) { const after = cursor.nextElementSibling; cursor.remove(); cursor = after; }

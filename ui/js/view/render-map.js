@@ -77,6 +77,7 @@ function renderMap(resetView, force) {
   placeLocals();
   separateCards();
   placeBigCards();
+  if (mapMode === "workspace" && !openIds.has(activeCardId)) activeCardId = [...openIds].at(-1) || null;
   JOBS = sessionJobs(sessions);
   topbarStatus(sessions);
 

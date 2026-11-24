@@ -69,6 +69,39 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator("#slToggle").click();
       await page.waitForFunction(() => document.querySelectorAll("#slList .sl-row.main").length === 10, null, filter);
 
+      // V4 modes, drafts, layout and card lifecycle.
+      await page.locator('[data-mode="workspace"]').click();
+      await first.click(filter);
+      await page.locator(".node.big.active-card .cin").fill("unsent fixture");
+      await page.locator('[data-mode="overview"]').click();
+      await page.waitForSelector("#overview .mon-card",filter);
+      assert.equal(await page.locator("#overview .mon-card").count(),10);
+      await page.locator('[data-mode="workspace"]').click();
+      await first.click(filter);
+      assert.equal(await page.locator(".node.big.active-card .cin").inputValue(),"unsent fixture");
+      await page.locator(".node.big.active-card [data-bslot=chat]").selectOption("side");
+      await page.waitForSelector('.node.big.active-card .blk[data-bkey=chat][data-slot=side]',filter);
+      assert.equal(await page.locator(".node.big.active-card .cin").inputValue(),"unsent fixture");
+      await page.locator(".node.big.active-card [data-bslot=chat]").selectOption("main");
+      await page.locator('[data-mode="map"]').click();
+      await sessionName("Timing 1").click(filter);
+      const before = await page.evaluate(()=>JSON.stringify([...BIGPOS]));
+      await page.locator("#layout-preset").selectOption("vertical");
+      await page.locator("#layout-apply").click();
+      await page.locator("#layout-undo").click();
+      assert.equal(await page.evaluate(()=>JSON.stringify([...BIGPOS])),before);
+      await page.locator("#layout-redo").click();
+      await page.locator("#layout-save").click();
+      assert.ok(await page.evaluate(()=>localStorage.getItem("omp-map-layout-preset-v4")));
+      const row=first.locator("..").locator("..");
+      await row.locator("[data-slmenu]").click();
+      await page.waitForSelector("#ctxmenu.open",filter);
+      await page.keyboard.press("Escape");
+      const stops=[];
+      page.on("request",r=>{if(r.url().endsWith("/api/session/stop"))stops.push(r.url());});
+      await row.locator("[data-slclose]").click();
+      assert.equal(stops.length,0);
+      assert.equal(await first.count(),1);
       const times = [];
       const sampleEpoch = Date.now();
       for (let i = 1; i <= 20; i++) {
