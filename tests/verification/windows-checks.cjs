@@ -36,11 +36,14 @@ test("Windows verification runner denies private files, local network, and child
       fs.writeFileSync("verified.txt", "inside");
       assert.throws(() => fs.readFileSync(${JSON.stringify(privateFile)}));
       assert.throws(() => fs.writeFileSync(${JSON.stringify(privateFile)}, "changed"));
-      assert.throws(() => cp.execFileSync(process.execPath, ["-e", "process.exit(0)"]));
+      fs.writeFileSync("files-denied.txt", "");
+      assert.throws(() => cp.execFileSync(process.execPath, ["-e", "require('fs').writeFileSync('child-launched.txt','bad')"], { timeout: 2500 }));
+      fs.writeFileSync("child-denied.txt", "");
       const socket = net.connect(${listener.address().port}, "127.0.0.1");
-      socket.setTimeout(1500, () => { socket.destroy(); console.log("isolated"); });
-      socket.once("connect", () => { socket.destroy(); process.exitCode = 19; });
-      socket.once("error", () => console.log("isolated"));
+      const settle = () => { socket.destroy(); console.log("isolated"); };
+      const deadline = setTimeout(settle, 1800);
+      socket.once("connect", () => { clearTimeout(deadline); socket.destroy(); process.exitCode = 19; });
+      socket.once("error", () => { clearTimeout(deadline); settle(); });
     `);
     const runner = createWindowsChecks({
       launcher: path.resolve(process.argv[2]), worktreeRoot: root,
@@ -56,12 +59,16 @@ test("Windows verification runner denies private files, local network, and child
     try { await assert.rejects(runner.execute(check, cwd, signal), /Hard links are not supported/); }
     finally { await fs.unlink(alias); }
     process.env.OMP_TEST_PRIVATE_SECRET = "parent-only";
-    const result = await runner.execute(check, cwd, signal);
+    const result = await runner.execute(check, cwd, signal).catch(async (error) => {
+      const markers = await fs.readdir(cwd);
+      throw new Error("Windows check did not finish. Workspace evidence: " + markers.join(", "), { cause: error });
+    });
     delete process.env.OMP_TEST_PRIVATE_SECRET;
     assert.equal(result.code, 0, result.log);
     assert.match(result.log, /isolated/);
     assert.equal(await fs.readFile(path.join(cwd, "verified.txt"), "utf8"), "inside");
     assert.equal(await fs.readFile(privateFile, "utf8"), "outside fixture");
+    await assert.rejects(fs.stat(path.join(cwd, "child-launched.txt")), { code: "ENOENT" });
 
     await fs.writeFile(path.join(cwd, "verify.cjs"), "setTimeout(() => require('node:fs').writeFileSync('late.txt','late'), 12000);");
     await assert.rejects(runner.execute(check, cwd, AbortSignal.timeout(8000)), { name: "TimeoutError" });
