@@ -3,10 +3,13 @@
 const { graphScheduler } = require("./graph-scheduler");
 const { nodeExecutor } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
+const { runParallel } = require("./workflow-parallel");
 const { problem, redact } = require("./state");
 
+const external = ({ type }) => ["agent", "loop", "command"].includes(type);
+
 function workflowEngine(store, workflows, catalog, runner, worktrees) {
-  const active = new Map();
+  const active = new Map(), queue = new Set();
 
   async function execute(id) {
     if (active.has(id)) return;
@@ -17,8 +20,32 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
     const runtime = runner.snapshot?.() ?? runner;
     const runNode = nodeExecutor(catalog, runtime);
     let workspace = run.workspace;
-    let operating;
+    const operating = new Set();
     let signal;
+    async function ensureWorkspace() {
+      if (!workspace) {
+        workspace = await worktrees.create(catalog.project(run.project), run);
+        store.workspace(id, workspace);
+      }
+      signal.throwIfAborted();
+    }
+    function begin(node) {
+      store.begin(id, node.id);
+      operating.add(node.id);
+    }
+    function finish(node, status, result) {
+      store.finish(id, node, status, result);
+      operating.delete(node);
+    }
+    async function executeExternal(node, location, remaining) {
+      let result = await runNode(node, run.project, location, Math.max(0, remaining), signal);
+      if (result.status === "succeeded" && node.outputs.length) {
+        try { result.artifacts = await collectOutputs(location, node, signal); } catch (error) {
+          result = { ...result, status: "failed", interrupted: true, error: redact(error.message) };
+        }
+      }
+      return result;
+    }
     try {
       if (run.deadline <= Date.now()) {
         store.change(id, ["queued", "paused", "interrupted"], "limit_exceeded");
@@ -47,49 +74,65 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
           store.change(id, ["running"], scheduler.outcome(results) ?? "failed");
           return;
         }
-        const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
-        signal.throwIfAborted();
-        if (node.type === "approval") { store.ask(id, node.id, node.prompt, artifacts); return; }
-        store.begin(id, node.id);
-        operating = node.id;
-        let result = { status: "succeeded" };
-        if (node.type === "condition") result.port = scheduler.conditionPort(node, results);
-        if (["agent", "loop", "command"].includes(node.type)) {
-          if (!workspace) {
-            workspace = await worktrees.create(catalog.project(run.project), run);
-            store.workspace(id, workspace);
-          }
+        const batch = external(node) ? ready.filter(external).slice(0, 2) : [];
+        let outcomes;
+        if (batch.length > 1) {
+          await ensureWorkspace();
+          for (const branch of batch) await verifyInputs(workspace, branch, results, signal);
+          for (const branch of batch) begin(branch);
+          const agents = batch.filter(({ type }) => type !== "command").length;
+          const share = Math.floor(Math.max(0, remaining) / Math.max(1, agents));
+          outcomes = await runParallel({ project: catalog.project(run.project), workspace, worktrees, nodes: batch, signal,
+            priorArtifacts: [...results.values()].flatMap(({ artifacts }) => artifacts?.map(({ path }) => path) ?? []),
+            execute: (item, location) => executeExternal(item, location, item.type === "command" ? 0 : share) });
+        } else {
+          const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
           signal.throwIfAborted();
-          result = await runNode(node, run.project, workspace, Math.max(0, remaining), signal);
+          if (node.type === "approval") { store.ask(id, node.id, node.prompt, artifacts); return; }
+          begin(node);
+          let result = { status: "succeeded" };
+          if (node.type === "condition") result.port = scheduler.conditionPort(node, results);
+          if (external(node)) {
+            await ensureWorkspace();
+            result = await executeExternal(node, workspace, remaining);
+          }
+          outcomes = [{ node, result }];
+        }
+        for (const { node, result } of outcomes) {
           remaining -= result.costCents ?? 0;
-          if (result.status === "succeeded" && node.outputs.length) {
-            try { result.artifacts = await collectOutputs(workspace, node, signal); } catch (error) {
-              result = { ...result, status: "failed", interrupted: true, error: redact(error.message) };
-            }
-          }
+          finish(node.id, signal.aborted ? "cancelled" : result.status, result);
+          results.set(node.id, result);
         }
-        if (signal.aborted) {
-          store.finish(id, operating, "cancelled", result);
-          operating = null;
-          signal.throwIfAborted();
-        }
-        store.finish(id, node.id, result.status, result);
-        operating = null;
-        results.set(node.id, result);
+        signal.throwIfAborted();
         if (remaining < 0) { store.change(id, ["running"], "limit_exceeded"); return; }
-        if (result.interrupted) { store.change(id, ["running"], "failed", result.error); return; }
+        const incomplete = outcomes.find(({ result }) => result.interrupted);
+        if (incomplete) { store.change(id, ["running"], "failed", incomplete.result.error); return; }
       }
     } catch (error) {
       const status = stop.signal.aborted ? "cancelled" : signal?.aborted ? "limit_exceeded" : "failed";
-      if (operating) store.finish(id, operating, signal?.aborted ? "cancelled" : "failed", { error: redact(error.message) });
-      store.change(id, ["running", "queued", "paused", "interrupted"], status, error.message);
+      const uncertainBatch = operating.size > 1;
+      for (const node of operating) finish(node, signal?.aborted ? "cancelled" : uncertainBatch ? "interrupted" : "failed",
+        { error: redact(error.message) });
+      store.change(id, ["running", "queued", "paused", "interrupted"],
+        uncertainBatch && !signal?.aborted ? "interrupted" : status, error.message);
     } finally {
       active.delete(id);
     }
   }
 
+  function dispatch() {
+    if (active.size) return;
+    for (const id of queue) {
+      queue.delete(id);
+      if (!["queued", "paused", "interrupted"].includes(store.get(id).status)) continue;
+      void execute(id).catch((error) => console.error("Workflow execution failed:", redact(error.message))).finally(dispatch);
+      return;
+    }
+  }
+
   function launch(id) {
-    void execute(id).catch((error) => console.error("Workflow execution failed:", redact(error.message)));
+    queue.add(id);
+    dispatch();
   }
 
   return {

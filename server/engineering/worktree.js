@@ -7,11 +7,11 @@ const { problem } = require("./state");
 
 function worktrees(directory, gitCommand = git) {
   return {
-    async create(project, run) {
+    async create(project, run, source) {
       await fs.mkdir(directory, { recursive: true, mode: 0o700 });
       const workspace = path.join(directory, run.id);
       const branch = "refs/heads/" + project.branch;
-      const commit = await gitCommand(project.root, ["rev-parse", "--verify", branch + "^{commit}"]);
+      const commit = await gitCommand(source ?? project.root, ["rev-parse", "--verify", (source ? "HEAD" : branch) + "^{commit}"]);
       if (!/^[a-f0-9]{40,64}$/i.test(commit)) throw problem(409, "Could not resolve the selected branch");
       await gitCommand(project.root, ["-c", "core.hooksPath=" + path.resolve(directory, ".disabled-hooks"),
         "worktree", "add", "--detach", workspace, commit]);

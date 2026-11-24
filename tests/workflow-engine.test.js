@@ -121,3 +121,57 @@ test("retrying a known failed node keeps successful predecessors and stores its 
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("parallel workflow branches run in distinct Git worktrees and publish outputs before Join", { timeout: 12000 }, async () => {
+  const { execFileSync } = require("node:child_process");
+  const { worktrees } = require("../server/engineering/worktree");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-parallel-"));
+  const root = path.join(directory, "repo");
+  fs.mkdirSync(root);
+  const git = (...args) => execFileSync("git", args, { cwd: root, stdio: "ignore" });
+  git("init", "-b", "main");
+  fs.writeFileSync(path.join(root, "seed.txt"), "seed");
+  git("add", "seed.txt");
+  git("-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-m", "fixture");
+  const db = openDatabase(path.join(directory, "engineering.sqlite"));
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", root, "Fixture", "main");
+    const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
+    const runs = workflowRuns(db, definitions, workflows);
+    let release;
+    const bothStarted = new Promise((resolve) => { release = resolve; });
+    const seen = [];
+    const engine = workflowEngine(runs, workflows, definitions, {
+      async verify([{ command }], location, signal) {
+        assert.equal(fs.readFileSync(path.join(location, "seed.txt"), "utf8"), "seed");
+        if (command === "verify-join") {
+          assert.equal(fs.readFileSync(path.join(location, "left.txt"), "utf8"), "left");
+          assert.equal(fs.readFileSync(path.join(location, "right.txt"), "utf8"), "right");
+        } else {
+          seen.push(location);
+          if (seen.length === 2) release();
+          await Promise.race([bothStarted, delay(3000, null, { signal, ref: false }).then(() => { throw Error("Branches did not run concurrently"); })]);
+          const sibling = command === "left" ? "right" : "left";
+          assert.equal(fs.existsSync(path.join(location, sibling + ".txt")), false);
+          fs.writeFileSync(path.join(location, command + ".txt"), command);
+        }
+        return [{ command, passed: true }];
+      },
+    }, worktrees(path.join(directory, "worktrees")));
+    const n = (id, type, config = {}) => ({ id, type, label: id, ...config });
+    const command = (id, outputs = []) => n(id,"command",{ check: { command: id,args: [] }, outputs });
+    const a = (from, to) => ({ from,to });
+    const plan = workflows.save({ project: "one", payload: { name: "isolated parallel", nodes: [
+      n("s", "start"), n("p", "parallel"), command("left", [{ name: "left", path: "left.txt" }]),
+      command("right", [{ name: "right", path: "right.txt" }]), n("j", "join"), command("verify-join"), n("e", "end"),
+    ], edges: [a("s","p"),a("p","left"),a("p","right"),a("left","j"),a("right","j"),a("j","verify-join"),a("verify-join","e")] } });
+    const run = engine.start({ project: "one", workflow: plan.id, version: 1, title: "parallel", timeoutMs: 10000, budgetCents: 0 }, "parallel-key");
+    for (let i = 0; i < 800 && ["running","queued"].includes(runs.get(run.id).status); i++) await delay(10);
+    assert.equal(runs.get(run.id).status, "succeeded", JSON.stringify({ run: runs.get(run.id), nodes: runs.nodes(run.id) }));
+    assert.equal(new Set(seen).size, 2);
+    assert.equal(fs.existsSync(path.join(root, "left.txt")), false);
+  } finally {
+    db.close();
+    fs.rmSync(directory, { force: true, recursive: true });
+  }
+});

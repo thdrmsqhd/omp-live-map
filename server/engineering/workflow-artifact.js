@@ -52,7 +52,7 @@ async function artifactDigest(workspace, relative, signal) {
     if (BigInt(length) !== info.size || !sameFile(info, await handle.stat({ bigint: true }))) {
       throw problem(409, "Workflow artifact changed while being read");
     }
-    return { path: relative, byteLength: length, sha256: hash.digest("hex") };
+    return { path: relative, byteLength: length, executable: Boolean(info.mode & 0o111n), sha256: hash.digest("hex") };
   } finally {
     await handle.close();
   }
@@ -65,7 +65,9 @@ async function validateArtifacts(workspace, artifacts, signal) {
       signal?.throwIfAborted();
       throw problem(409, "Workflow artifact is unavailable: " + artifact.path);
     }
-    if (actual.sha256 !== artifact.sha256) throw problem(409, "Workflow artifact changed: " + artifact.path);
+    if (actual.sha256 !== artifact.sha256 || (artifact.executable !== undefined && actual.executable !== artifact.executable)) {
+      throw problem(409, "Workflow artifact changed: " + artifact.path);
+    }
   }
 }
 

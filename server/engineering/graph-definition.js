@@ -26,7 +26,7 @@ function identifier(value, label) {
 function artifactPath(value) {
   const file = string(value, "artifact path", 512);
   const parts = file.split("/");
-  if (parts.some((part) => !part || /[<>:"\\|?*\x00-\x1f]/.test(part) || /[ .]$/.test(part) ||
+  if (parts.some((part) => !part || /^\.git$/i.test(part) || /[<>:"\\|?*\x00-\x1f]/.test(part) || /[ .]$/.test(part) ||
       /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) bad("Artifact paths must be portable workspace-relative paths");
   return file;
 }
