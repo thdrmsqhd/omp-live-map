@@ -18,6 +18,16 @@ test("existing map opens a session card, restores panel state and renders update
       if (message.type() === "error") errors.push(message.text());
     });
     try {
+      const editorFixture = "editor-fixture.txt";
+      const file = path.join(directory, editorFixture);
+      await fs.writeFile(file, "original text");
+      const cdn = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/";
+      const assets = path.join(path.dirname(require.resolve("monaco-editor/package.json")), "min");
+      await page.route(cdn + "**", (route) => {
+        const relative = new URL(route.request().url()).pathname.split("/min/")[1];
+        if (!relative || !/^vs\/[A-Za-z0-9_./-]+$/.test(relative) || relative.split("/").includes("..")) return route.abort();
+        return route.fulfill({ path: path.join(assets, relative), headers: { "access-control-allow-origin": "*" } });
+      });
       const { scan } = require("../../server/tail");
       const { broadcast } = require("../../server/sse");
       const folder = path.join(config.SESSIONS, "timing");
@@ -40,6 +50,17 @@ test("existing map opens a session card, restores panel state and renders update
       await first.click(filter);
       await page.waitForSelector("#slList .sl-row.open", filter);
       await page.waitForFunction(() => document.querySelector("#nodes").innerText.includes("Timing 0"), null, filter);
+      const explorerFile = page.locator("#nodes .exr").filter({ hasText: editorFixture });
+      await explorerFile.click(filter);
+      await page.waitForFunction(() => document.querySelector("#nodes .view-lines")?.innerText.includes("original"), null, filter);
+      await page.locator("#nodes .view-lines").click(filter);
+      await page.keyboard.press("Control+A");
+      await page.keyboard.insertText("updated through Monaco");
+      const saved = page.waitForResponse((response) => response.url().endsWith("/api/editor/write") && response.ok());
+      await page.keyboard.press("Control+S");
+      assert.equal((await (await saved).json()).ok, true);
+      assert.equal(await fs.readFile(file, "utf8"), "updated through Monaco");
+
       await page.locator("#slToggle").click();
       const connected = page.waitForResponse((response) => response.url().endsWith("/api/events") && response.ok());
       await page.reload();
