@@ -45,7 +45,6 @@ static std::wstring appIdentity() {
     if (!StringFromGUID2(guid, text, 40)) throw std::runtime_error("Could not format identity");
     return L"OmpLiveMap." + std::wstring(text + 1, 36);
 }
-
 struct Profile {
     std::wstring name = appIdentity();
     PSID sid = nullptr;
@@ -55,7 +54,6 @@ struct Profile {
     }
     ~Profile() { FreeSid(sid); DeleteAppContainerProfile(name.c_str()); }
 };
-
 struct Attributes {
     LPPROC_THREAD_ATTRIBUTE_LIST list = nullptr;
     std::vector<unsigned char> storage;
@@ -72,7 +70,6 @@ struct Attributes {
         requireWin(UpdateProcThreadAttribute(list, 0, key, value, size, nullptr, nullptr), "Set launch attribute");
     }
 };
-
 static void acl(const fs::path& target, const std::wstring& arguments) {
     const auto executable = fs::path(systemDirectory()) / L"icacls.exe";
     auto command = quote(executable.wstring()) + L" " + quote(target.wstring()) + L" " + arguments + L" /Q /L";
@@ -143,7 +140,9 @@ static int execute(const fs::path& workspace, const fs::path& executable, int ar
     requireWin(SetInformationJobObject(job.value, JobObjectExtendedLimitInformation, &options, sizeof options), "Set job limits");
     SECURITY_CAPABILITIES capabilities{};
     capabilities.AppContainerSid = profile.sid;
-    Attributes attributes(3);
+    DWORD childPolicy = PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
+    Attributes attributes(4);
+    attributes.add(PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY, &childPolicy, sizeof childPolicy);
     attributes.add(PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, &capabilities, sizeof capabilities);
     attributes.add(PROC_THREAD_ATTRIBUTE_JOB_LIST, &job.value, sizeof job.value);
     Handle input, output, error;
@@ -168,8 +167,7 @@ static int execute(const fs::path& workspace, const fs::path& executable, int ar
     for (int i = 3; i < argc; ++i) command += L" " + quote(argv[i]);
     std::wstring environment;
     auto variable = [&](const wchar_t* name, const std::wstring& value) {
-        environment += std::wstring(name) + L"=" + value;
-        environment += L'\0';
+        environment += std::wstring(name) + L"=" + value + L'\0';
     };
     const auto systemRoot = fs::path(systemDirectory()).parent_path().wstring();
     variable(L"LOCALAPPDATA", _wgetenv(L"LOCALAPPDATA") ? _wgetenv(L"LOCALAPPDATA") : workspace.wstring());
