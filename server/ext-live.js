@@ -141,7 +141,9 @@ function tick() {
     seen.add(file);
     track(file);
     const st = files.get(file);
-    if (st) readNew(st);
+    if (st) {
+      try { readNew(st); } catch { /* file rotated mid-read */ }
+    }
   }
   for (const file of files.keys()) if (!seen.has(file)) files.delete(file);
 }

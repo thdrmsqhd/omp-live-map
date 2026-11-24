@@ -3,32 +3,35 @@
 
 const fs = require("fs");
 const path = require("path");
+const { StringDecoder } = require("node:string_decoder");
 const { SESSIONS } = require("./config");
 const { newFileState, parentOf, ingest } = require("./ingest");
 
 const files = new Map(); // abs path -> file state
+const READ_BYTES = 512 * 1024;
 
 function readNew(st, bytes) {
-  let text = st.pending;
-  st.offset += bytes;
-  st.pending = "";
   const buf = Buffer.allocUnsafe(bytes);
   const fd = fs.openSync(st.file, "r");
+  let read;
   try {
-    fs.readSync(fd, buf, 0, bytes, st.offset - bytes);
+    read = fs.readSync(fd, buf, 0, bytes, st.offset);
   } finally {
     fs.closeSync(fd);
   }
-  text += buf.toString("utf8");
+  if (!read) return false;
+  st.offset += read;
+  const text = st.pending + st.decoder.write(buf.subarray(0, read));
   const lines = text.split("\n");
   st.pending = lines.pop() || "";
   for (const line of lines) {
     const t = line.trim();
     if (t) ingest(st, t);
   }
+  return true;
 }
 
-function track(file) {
+function* track(file) {
   let st = files.get(file);
   let size;
   try {
@@ -40,55 +43,50 @@ function track(file) {
   if (!st) {
     st = newFileState(file);
     st.parent = parentOf(file, st.depth);
+    st.decoder = new StringDecoder("utf8");
     files.set(file, st);
   }
-  if (size < st.offset) st.offset = 0; // truncated/rewritten
-  if (size > st.offset) {
+  if (size < st.offset) {
+    st.offset = 0;
+    st.pending = "";
+    st.decoder = new StringDecoder("utf8");
+  }
+  while (size > st.offset) {
     try {
-      readNew(st, size - st.offset);
-    } catch {
-      /* file rotated mid-read */
-    }
-    st.mtime = size;
+      if (!readNew(st, Math.min(READ_BYTES, size - st.offset))) break;
+    } catch { break; }
+    st.mtime = st.offset;
+    yield;
   }
 }
 
-function scan() {
-  const roots = fs.existsSync(SESSIONS) ? fs.readdirSync(SESSIONS, { withFileTypes: true }) : [];
-  const seen = new Set();
-  const walk = (dir, depth) => {
+function* scanSteps(seen = new Set()) {
+  function* walk(dir, depth) {
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
       return;
     }
+    yield;
     for (const ent of entries) {
       const full = path.join(dir, ent.name);
       if (ent.isDirectory()) {
         if (ent.name === "local" || ent.name.startsWith(".")) continue;
-        if (path.relative(SESSIONS, dir).split(path.sep).length >= 5) continue;
-        walk(full, depth + 1);
-      } else if (ent.name.endsWith(".jsonl")) {
+        if (depth < 5) yield* walk(full, depth + 1);
+      } else if (depth > 0 && ent.name.endsWith(".jsonl")) {
         seen.add(full);
-        track(full);
-      }
-    }
-  };
-  for (const r of roots) {
-    if (!r.isDirectory()) continue;
-    if (r.name === "local" || r.name.startsWith(".")) continue;
-    for (const ent of fs.readdirSync(path.join(SESSIONS, r.name), { withFileTypes: true })) {
-      const full = path.join(SESSIONS, r.name, ent.name);
-      if (ent.isDirectory()) {
-        if (ent.name === "local" || ent.name.startsWith(".")) continue;
-        walk(full, 3);
-      } else if (ent.name.endsWith(".jsonl")) {
-        seen.add(full);
-        track(full);
+        yield* track(full);
+        yield;
       }
     }
   }
+  yield* walk(SESSIONS, 0);
+}
+
+function scan() {
+  const seen = new Set();
+  for (const step of scanSteps(seen)) { /* preserve synchronous callers */ }
   return seen;
 }
 
@@ -100,4 +98,4 @@ function allStates() {
   return files.values();
 }
 
-module.exports = { scan, stateOf, allStates };
+module.exports = { scan, scanSteps, stateOf, allStates };

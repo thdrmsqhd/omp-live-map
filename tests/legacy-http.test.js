@@ -31,20 +31,21 @@ test("기존 HTTP 진입점, 세션 관측과 편집기 계약을 유지한다",
       await fs.mkdir(path.dirname(sub), { recursive: true });
       const timestamp = new Date().toISOString();
       const session = JSON.stringify({ type: "session", id: "main", cwd: directory, timestamp });
-      const title = JSON.stringify({ type: "title", title: "fixture-title", timestamp });
-      await fs.writeFile(main, `${session}\n${title.slice(0, 15)}`);
+      const title = Buffer.from(JSON.stringify({ type: "title", title: "세션 제목", timestamp }) + "\n");
+      const split = title.indexOf(Buffer.from("세")) + 1;
+      await fs.writeFile(main, Buffer.concat([Buffer.from(session + "\n"), title.subarray(0, split)]));
       await fs.writeFile(sub, `${session}\n`);
       const { scan } = require("../server/tail");
       scan();
       const before = JSON.parse((await request("/api/graph")).text);
       assert.equal(before.sessions.length, 1);
-      assert.notEqual(before.sessions[0].title, "fixture-title");
+      assert.notEqual(before.sessions[0].title, "세션 제목");
 
-      await fs.appendFile(main, title.slice(15) + "\n");
+      await fs.appendFile(main, title.subarray(split));
       scan();
       const graph = JSON.parse((await request("/api/graph")).text);
       const [cluster] = graph.sessions;
-      assert.equal(cluster.title, "fixture-title");
+      assert.equal(cluster.title, "세션 제목");
       assert.equal(cluster.nodes.find(({ id }) => id === sub)?.parent, main);
       assert.equal(graph.harness.claude.context, false);
 

@@ -3,11 +3,13 @@
 const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
+const fs = require("node:fs");
 const path = require("node:path");
 const credentials = require("./credentials.cjs");
 
 const token = randomBytes(32).toString("hex");
 let child, origin, shutdown = false, window;
+let stage = "starting the app";
 const userData = app.commandLine.getSwitchValue("user-data-dir");
 if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
 const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
@@ -18,6 +20,7 @@ const endpoints = new Set([
 
 function startServer() {
   const data = app.getPath("userData");
+  stage = "launching the local server";
   child = spawn(process.execPath, [path.join(root, "server.js"), "--port", "0"], {
     windowsHide: true,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1",
@@ -27,8 +30,9 @@ function startServer() {
   });
   return new Promise((resolve, reject) => {
     let errors = "";
-    const timeout = setTimeout(() => reject(new Error("Live Map did not start within 15 seconds")), 15000);
+    const timeout = setTimeout(() => reject(new Error("로컬 서버가 시작 응답을 보내지 않았습니다.")), 30000);
     function ready(message) {
+      if (message?.type === "desktop-starting") stage = "loading the local server";
       const port = message?.port;
       if (message?.type !== "desktop-ready" || !Number.isInteger(port) || port < 1 || port > 65535) return;
       child.off("message", ready);
@@ -42,9 +46,11 @@ function startServer() {
       clearTimeout(timeout);
       reject(error);
     });
-    child.once("close", () => {
+    child.once("close", (code, signal) => {
       clearTimeout(timeout);
-      reject(new Error(errors.includes("EADDRINUSE") ? "Could not bind a local port." : "Live Map server exited."));
+      const error = new Error(errors.includes("EADDRINUSE") ? "로컬 포트를 열 수 없습니다." : "로컬 서버가 시작 중 종료되었습니다.");
+      error.code = errors.match(/code:\s*['"]([A-Z0-9_]+)['"]/)?.[1] ?? signal ?? code;
+      reject(error);
       if (window && !shutdown) app.quit();
     });
   });
@@ -77,6 +83,7 @@ ipcMain.handle("engineering:request", async (event, { endpoint, params, payload 
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
   await startServer();
+  stage = "opening the app window";
   const key = credentials.load();
   if (key) child.send({ type: "desktop-runtime-key", key });
   window = new BrowserWindow({
@@ -95,7 +102,15 @@ else app.whenReady().then(async () => {
   });
   await window.loadURL(origin);
 }).catch((error) => {
-  dialog.showErrorBox("OMP Live Map", error.message);
+  const log = path.join(app.getPath("userData"), "startup-error.log");
+  let details = `\n\n단계: ${stage}`;
+  try {
+    fs.mkdirSync(path.dirname(log), { recursive: true });
+    fs.writeFileSync(log, JSON.stringify({ at: new Date().toISOString(), stage, code: error.code ?? null,
+      version: app.getVersion() }) + "\n");
+    details += `\n진단 파일: ${log}`;
+  } catch { /* show the original startup error */ }
+  dialog.showErrorBox("OMP Live Map", error.message + details);
   app.quit();
 });
 
