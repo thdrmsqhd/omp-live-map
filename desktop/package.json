@@ -3,6 +3,51 @@
   "version": "2.0.0-dev",
   "private": true,
   "main": "main.cjs",
-  "scripts": { "start": "electron ." },
-  "devDependencies": { "electron": "43.8.12" }
+  "scripts": {
+    "start": "electron .",
+    "build:windows": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "43.8.12",
+    "electron-builder": "26.0.12",
+    "monaco-editor": "0.52.2"
+  },
+  "description": "OMP Live Map V2 desktop development build",
+  "author": "OMP Live Map",
+  "build": {
+    "appId": "dev.omplivemap.v2",
+    "productName": "OMP Live Map V2",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../server",
+        "to": "runtime/server"
+      },
+      {
+        "from": "../server.js",
+        "to": "runtime/server.js"
+      },
+      {
+        "from": "../ui",
+        "to": "runtime/ui"
+      },
+      {
+        "from": "node_modules/monaco-editor/min",
+        "to": "runtime/ui/vendor/monaco"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "artifactName": "OMP-Live-Map-V2-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false
+    }
+  }
 }

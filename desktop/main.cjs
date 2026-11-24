@@ -11,7 +11,7 @@ const token = randomBytes(32).toString("hex");
 let child, shutdown = false, window;
 const userData = app.commandLine.getSwitchValue("user-data-dir");
 if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
-const root = path.resolve(__dirname, "..");
+const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
 const endpoints = new Set([
   "projects", "projects/archive", "definitions", "definitions/remove",
   "runs", "run", "runs/action", "capabilities", "events",
@@ -22,7 +22,8 @@ function startServer() {
   child = spawn(process.execPath, [path.join(root, "server.js"), "--port", String(port)], {
     windowsHide: true,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1",
-      OMP_MAP_ENGINEERING_TOKEN: token, OMP_MAP_ENGINEERING_DATA: data },
+      OMP_MAP_ENGINEERING_TOKEN: token, OMP_MAP_ENGINEERING_DATA: data,
+      ...(app.isPackaged ? { OMP_MAP_STATE: path.join(data, "legacy-state") } : {}) },
     stdio: ["ignore", "pipe", "pipe"],
   });
   return new Promise((resolve, reject) => {
@@ -70,6 +71,7 @@ else app.whenReady().then(async () => {
     width: 1450, height: 960,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
+      additionalArguments: app.isPackaged ? ["--omp-local-monaco"] : [],
       contextIsolation: true, sandbox: true, nodeIntegration: false,
     },
   });

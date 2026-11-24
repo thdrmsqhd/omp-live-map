@@ -12,8 +12,10 @@ const executable = require("electron");
 
 test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-desktop-"));
-  const app = spawn(executable, [path.resolve(__dirname, "../../desktop"),
-    "--remote-debugging-port=0", "--user-data-dir=" + directory], { stdio: ["ignore", "pipe", "pipe"] });
+  const installed = process.env.OMP_MAP_INSTALLED_EXE;
+  const args = installed ? [] : [path.resolve(__dirname, "../../desktop")];
+  const app = spawn(installed || executable, [...args, "--remote-debugging-port=0", "--user-data-dir=" + directory],
+    { stdio: ["ignore", "pipe", "pipe"] });
   const closed = once(app, "close");
   closed.catch(() => {});
   let browser;
@@ -34,6 +36,11 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
     await page.getByRole("link", { name: "Engineering" }).click({ timeout: 15000 });
+    if (installed) {
+      const monaco = await fetch("http://127.0.0.1:7800/vendor/monaco/vs/loader.js");
+      assert.equal(monaco.status, 200);
+      assert.match(monaco.headers.get("content-type"), /javascript/);
+    }
     await page.getByText("격리 검증을 통과한 실행 하네스가 없습니다.", { exact: false }).waitFor({ timeout: 8000 });
     await page.getByRole("button", { name: "실행", exact: true }).click();
     assert.equal(await page.getByRole("heading", { name: "Loop 실행" }).isVisible(), true);

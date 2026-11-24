@@ -1,6 +1,7 @@
 /* omp-live-map · view · Monaco(jsDelivr CDN) 지연 로드·언어 매핑·진단 마커 변환 */
 
-const ED_CDN = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/";
+const ED_CDN = window.engineeringDesktop?.localMonaco
+  ? "/vendor/monaco/" : "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/";
 let edMonaco = null;
 let edMonacoPromise = null;
 

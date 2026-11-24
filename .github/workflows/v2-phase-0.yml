@@ -54,3 +54,36 @@ jobs:
       - name: Product desktop UI and protected API
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/engineering-desktop.cjs
+  installer:
+    if: github.ref_name == 'v2/phase-1-3'
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Build Windows installer
+        run: |
+          npm --prefix desktop install --package-lock=false
+          npm --prefix desktop run build:windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OMP-Live-Map-V2-Windows-development
+          path: desktop/dist/OMP-Live-Map-V2-Setup.exe
+          if-no-files-found: error
+      - name: Install on hosted Windows and verify local assets
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'omp-v2-install'
+          $setup = Join-Path $PWD 'desktop/dist/OMP-Live-Map-V2-Setup.exe'
+          $result = Start-Process -FilePath $setup -ArgumentList '/S',"/D=$target" -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
+          $env:OMP_MAP_INSTALLED_EXE = Join-Path $target 'OMP Live Map V2.exe'
+          if (!(Test-Path -LiteralPath $env:OMP_MAP_INSTALLED_EXE)) { throw 'Installed executable not found' }
+          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/verification/engineering-desktop.cjs
