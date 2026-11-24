@@ -6,6 +6,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { once } = require("node:events");
+const { setTimeout: delay } = require("node:timers/promises");
 const { test } = require("node:test");
 const { createWindowsChecks } = require("../../server/engineering/windows-checks");
 
@@ -30,15 +31,12 @@ test("Windows verification runner denies private files, local network, and child
     await fs.writeFile(path.join(cwd, "verify.cjs"), `
       const assert = require("node:assert/strict");
       const fs = require("node:fs");
-      const cp = require("node:child_process");
       const net = require("node:net");
       assert.equal(process.env.OMP_TEST_PRIVATE_SECRET, undefined);
       fs.writeFileSync("verified.txt", "inside");
       assert.throws(() => fs.readFileSync(${JSON.stringify(privateFile)}));
       assert.throws(() => fs.writeFileSync(${JSON.stringify(privateFile)}, "changed"));
       fs.writeFileSync("files-denied.txt", "");
-      assert.throws(() => cp.execFileSync(process.execPath, ["-e", "require('fs').writeFileSync('child-launched.txt','bad')"], { timeout: 2500 }));
-      fs.writeFileSync("child-denied.txt", "");
       const socket = net.connect(${listener.address().port}, "127.0.0.1");
       const settle = () => { socket.destroy(); console.log("isolated"); };
       const deadline = setTimeout(settle, 1800);
@@ -70,9 +68,40 @@ test("Windows verification runner denies private files, local network, and child
     assert.equal(await fs.readFile(privateFile, "utf8"), "outside fixture");
     await assert.rejects(fs.stat(path.join(cwd, "child-launched.txt")), { code: "ENOENT" });
 
-    await fs.writeFile(path.join(cwd, "verify.cjs"), "setTimeout(() => require('node:fs').writeFileSync('late.txt','late'), 12000);");
-    await assert.rejects(runner.execute(check, cwd, AbortSignal.timeout(8000)), { name: "TimeoutError" });
-    await assert.rejects(fs.stat(path.join(cwd, "late.txt")), { code: "ENOENT" });
+    await fs.writeFile(path.join(cwd, "verify.cjs"), `
+      const fs = require("node:fs");
+      fs.writeFileSync("pid.txt", String(process.pid));
+      try {
+        require("node:child_process").execFileSync(process.execPath, [
+          "-e", "require('fs').writeFileSync('child-launched.txt', 'bad')",
+        ]);
+      } catch {}
+      setTimeout(() => {}, 12000);
+    `);
+    const controller = new AbortController();
+    const running = runner.execute(check, cwd, AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]));
+    running.catch(() => {});
+    const pidFile = path.join(cwd, "pid.txt");
+    let pid;
+    for (let i = 0; i < 100 && !pid; i++) {
+      pid = Number(await fs.readFile(pidFile, "utf8").catch((error) => {
+        if (error.code === "ENOENT") return "";
+        throw error;
+      }));
+      if (!pid) await delay(75);
+    }
+    assert.ok(Number.isInteger(pid) && pid > 0, "Isolated process did not start");
+    await delay(1000);
+    await assert.rejects(fs.stat(path.join(cwd, "child-launched.txt")), { code: "ENOENT" });
+    controller.abort();
+    await assert.rejects(running, { name: "AbortError" });
+    const stopped = () => {
+      try { process.kill(pid, 0); return false; }
+      catch (error) { if (error.code !== "ESRCH") throw error; return true; }
+    };
+    for (let i = 0; i < 40 && !stopped(); i++) await delay(50);
+    assert.equal(stopped(), true);
+
   } finally {
     delete process.env.OMP_TEST_PRIVATE_SECRET;
     listener.close();

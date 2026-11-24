@@ -140,9 +140,7 @@ static int execute(const fs::path& workspace, const fs::path& executable, int ar
     requireWin(SetInformationJobObject(job.value, JobObjectExtendedLimitInformation, &options, sizeof options), "Set job limits");
     SECURITY_CAPABILITIES capabilities{};
     capabilities.AppContainerSid = profile.sid;
-    DWORD childPolicy = PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
-    Attributes attributes(4);
-    attributes.add(PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY, &childPolicy, sizeof childPolicy);
+    Attributes attributes(3);
     attributes.add(PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, &capabilities, sizeof capabilities);
     attributes.add(PROC_THREAD_ATTRIBUTE_JOB_LIST, &job.value, sizeof job.value);
     Handle input, output, error;
