@@ -9,6 +9,9 @@ const { workflowRuns } = require("./workflow-runs");
 const { workflowEngine } = require("./workflow-engine");
 const { workflowTemplates } = require("./workflow-templates");
 const { sdlcTasks } = require("./sdlc-tasks");
+const { sdlcStages } = require("./sdlc-stages");
+const { workflowObservability } = require("./workflow-observability");
+const { workflowDelivery } = require("./workflow-delivery");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
@@ -59,10 +62,14 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const workflows = workflowCatalog(db, definitions);
       const tasks = sdlcTasks(db, definitions, workflows);
       const flowRuns = workflowRuns(db, definitions, workflows, tasks);
-      const workspace = worktrees(path.resolve(directory, "worktrees"));
+      const workspaceRoot = path.resolve(directory, "worktrees");
+      const workspace = worktrees(workspaceRoot);
       runs.recover();
       flowRuns.recover();
       services = { definitions, workflows, runs, flowRuns, tasks,
+        stages: sdlcStages(db, definitions, workflows),
+        observability: workflowObservability(db, flowRuns, workspaceRoot),
+        delivery: workflowDelivery(db, flowRuns, definitions, workspaceRoot),
         templates: workflowTemplates(definitions, workflows),
         flow: workflowEngine(flowRuns, workflows, definitions, runner, workspace),
         loop: loopEngine(runs, definitions, runner, workspace) };
@@ -75,20 +82,24 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
       if (req.method === "GET") {
         if (endpoint === "projects") result = definitions.projects();
         if (endpoint === "tasks") result = tasks.list(query("project"));
+        if (endpoint === "sdlc-stages") result = stages.list(query("project"));
+        if (endpoint === "workflow-approvals") result = observability.approvals(query("project"));
+        if (endpoint === "workflow-dashboard") result = observability.dashboard(query("project"));
+        if (endpoint === "workflow-review") result = await observability.review(query("id"));
         if (endpoint === "workflows") result = workflows.list(query("project"));
         if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
         if (endpoint === "workflow-run") {
           const id = query("id");
           const run = flowRuns.get(id);
           const workflow = workflows.get(run.project, run.workflow, run.version);
-          result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id),
+          result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id), timeline: observability.timeline(id), delivery: delivery.get(id),
             labels: Object.fromEntries(workflows.executionPlan(run.project, workflow.payload, run.workflow)
               .document.nodes.map(({ id, label }) => [id, label])) };
         }
@@ -137,6 +148,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
         if (endpoint === "tasks") result = tasks.save(input);
+        if (endpoint === "sdlc-stages") result = stages.save(input);
         if (endpoint === "tasks/move") result = tasks.move(string(input.id, "task"), input.status, input.revision);
         if (endpoint === "workflows") result = workflows.save(input);
         if (endpoint === "workflows/import") {
@@ -150,6 +162,10 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflow-runs/approval") {
           result = await flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
         }
+        if (endpoint === "workflow-delivery/approve") result = await delivery.approve(string(input.id, "run"), input.branch);
+        if (endpoint === "workflow-delivery/pr") result = await delivery.createPR(string(input.id, "run"));
+        if (endpoint === "workflow-delivery/ci") result = await delivery.checkCI(string(input.id, "run"));
+        if (endpoint === "workflow-delivery/release") result = await delivery.approveRelease(string(input.id, "run"));
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
         if (endpoint === "definitions/remove") {

@@ -5,17 +5,34 @@ const columns = {
 
 export function bindSdlc({ find, request, report, showRun }) {
   const form = find("sdlc-form"), selector = form.elements.workflow, board = find("sdlc-board");
-  let project = "", editing, tasks = [], workflows = [], refreshPending = false;
+  const stageForm = find("sdlc-stage-form");
+  let project = "", editing, tasks = [], workflows = [], stages = [], refreshPending = false, lastMetrics = 0;
   const pending = new Map();
 
   function formOptions() {
-    const selected = editing ? editing.workflow + ":" + editing.workflow_version : selector.value;
+    const mapped = stages.find(({ status, workflow }) => status === "backlog" && workflow) ?? stages.find(({ status }) => status === "ready");
+    const fallback = mapped?.workflow ? mapped.workflow + ":" + mapped.workflow_version : "";
+    const selected = editing ? editing.workflow + ":" + editing.workflow_version : selector.value || fallback;
     const options = workflows.map((entry) => new Option(entry.name + " · v" + entry.version, entry.id + ":" + entry.version));
     if (editing && !options.some(({ value }) => value === selected)) {
       options.unshift(new Option(editing.workflow_name + " · v" + editing.workflow_version, selected));
+    } else if (fallback && !options.some(({ value }) => value === fallback)) {
+      options.unshift(new Option("단계 기본 Workflow · v" + mapped.workflow_version, fallback));
     }
     selector.replaceChildren(new Option("Workflow 선택", ""), ...options);
     selector.value = selected;
+  }
+
+  function stageValues() {
+    const stage = stages.find(({ status }) => status === stageForm.elements.status.value);
+    if (!stage) return;
+    stageForm.elements.label.value = stage.label;
+    stageForm.elements.position.value = stage.position;
+    const mapping = stage.workflow ? stage.workflow + ":" + stage.workflow_version : "";
+    const options = workflows.map((flow) => new Option(flow.name + " · v" + flow.version, flow.id + ":" + flow.version));
+    if (mapping && !options.some(({ value }) => value === mapping)) options.unshift(new Option("이전 기본 버전", mapping));
+    stageForm.elements.workflow.replaceChildren(new Option("지정 안 함", ""), ...options);
+    stageForm.elements.workflow.value = mapping;
   }
 
   function edit(task) {
@@ -65,7 +82,8 @@ export function bindSdlc({ find, request, report, showRun }) {
   }
 
   function render() {
-    board.replaceChildren(...Object.entries(columns).map(([status, label]) => {
+    const configured = stages.length ? stages.map(({ status, label }) => [status, label]) : Object.entries(columns);
+    board.replaceChildren(...configured.map(([status, label]) => {
       const section = document.createElement("section"), heading = document.createElement("h3");
       heading.textContent = label;
       section.append(heading, ...tasks.filter((task) => task.status === status).map(card));
@@ -76,15 +94,45 @@ export function bindSdlc({ find, request, report, showRun }) {
   async function refresh(loadWorkflows = false) {
     const owner = project;
     if (!owner) { tasks = []; workflows = []; formOptions(); render(); return; }
-    const [rows, saved] = await Promise.all([request("tasks", { project: owner }),
-      loadWorkflows ? request("workflows", { project: owner }) : Promise.resolve(null)]);
+    const loadMetrics = loadWorkflows || Date.now() - lastMetrics >= 15000;
+    const [rows, saved, approvals, metrics, settings] = await Promise.all([request("tasks", { project: owner }),
+      loadWorkflows ? request("workflows", { project: owner }) : Promise.resolve(null),
+      request("workflow-approvals", { project: owner }), loadMetrics ? request("workflow-dashboard", { project: owner }) : null,
+      loadWorkflows ? request("sdlc-stages", { project: owner }) : null]);
     if (owner !== project) return;
     tasks = rows;
-    if (saved) { workflows = saved; formOptions(); }
+    if (settings) {
+      stages = settings;
+      const previous = stageForm.elements.status.value;
+      stageForm.elements.status.replaceChildren(...stages.map(({ status, label }) => new Option(label, status)));
+      if (stages.some(({ status }) => status === previous)) stageForm.elements.status.value = previous;
+    }
+    if (saved) { workflows = saved; formOptions(); stageValues(); }
     render();
+    find("sdlc-inbox").replaceChildren(...approvals.map((approval) => {
+      const item = document.createElement("li");
+      item.append(approval.title + " · " + approval.prompt, control("승인 검토", async () => showRun(approval.run)));
+      return item;
+    }));
+    if (!metrics) return;
+    lastMetrics = Date.now();
+    const categories = { reported: "보고 비용", reserved: "예약 비용", unknown_basis: "출처 미확인", missing: "비용 미수집" };
+    find("sdlc-metrics").replaceChildren(...[
+      ...metrics.states.map(({ status, count }) => status + " " + count + "건"),
+      ...metrics.usage.map(({ category, count, costCents }) =>
+        categories[category] + " " + count + "건" + (costCents === null ? "" : " · $" + (costCents / 100).toFixed(2))),
+    ].map((label) => { const line = document.createElement("p"); line.textContent = label; return line; }));
   }
 
   find("sdlc-new").onclick = () => edit(null);
+  stageForm.elements.status.onchange = stageValues;
+  stageForm.addEventListener("submit", report(async () => {
+    if (!project) throw new Error("프로젝트를 선택해 주세요.");
+    const fields = Object.fromEntries(new FormData(stageForm)), [workflow, version] = fields.workflow.split(":");
+    await request("sdlc-stages", {}, { project, status: fields.status, label: fields.label,
+      position: Number(fields.position), workflow, version: Number(version) });
+    await refresh(true);
+  }));
   find("sdlc-nav").addEventListener("click", report(async () => refresh(true)));
   form.addEventListener("submit", report(async () => {
     if (!project) throw new Error("프로젝트를 선택해 주세요.");
@@ -105,7 +153,7 @@ export function bindSdlc({ find, request, report, showRun }) {
 
   return { async selectProject(id) {
     if (id === project) return;
-    project = id; tasks = []; workflows = []; edit(null);
+    project = id; tasks = []; workflows = []; stages = []; lastMetrics = 0; edit(null);
     await refresh(true);
   } };
 }

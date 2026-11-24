@@ -104,16 +104,41 @@
         <button type="button" data-action="pause">일시정지</button>
         <button type="button" data-action="resume">재개</button>
         <button type="button" data-action="cancel">취소</button>
+        <button type="button" id="workflow-review">변경사항 보기</button>
       </div>
       <p id="workflow-run-status" role="status"></p>
+      <pre id="workflow-review-output" hidden></pre>
       <form id="workflow-approval" hidden>
         <label>승인 메모 또는 거절 사유 <input name="reason" maxlength="2000"></label>
         <div><button name="decision" value="approved">승인</button> <button name="decision" value="rejected">거절</button></div>
       </form>
       <ol id="workflow-run-nodes"></ol>
+      <details><summary>실행 타임라인</summary><ol id="workflow-timeline"></ol></details>
+      <details id="workflow-delivery" hidden><summary>GitHub PR 및 CI</summary>
+        <p>작업 Worktree에서 검토한 커밋을 만들고 GitHub의 작업 브랜치에 푸시한 뒤 승인하세요.</p>
+        <form id="workflow-delivery-form" class="workflow-controls">
+          <label>GitHub 작업 브랜치 <input name="branch" maxlength="200" required></label>
+          <button>현재 커밋 승인</button>
+        </form>
+        <div id="workflow-delivery-actions">
+          <button type="button" data-delivery="pr">GitHub PR 생성 또는 연결</button>
+          <button type="button" data-delivery="ci">CI 확인</button>
+          <button type="button" data-delivery="release">릴리스 후보 승인</button>
+        </div>
+        <p id="workflow-delivery-status" role="status"></p>
+      </details>
     </section>
     <section id="sdlc" hidden>
       <h2>개발 Task</h2>
+      <details><summary>칸반 단계 설정</summary>
+        <form id="sdlc-stage-form" class="workflow-controls">
+          <label>단계 <select name="status"></select></label>
+          <label>표시 이름 <input name="label" required maxlength="64"></label>
+          <label>순서 <input name="position" type="number" min="0" max="20" required></label>
+          <label>단계 기본 Workflow <select name="workflow"></select></label>
+          <button>단계 저장</button>
+        </form>
+      </details>
       <form id="sdlc-form">
         <label>업무 제목 <input name="title" maxlength="240" required></label>
         <label>요구사항 <textarea name="instruction" rows="4" maxlength="12000" required></textarea></label>
@@ -125,6 +150,8 @@
         <label>실행 예산(센트) <input id="sdlc-budget" type="number" min="0" max="100000" value="300"></label>
       </div>
       <div id="sdlc-board" aria-label="개발 Task 칸반"></div>
+      <section><h3>승인 대기함</h3><ul id="sdlc-inbox"></ul></section>
+      <section><h3>프로젝트 실행 지표</h3><div id="sdlc-metrics"></div></section>
     </section>
     <section id="execution" hidden>
       <h2>Loop 실행</h2>
