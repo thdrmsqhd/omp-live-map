@@ -104,10 +104,11 @@ async function repairFixture(adapter) {
         if (Array.isArray(last.content) && last.content.some((block) => block.type === "tool_result")) {
           return providerFixture(url, options, []);
         }
-        const tool = body.tools.find(({ name }) => name.toLowerCase() === "write");
+        const tool = body.tools.find(({ name }) => name.toLowerCase().replace(/^_/, "") === "write");
         assert.ok(tool, adapter + " Write tool was not exposed");
         const pathField = Object.hasOwn(tool.input_schema.properties, "file_path") ? "file_path" : "path";
         const input = { [pathField]: "/workspace/attempt-" + (++attempts) + ".txt", content: "fixed" };
+        if (Object.hasOwn(tool.input_schema.properties, "i")) input.i = "Write fixture result";
         return toolResponse(body, tool.name, input, attempts);
       },
     });
