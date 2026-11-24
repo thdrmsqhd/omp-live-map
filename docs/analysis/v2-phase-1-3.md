@@ -14,6 +14,15 @@ Phase 0의 Windows 회귀 기준선에서 출발했습니다. 기존 세션·터
 | Phase 2 | OMP RPC와 Claude stream-json 어댑터 계약, 모델·하네스 정의 편집, 가짜 CLI 프로토콜 확인, Git Worktree 분리와 변경 보호 | T022의 제품 격리 백엔드와 실제 CLI 권한·자격증명 정책, 모델 지원 검증, T024의 세션 카드 연결과 사용량 검증, T025의 AGENTS.md·Skills·MCP·Hooks 편집 및 복구 |
 | Phase 3 | Loop 정의·실행 이력 UI, 구조화된 검증 명령, 재시도·한도·취소·중단 상태, 재시작 시 불확실한 시도 재실행 차단, 가짜 하네스와 실제 검증 프로세스로 실패 2회 후 성공 확인 | 제품 격리 백엔드에서 실제 하네스와 검증 명령을 연결한 인수 시나리오 |
 
+## Windows CI 결과
+
+[Windows 실행 45314221844](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45314221844)에서 소스와 설치 파일을 각각 실행했습니다. 기준 커밋은 `39bf4e5fd6bbc32f14b0b63f97c09fae0305c314`입니다.
+
+- Windows Node 24 자동 테스트 15건 통과.
+- 설치된 앱에서 기존 Live Map, Engineering API, 프로젝트 등록, 모델 프로필 저장과 새로고침 복원, 번들에 포함된 Monaco 자산 확인.
+- 가짜 하네스와 실제 Node 검증 명령으로 실패 → 실패 → 성공 및 작업 트리 보존 검증.
+- [Windows 개발 빌드](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45314221844/artifacts/14885126641)는 서명하지 않은 테스트용 설치 파일입니다.
+
 ## 실행 경계
 
 - 가짜 실행기만 테스트 코드에서 주입합니다. 제품에는 권한을 강제하는 백엔드가 연결되기 전까지 자동 실행 권한이 없습니다.
