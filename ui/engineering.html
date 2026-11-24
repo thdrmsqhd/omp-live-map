@@ -66,6 +66,12 @@
       </div>
       <p id="workflow-status" role="status"></p>
       <div class="workflow-controls">
+        <button id="workflow-export" type="button">템플릿 내보내기</button>
+        <label>템플릿 파일 <input id="workflow-import-file" type="file" accept=".json,application/json"></label>
+        <label>가져올 이름 <input id="workflow-import-name" maxlength="240"></label>
+        <button id="workflow-import" type="button">템플릿 가져오기</button>
+      </div>
+      <div class="workflow-controls">
         <label>노드 종류 <select id="workflow-type"></select></label>
         <button id="workflow-add" type="button">노드 추가</button>
         <label>출발 노드 <select id="workflow-from"></select></label>

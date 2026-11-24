@@ -7,6 +7,7 @@ const { catalog } = require("./catalog");
 const { workflowCatalog } = require("./workflow-catalog");
 const { workflowRuns } = require("./workflow-runs");
 const { workflowEngine } = require("./workflow-engine");
+const { workflowTemplates } = require("./workflow-templates");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
@@ -60,6 +61,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       runs.recover();
       flowRuns.recover();
       services = { definitions, workflows, runs, flowRuns,
+        templates: workflowTemplates(definitions, workflows),
         flow: workflowEngine(flowRuns, workflows, definitions, runner, workspace),
         loop: loopEngine(runs, definitions, runner, workspace) };
       return services;
@@ -71,7 +73,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
@@ -84,12 +86,16 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const run = flowRuns.get(id);
           const workflow = workflows.get(run.project, run.workflow, run.version);
           result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id),
-            labels: Object.fromEntries(workflow.payload.nodes.map(({ id, label }) => [id, label])) };
+            labels: Object.fromEntries(workflows.executionPlan(run.project, workflow.payload, run.workflow)
+              .document.nodes.map(({ id, label }) => [id, label])) };
         }
         if (endpoint === "workflow") {
           const version = url.searchParams.get("version");
           result = workflows.get(query("project"), query("id"), version === null ? undefined
             : integer(Number(version), "workflow version", 1, Number.MAX_SAFE_INTEGER));
+        }
+        if (endpoint === "workflows/export") {
+          result = templates.export(query("project"), query("id"), integer(Number(query("version")), "workflow version", 1, Number.MAX_SAFE_INTEGER));
         }
         if (endpoint === "definitions") result = definitions.definitions(query("project"));
         if (endpoint === "definitions/version") {
@@ -128,7 +134,11 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
         if (endpoint === "workflows") result = workflows.save(input);
-        if (endpoint === "workflows/plan") result = workflows.plan(string(input.project, "project"), input.payload);
+        if (endpoint === "workflows/import") {
+          result = templates.import(string(input.project, "project"), input.template, input.name);
+        }
+        if (endpoint === "workflows/plan") result = workflows.executionPlan(string(input.project, "project"), input.payload,
+          input.id ? string(input.id, "workflow") : undefined);
         if (endpoint === "workflow-runs") result = flow.start(input, input.key);
         if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
         if (endpoint === "workflow-runs/retry") result = flow.retry(string(input.id, "run"), string(input.node, "node"));

@@ -26,7 +26,7 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       }
       signal = AbortSignal.any([stop.signal, AbortSignal.timeout(run.deadline - Date.now())]);
       const definition = workflows.get(run.project, run.workflow, run.version);
-      const plan = workflows.plan(run.project, definition.payload);
+      const plan = workflows.executionPlan(run.project, definition.payload, run.workflow);
       const scheduler = graphScheduler(plan);
       const results = new Map(store.nodes(id).map(({ node, status, outcome }) => [node, { ...outcome, status }]));
       const earlier = store.retries(id).map(({ outcome }) => outcome);
@@ -112,7 +112,8 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
     retry(id, node) {
       const run = store.get(id);
       if (active.has(id)) throw problem(409, "Workflow is still active");
-      const workflow = workflows.get(run.project, run.workflow, run.version).payload;
+      const saved = workflows.get(run.project, run.workflow, run.version);
+      const workflow = workflows.executionPlan(run.project, saved.payload, run.workflow).document;
       const children = new Map(workflow.nodes.map((item) => [item.id, []]));
       for (const edge of workflow.edges) children.get(edge.from).push(edge.to);
       const descendants = new Set(), pending = [...(children.get(node) ?? [])];

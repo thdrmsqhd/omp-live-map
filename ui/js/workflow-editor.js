@@ -1,8 +1,9 @@
 import { bindWorkflowRuns } from "./workflow-runs.js";
+import { bindTemplateButtons } from "./workflow-templates.js";
 
 const types = {
   start: "Start", end: "End", agent: "Agent", command: "Command", loop: "Loop",
-  condition: "Condition", parallel: "Parallel", join: "Join", approval: "Approval",
+  condition: "Condition", parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph",
 };
 const ports = { end: [], condition: ["true", "false"], approval: ["approved", "rejected"] };
 const nodeWidth = 132, nodeHeight = 52;
@@ -21,11 +22,13 @@ function choices(select, entries, fallback) {
 export function bindWorkflow({ find, request, report, definitions }) {
   const el = (name) => find("workflow-" + name);
   const selector = el("list"), form = el("node-form");
-  let project = "", workflow, selected, documentState = blank(), runDetail;
+  let project = "", workflow, selected, documentState = blank(), runDetail, workflows = [];
   const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project,
     onStatus(detail) { runDetail = detail; showRunStates(); } });
+  bindTemplateButtons({ el, request, report, current: () => workflow, projectId: () => project, async imported(record) {
+    await loadList(record.project); if (record.project === project) { selector.value = record.id; open(record); }
+  } });
   choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end"].includes(type)));
-
   function draw() {
     const nodes = documentState.nodes;
     const width = Math.max(650, ...nodes.map((node) => node.x + nodeWidth + 30));
@@ -49,7 +52,6 @@ export function bindWorkflow({ find, request, report, definitions }) {
       return group;
     }));
   }
-
   function nodeButton(node) {
     const button = document.createElement("button");
     const label = document.createElement("strong"), type = document.createElement("small");
@@ -75,7 +77,6 @@ export function bindWorkflow({ find, request, report, definitions }) {
     });
     return button;
   }
-
   function showRunStates() {
     const sameVersion = runDetail?.run.workflow === workflow?.id && runDetail?.run.version === workflow?.version;
     const statusByNode = new Map((sameVersion ? runDetail?.nodes ?? [] : []).map(({ node, status }) => [node, status]));
@@ -90,7 +91,6 @@ export function bindWorkflow({ find, request, report, definitions }) {
     const type = documentState.nodes.find(({ id }) => id === el("from").value)?.type;
     choices(el("port"), (ports[type] ?? ["next"]).map((port) => [port, port]));
   }
-
   function render() {
     const nodes = documentState.nodes;
     const entries = nodes.map(({ id, label }) => [id, label]);
@@ -117,7 +117,6 @@ export function bindWorkflow({ find, request, report, definitions }) {
     }
     draw();
   }
-
   function open(record) {
     workflow = record;
     documentState = record?.payload ?? blank();
@@ -129,9 +128,10 @@ export function bindWorkflow({ find, request, report, definitions }) {
   }
   async function loadList(id) {
     const records = id ? await request("workflows", { project: id }) : [];
-    if (id === project) choices(selector, [["", "새 Workflow"], ...records.map(({ id, name }) => [id, name])]);
+    if (id !== project) return;
+    workflows = records;
+    choices(selector, [["", "새 Workflow"], ...records.map(({ id, name }) => [id, name])]);
   }
-
   selector.addEventListener("change", report(async () => {
     const id = selector.value, owner = project;
     const current = id ? await request("workflow", { project: owner, id }) : null;
@@ -145,6 +145,7 @@ export function bindWorkflow({ find, request, report, definitions }) {
       agent: { definition: ref?.id ?? "", instruction: "" }, loop: { definition: ref?.id ?? "", instruction: "" },
       command: { check: { command: "node", args: ["--test"], code: 0 } },
       condition: { source: "", field: "passed", equals: true }, approval: { prompt: "" },
+      subgraph: { workflow: workflows.find((item) => item.id !== workflow?.id)?.id ?? "" },
     };
     const position = documentState.nodes.length;
     documentState.nodes.push({ id, type, label: types[type], x: 230, y: 70 + (position - 2) * 65, ...config[type] });
@@ -187,7 +188,6 @@ export function bindWorkflow({ find, request, report, definitions }) {
       }
     }));
   }
-
   return { async selectProject(id) {
     if (id === project) return;
     project = id;

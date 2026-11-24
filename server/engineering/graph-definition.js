@@ -3,7 +3,7 @@
 const { string, integer, checkCommand } = require("./definitions");
 const { problem } = require("./state");
 
-const types = new Set(["start", "end", "agent", "command", "loop", "condition", "parallel", "join", "approval"]);
+const types = new Set(["start", "end", "agent", "command", "loop", "condition", "parallel", "join", "approval", "subgraph"]);
 const ports = {
   end: [], condition: ["true", "false"], approval: ["approved", "rejected"],
 };
@@ -48,6 +48,10 @@ function contract(raw) {
 }
 
 function settings(type, raw) {
+  if (type === "subgraph") return {
+    workflow: string(raw.workflow, "subgraph definition"),
+    ...(raw.version === undefined ? {} : { version: integer(raw.version, "subgraph version", 1, Number.MAX_SAFE_INTEGER) }),
+  };
   if (type === "agent" || type === "loop") return {
     definition: string(raw.definition, "node definition"),
     ...(raw.version === undefined ? {} : { version: integer(raw.version, "node definition version", 1, Number.MAX_SAFE_INTEGER) }),
@@ -65,8 +69,8 @@ function settings(type, raw) {
   return {};
 }
 
-function node(raw) {
-  if (!raw || !types.has(raw.type)) bad("Unknown graph node type");
+function node(raw, expanded) {
+  if (!raw || !(types.has(raw.type) || (expanded && ["scope-enter", "scope-exit"].includes(raw.type)))) bad("Unknown graph node type");
   return {
     id: identifier(raw.id, "node id"), type: raw.type, label: string(raw.label, "node label"),
     x: integer(raw.x ?? 0, "node x", 0, 10000), y: integer(raw.y ?? 0, "node y", 0, 10000),
@@ -74,9 +78,9 @@ function node(raw) {
   };
 }
 
-function compileGraph(payload) {
+function compileGraph(payload, { expanded = false } = {}) {
   const name = string(payload?.name, "workflow name");
-  const nodes = array(payload.nodes, "graph nodes", 100).map(node);
+  const nodes = array(payload.nodes, "graph nodes", 100).map((raw) => node(raw, expanded));
   const edges = array(payload.edges, "graph connections", 300).map((edge) => ({
     from: identifier(edge?.from, "edge source"), to: identifier(edge?.to, "edge target"),
     port: identifier(edge?.port ?? "next", "output port"),
@@ -96,7 +100,7 @@ function compileGraph(payload) {
   for (const item of byId.values()) {
     const { type, incoming, outgoing } = item;
     const minInputs = type === "start" ? 0 : type === "join" ? 2 : 1;
-    const maxInputs = ["end", "join"].includes(type) ? Infinity : minInputs;
+    const maxInputs = ["end", "join", "scope-exit"].includes(type) ? Infinity : minInputs;
     if (incoming.length < minInputs || incoming.length > maxInputs) bad("Invalid incoming connections for " + item.id);
     if (type === "parallel" && (outgoing.length < 2 || new Set(outgoing.map((edge) => edge.to)).size !== outgoing.length)) {
       bad("Parallel requires two or more distinct branches");
@@ -134,6 +138,7 @@ function compileGraph(payload) {
   for (const item of nodes) {
     const prior = ancestors.get(item.id);
     if (item.outputs.length && !producers.has(item.type)) bad("Only execution nodes declare artifacts");
+    if (item.type === "subgraph" && item.inputs.length) bad("Subgraphs use their own input contracts");
     if (item.source && (!prior.has(item.source) || (item.field === "passed" && !["command", "loop"].includes(byId.get(item.source).type)))) {
       bad("Condition source must be a compatible predecessor");
     }

@@ -120,3 +120,63 @@ test("scheduler leaves approval successors pending until a recorded decision", (
   for (const id of ["w", "z"]) results.set(id, { status: "skipped" });
   assert.equal(scheduler.outcome(results), "failed");
 });
+
+test("Subgraph calls are versioned, expand under separate node ids, and reject recursion", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-subgraph-test-"));
+  const db = openDatabase(path.join(dir, "engineering.sqlite"));
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", dir, "Project", "main");
+    const workflows = workflowCatalog(db, catalog(db));
+    const shell = (name, middle) => ({ name, nodes: [node("s", "start"), middle, node("e", "end")],
+      edges: [edge("s", middle.id), edge(middle.id, "e")] });
+    const child = workflows.save({ project: "one", payload: shell("child", node("validate", "command", check)) });
+    const parent = workflows.save({ project: "one", payload: shell("parent", node("child-call", "subgraph", { workflow: child.id })) });
+    assert.equal(parent.payload.nodes[1].version, 1);
+    workflows.save({ project: "one", id: child.id, version: 1, payload: shell("child", node("new-check", "command", check)) });
+    const plan = workflows.executionPlan("one", parent.payload, parent.id);
+    const ordered = plan.order.map((id) => plan.document.nodes.find((item) => item.id === id));
+    assert.deepEqual(ordered.map(({ type }) => type), ["start", "scope-enter", "command", "scope-exit", "end"]);
+    assert.match(ordered[2].label, /validate/);
+    assert.equal(ordered[3].id, "child-call");
+    assert.throws(() => workflows.save({ project: "one", id: child.id, version: 2,
+      payload: shell("child", node("recur", "subgraph", { workflow: parent.id })) }), /Recursive/);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("template exchange replaces runtime IDs with project references and rejects embedded credentials", () => {
+  const { workflowTemplates } = require("../server/engineering/workflow-templates");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-template-test-"));
+  const db = openDatabase(path.join(dir, "engineering.sqlite"));
+  try {
+    const add = db.prepare("INSERT INTO project VALUES (?,?,?,?,0)");
+    add.run("one", dir, "Original", "main");
+    add.run("two", path.join(dir, "other"), "Target", "main");
+    const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
+    const templates = workflowTemplates(definitions, workflows);
+    const prepare = (project) => {
+      const model = definitions.saveDefinition({ project, kind: "model", payload: { name: "Provider", provider: "fixture", model: "fake" } });
+      return definitions.saveDefinition({ project, kind: "harness", payload: { name: "Editor", adapter: "claude", model: model.id, role: "editor" } });
+    };
+    const first = prepare("one");
+    const saved = workflows.save({ project: "one", payload: {
+      name: "Portable", nodes: [node("s", "start"), node("a", "agent", { definition: first.id, instruction: "Edit the fixture" }), node("e", "end")],
+      edges: [edge("s", "a"), edge("a", "e")],
+    } });
+    const output = templates.export("one", saved.id, saved.version);
+    assert.equal(JSON.stringify(output).includes(first.id), false);
+    assert.throws(() => templates.import("two", output), /matching project definition/);
+    const second = prepare("two");
+    const restored = templates.import("two", output);
+    assert.equal(restored.payload.nodes[1].definition, second.id);
+    assert.equal(restored.payload.nodes[1].version, 1);
+    assert.deepEqual(restored.payload.edges, saved.payload.edges);
+    output.payload.nodes[1].instruction = "api_key=fixture-credential";
+    assert.throws(() => templates.import("two", output, "another"), /embedded credentials/);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
+});

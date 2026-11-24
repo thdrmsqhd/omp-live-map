@@ -4,11 +4,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
-const version = 4;
+const version = 5;
 const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
 const graphSchema = fs.readFileSync(path.join(__dirname, "schema-v2.sql"), "utf8");
 const runSchema = fs.readFileSync(path.join(__dirname, "schema-v3.sql"), "utf8");
 const retrySchema = fs.readFileSync(path.join(__dirname, "schema-v4.sql"), "utf8");
+const subgraphSchema = fs.readFileSync(path.join(__dirname, "schema-v5.sql"), "utf8");
 
 function transaction(db, fn) {
   db.exec("BEGIN IMMEDIATE");
@@ -34,7 +35,8 @@ function openDatabase(file) {
       if (current < 1) db.exec(schema);
       if (current < 2) db.exec(graphSchema);
       if (current < 3) db.exec(runSchema);
-      if (current < 4) db.exec(retrySchema + "; PRAGMA user_version=4");
+      if (current < 4) db.exec(retrySchema);
+      if (current < 5) db.exec(subgraphSchema + "; PRAGMA user_version=5");
     });
     return db;
   } catch (error) {
