@@ -3,8 +3,8 @@ let mapMode = readJSON("omp-map-view-mode","map");
 if (!["map","overview","workspace"].includes(mapMode)) mapMode="map";
 let overviewDensity = readJSON("omp-map-overview-density","standard");
 if (!["compact","standard","detailed"].includes(overviewDensity)) overviewDensity="standard";
-let overviewSort = readJSON("omp-map-overview-sort","attention");
-if (!["attention","memory","recent","name"].includes(overviewSort)) overviewSort="attention";
+let overviewSort = readJSON("omp-map-overview-sort-v2","stable");
+if (!["stable","attention","memory","recent","name"].includes(overviewSort)) overviewSort="stable";
 let overviewMemory = Math.min(1048576,Math.max(128,Number(readJSON("omp-map-overview-memory",2048))||2048));
 const OVERVIEW_SELECTED = new Set();
 
@@ -52,11 +52,11 @@ $("overview-density").value=overviewDensity;
 $("overview-sort").value=overviewSort;
 $("overview-memory").value=overviewMemory;
 $("overview-density").onchange=(e)=>{overviewDensity=e.target.value;writeJSON("omp-map-overview-density",overviewDensity);paintOverview(filteredSessions());};
-$("overview-sort").onchange=(e)=>{overviewSort=e.target.value;writeJSON("omp-map-overview-sort",overviewSort);paintOverview(filteredSessions());};
+$("overview-sort").onchange=(e)=>{overviewSort=e.target.value;writeJSON("omp-map-overview-sort-v2",overviewSort);paintOverview(filteredSessions());};
 $("overview-memory").onchange=(e)=>{overviewMemory=Math.min(1048576,Math.max(128,Number(e.target.value)||2048));e.target.value=overviewMemory;writeJSON("omp-map-overview-memory",overviewMemory);paintOverview(filteredSessions());};
 $("overview-select-all").onclick=()=>{
-  const ids=filteredSessions().flatMap((s)=>s.nodes.filter((n)=>n.kind==="main").map((n)=>n.id));
-  if(ids.every((id)=>OVERVIEW_SELECTED.has(id))) OVERVIEW_SELECTED.clear(); else for(const id of ids) OVERVIEW_SELECTED.add(id);
+  const ids=monitorVisibleSessions(filteredSessions()).flatMap((s)=>s.nodes.filter((n)=>n.kind==="main").map((n)=>n.id));
+  if(ids.every((id)=>OVERVIEW_SELECTED.has(id))) { for(const id of ids) OVERVIEW_SELECTED.delete(id); } else for(const id of ids) OVERVIEW_SELECTED.add(id);
   paintOverview(filteredSessions());
 };
 $("overview-close-selected").onclick=()=>{for(const id of [...OVERVIEW_SELECTED]) if(openIds.has(id))closeCard(id);renderMap(false,true);};

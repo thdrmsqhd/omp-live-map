@@ -78,6 +78,15 @@ test("existing map opens a session card, restores panel state and renders update
       await page.waitForSelector("#overview .mon-card",filter);
       assert.equal(await page.locator("#overview .mon-card").count(),10);
       await page.screenshot({path:"artifacts/v4-ux/01-overview.png"});
+      await page.locator("#mon-search").fill("Timing 1");
+      assert.equal(await page.locator("#overview .mon-card").count(),1);
+      await page.locator("#mon-search").fill("");
+      assert.equal(await page.locator("#overview .mon-card").count(),10);
+      await page.locator("[data-mon-filter=attention]").click();
+      await page.locator("[data-mon-filter=all]").click();
+      await page.locator("#overview [data-mon-detail]").first().click();
+      assert.equal(await page.locator("#overview .mon-agent-list").count(),1);
+      await page.locator("#overview [data-mon-detail]").first().click();
       await page.locator('[data-mode="workspace"]').click();
       await first.click(filter);
       assert.equal(await page.locator(".node.big.active-card .cin").inputValue(),"unsent fixture");
