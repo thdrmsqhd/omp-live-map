@@ -20,7 +20,10 @@ function createWindowsChecks({ launcher, worktreeRoot, programs, allowlist }) {
           fs.lstatSync(requested).isSymbolicLink() || actual.toLowerCase() !== requested.toLowerCase()) {
         throw problem(409, "Command has no trusted binary or the worktree path is invalid");
       }
-      return spawn(launcher, [actual, executable, ...args], options);
+      const child = spawn(launcher, [actual, executable, ...args], { ...options, stdio: ["pipe", "pipe", "pipe"] });
+      child.stdin.on("error", () => {});
+      child.stdin.end();
+      return child;
     },
     terminate(child) { child.kill(); },
   };
@@ -29,7 +32,7 @@ function createWindowsChecks({ launcher, worktreeRoot, programs, allowlist }) {
     ...runner,
     async execute(check, cwd, signal) {
       const result = await runner.execute(check, cwd, signal);
-      if (result.code === 125) throw problem(409, "Windows isolation refused the verification command");
+      if (result.code === 125) throw problem(409, "Windows isolation refused the verification command. " + result.log);
       return result;
     },
   };

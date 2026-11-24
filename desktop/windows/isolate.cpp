@@ -10,7 +10,6 @@
 #include <vector>
 
 namespace fs = std::filesystem;
-
 static void requireWin(BOOL success, const char* operation) {
     if (!success) throw std::runtime_error(std::string(operation) + ": " + std::to_string(GetLastError()));
 }
@@ -40,7 +39,6 @@ static std::wstring systemDirectory() {
     requireWin(length > 0 && length < MAX_PATH, "GetSystemDirectoryW");
     return path;
 }
-
 static std::wstring appIdentity() {
     GUID guid{};
     if (FAILED(CoCreateGuid(&guid))) throw std::runtime_error("Could not allocate AppContainer identity");
@@ -93,7 +91,6 @@ static void acl(const fs::path& target, const std::wstring& arguments) {
     requireWin(GetExitCodeProcess(child.value, &code), "icacls result");
     if (code) throw std::runtime_error("Workspace ACL setup failed: " + std::to_string(code));
 }
-
 struct Grants {
     fs::path work, runtime;
     std::wstring sid;
@@ -123,13 +120,17 @@ static void rejectLinks(const fs::path& root) {
         }
     };
     for (auto parent = root; parent.has_relative_path(); parent = parent.parent_path()) check(parent);
-    for (const auto& entry : fs::recursive_directory_iterator(root)) check(entry.path());
+    for (const auto& entry : fs::recursive_directory_iterator(root)) {
+        check(entry.path());
+        if (entry.is_regular_file() && fs::hard_link_count(entry.path()) > 1) throw std::runtime_error("Hard links are not supported");
+    }
 }
 
 static int execute(const fs::path& workspace, const fs::path& executable, int argc, wchar_t** argv) {
     const auto runtime = executable.parent_path();
-    if (!workspace.is_absolute() || !executable.is_absolute() || runtime == workspace ||
-        runtime.lexically_relative(workspace).native().rfind(L"..", 0) != 0) {
+    const auto relative = runtime.lexically_relative(workspace);
+    if (!workspace.is_absolute() || !executable.is_absolute() ||
+        relative.empty() || *relative.begin() != L"..") {
         throw std::runtime_error("Use a separate, read-only runtime directory");
     }
     rejectLinks(workspace);
@@ -137,7 +138,6 @@ static int execute(const fs::path& workspace, const fs::path& executable, int ar
     Profile profile;
     Grants grants{workspace, runtime, L""};
     grants.configure(profile.sid);
-
     Handle job{CreateJobObjectW(nullptr, nullptr)};
     requireWin(job.value != nullptr, "Create process job");
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION options{};

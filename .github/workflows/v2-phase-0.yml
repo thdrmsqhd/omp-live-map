@@ -3,7 +3,12 @@ name: V2 Phase 0 verification
 on:
   push:
     branches: ['v2/phase-0-baseline', 'v2/phase-1-3']
-    paths-ignore: ['docs/**']
+    paths-ignore:
+      - 'docs/**'
+      - '.github/workflows/v2-windows-isolation.yml'
+      - 'desktop/windows/**'
+      - 'server/engineering/windows-checks.js'
+      - 'tests/verification/windows-checks.cjs'
 
 permissions:
   contents: read
@@ -36,19 +41,6 @@ jobs:
           cmd.exe /d /c $compile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/verification/appcontainer.cjs $exe
-      - name: Windows isolated verification command
-        if: ${{ !cancelled() && github.ref_name == 'v2/phase-1-3' }}
-        run: |
-          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if (!$vs) { throw 'Visual Studio C++ tools are unavailable' }
-          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
-          $exe = Join-Path $env:RUNNER_TEMP 'omp-isolate.exe'
-          $obj = Join-Path $env:RUNNER_TEMP 'omp-isolate.obj'
-          $compile = 'call "' + $vcvars + '" && cl /nologo /W4 /EHsc /std:c++17 /MT /Fo:"' + $obj + '" /Fe:"' + $exe + '" desktop/windows/isolate.cpp /link userenv.lib advapi32.lib ole32.lib'
-          cmd.exe /d /c $compile
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/verification/windows-checks.cjs $exe
       - name: SQLite recovery probe
         if: ${{ !cancelled() }}
         run: node tests/verification/sqlite.cjs
