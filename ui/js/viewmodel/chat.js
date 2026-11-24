@@ -69,11 +69,15 @@ function commitStream(st, fallback) {
 async function sendChat(id) {
   if (typeof attnClear === "function") attnClear(id);   // 프롬프트를 보내면 그 카드의 주의는 끝난다
   const st = chatState(id);
+  if(st.sending)return;
   const text = (st.draft || "").trim();
   const files = st.files;
   if (!text && !files.length) return;
   const bad = attachProblem(files);
   if (bad) { st.error = bad; st.retry = ""; paintChat(id); return; }
+  st.sending=true;
+  st.historyOffset=0;st.search="";
+  const search=ELS.get(id)?.querySelector(".chat-search");if(search)search.value="";
   commitStream(st);
   const since = Date.now();
   // 사용자가 붙인 이미지는 보내는 즉시 말풍선에 그린다. 서버 기록이 올라오기 전까지는 blob 미리보기를,
@@ -95,7 +99,8 @@ async function sendChat(id) {
   } catch (err) {
     out = { ok: false, out: err.message };
   }
-  if (out.ok) { clearAttachments(files, new Set(previews)); return; }
+  st.sending=false;
+  if (out.ok) { clearAttachments(files, new Set(previews)); paintChat(id); return; }
   // 전달되지 않은 입력은 대화 목록에서 빼고 입력창에 되돌려 다시 시도할 수 있게 한다.
   const i = st.log.indexOf(entry);
   if (i >= 0) st.log.splice(i, 1);

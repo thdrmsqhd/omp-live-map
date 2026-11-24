@@ -84,6 +84,10 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator('[data-mode="workspace"]').click();
       await first.click(filter);
       await page.locator(".node.big.active-card .cin").fill("unsent fixture");
+      assert.equal(await page.locator(".node.big.active-card [data-send]").isEnabled(),true);
+      await page.locator(".node.big.active-card .chat-search").fill("no matching fixture");
+      assert.equal(await page.locator(".node.big.active-card .cmsgs").innerText(),"검색 결과 없음");
+      await page.locator(".node.big.active-card [data-chat-search-clear]").click();
       await page.locator('[data-mode="overview"]').click();
       await page.waitForSelector("#overview .mon-card",filter);
       assert.equal(await page.locator("#overview .mon-card").count(),10);
