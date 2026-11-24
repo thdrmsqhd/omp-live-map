@@ -42,9 +42,9 @@ V3는 Phase 4~6의 Graph·SDLC·PR/CI·통합 인수와 설치 업데이트·이
 | T001 | 완료 | 위 소스 인벤토리와 호환 계약 |
 | T002 | 검토 중 | [ADR-0003](../adr/0003-v2-desktop-state-and-isolation.md), Linux SQLite 확인. Windows 격리·설치 PoC 필요 |
 | T003 | 완료 | `node --test`, 임시 상태·JSONL 디렉터리 및 loopback HTTP fixture |
-| T004 | 검토 중 | 기존 가짜 OMP의 준비·질문 대기·취소와 가짜 Claude의 스트리밍·실패를 자동 검증. Claude 메인·서브 수집 확인. 기존 서버가 두 CLI를 연결하는 전체 경로 검증 필요 |
+| T004 | 완료 | 기존 API에서 두 가짜 CLI 실행, OMP 대기·취소, Claude 스트리밍·오류와 메인·서브 수집, SSE 재연결을 자동 검증 |
 | T005 | 진행 중 | 보안 가드·초기 SSE·계보·편집기 저장 충돌·잡 종료 검증. Windows 인프라, 브라우저 카드 조작, 성능 기준선 필요 |
 
-Linux Node 24의 `node --test` 결과는 8건 통과입니다. 테스트는 임시 홈/상태와 Node로 시작한 가짜 프로세스를 사용합니다.
+Linux Node 24의 `node --test` 결과는 9건 통과입니다. 테스트는 임시 홈/상태와 Node로 시작한 가짜 프로세스를 사용합니다.
 
 Chromium 실동작 측정은 실행 환경에서 브라우저 소켓 생성이 거부되어 진행하지 못했습니다. 성능 결과는 확보하지 못했습니다.

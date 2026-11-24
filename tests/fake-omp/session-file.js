@@ -23,7 +23,7 @@ function makeSession(resumePath, cwd) {
     if (!fs.existsSync(file)) fs.writeFileSync(file, "");
     return { file, id: path.basename(file, ".jsonl"), append: (o) => write(file, o) };
   }
-  const home = process.env.USERPROFILE || process.env.HOME || os.homedir();
+  const home = process.env.FAKE_OMP_HOME || process.env.USERPROFILE || process.env.HOME || os.homedir();
   const dir = path.join(home, ".omp", "agent", "sessions", "--C--fake--");
   fs.mkdirSync(dir, { recursive: true });
   const now = Date.now();
