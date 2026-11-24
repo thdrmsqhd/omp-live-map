@@ -14,7 +14,7 @@ const userData = app.commandLine.getSwitchValue("user-data-dir");
 if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
 const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
 const endpoints = new Set([
-  "projects", "projects/archive", "definitions", "definitions/remove",
+  "projects", "projects/archive", "definitions", "definitions/remove", "definitions/version",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key",
 ]);
 

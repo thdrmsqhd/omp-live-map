@@ -60,7 +60,12 @@ test("real CLI binaries talk through an offline container to the model broker", 
   }
 });
 
-test("real Claude Code writes files and Loop retries until the isolated verification succeeds", { timeout: 120000 }, async () => {
+for (const adapter of ["claude", "omp"]) {
+  test(`real ${adapter} writes files and Loop retries until isolated verification succeeds`,
+    { timeout: 120000 }, () => repairFixture(adapter));
+}
+
+async function repairFixture(adapter) {
   const { execFileSync } = require("node:child_process");
   const { setTimeout: delay } = require("node:timers/promises");
   const { openDatabase } = require("../../server/engineering/database");
@@ -96,9 +101,10 @@ test("real Claude Code writes files and Loop retries until the isolated verifica
         if (Array.isArray(last.content) && last.content.some((block) => block.type === "tool_result")) {
           return providerFixture(url, options, []);
         }
-        const tool = body.tools.find(({ name }) => name === "Write");
-        assert.ok(tool, "Claude Write tool was not exposed");
-        const input = { file_path: "/workspace/attempt-" + (++attempts) + ".txt", content: "fixed" };
+        const tool = body.tools.find(({ name }) => name.toLowerCase() === "write");
+        assert.ok(tool, adapter + " Write tool was not exposed");
+        const pathField = Object.hasOwn(tool.input_schema.properties, "file_path") ? "file_path" : "path";
+        const input = { [pathField]: "/workspace/attempt-" + (++attempts) + ".txt", content: "fixed" };
         return toolResponse(body, tool.name, input, attempts);
       },
     });
@@ -108,7 +114,7 @@ test("real Claude Code writes files and Loop retries until the isolated verifica
     const model = definitions.saveDefinition({ project: project.id, kind: "model",
       payload: { name: "Claude", provider: "anthropic", model: modelName } });
     const harness = definitions.saveDefinition({ project: project.id, kind: "harness",
-      payload: { name: "Claude editor", adapter: "claude", role: "developer", model: model.id } });
+      payload: { name: adapter + " editor", adapter, role: "developer", model: model.id } });
     const loop = definitions.saveDefinition({ project: project.id, kind: "loop",
       payload: { name: "verify", harness: harness.id, attempts: 3, timeoutMs: 90000, budgetCents: 1600,
         checks: [{ command: "node", args: ["--test"], code: 0 }] } });
@@ -128,7 +134,7 @@ test("real Claude Code writes files and Loop retries until the isolated verifica
     db?.close();
     await fs.rm(temp, { recursive: true, force: true, maxRetries: 3 });
   }
-});
+}
 
 function toolResponse(body, name, input, attempt) {
   const message = { id: "msg_tool_" + attempt, type: "message", role: "assistant", model: body.model,

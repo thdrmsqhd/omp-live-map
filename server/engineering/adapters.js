@@ -4,11 +4,12 @@ const { randomUUID } = require("node:crypto");
 const { once } = require("node:events");
 const { createInterface } = require("node:readline");
 const { open } = require("../rpc");
+const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
 
 function prompt(context) {
   const { harness, instruction, feedback } = context;
-  return [harness.role, harness.instructions, instruction,
+  return [harness.role, harness.instructions, promptAssets(harness.assets), instruction,
     feedback.length ? "Previous verification results:\n" + JSON.stringify(feedback) : ""].filter(Boolean).join("\n\n");
 }
 

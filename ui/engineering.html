@@ -44,6 +44,9 @@
           <option value="model">모델</option><option value="harness">하네스</option><option value="loop">Loop</option>
         </select></label>
         <label>기존 정의 <select id="definition"></select></label>
+        <label>저장 버전 <select id="definition-version"></select></label>
+        <p id="harness-assets" hidden>AGENTS.md와 Skills는 실행 지시에 반영됩니다. MCP와 Hooks는 설정 초안으로 저장됩니다.</p>
+        <pre id="definition-diff" aria-label="현재 버전과의 변경 내역" hidden></pre>
         <label>정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
         <div><button>버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
       </form>

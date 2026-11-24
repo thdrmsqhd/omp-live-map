@@ -36,7 +36,7 @@ function defaultPayload() {
   const model = definitions.find((entry) => entry.kind === "model");
   const harness = definitions.find((entry) => entry.kind === "harness");
   if (kind.value === "model") return { name: "Claude Sonnet 4.6", provider: "anthropic", model: "claude-sonnet-4-6", reasoning: "" };
-  if (kind.value === "harness") return { name: "Claude Code", adapter: "claude", model: model?.id ?? "", role: "개발", instructions: "" };
+  if (kind.value === "harness") return { name: "Claude Code", adapter: "claude", model: model?.id ?? "", role: "개발", instructions: "", assets: { agents: "", skills: [], mcp: {}, hooks: {} } };
   return { name: "", harness: harness?.id ?? "", attempts: 3, timeoutMs: 600000, budgetCents: 300,
     checks: [{ command: "node", args: ["--test"], code: 0 }] };
 }
@@ -45,6 +45,12 @@ function showDefinition() {
   const selected = definitions.find((entry) => entry.id === definition.value);
   find("payload").value = JSON.stringify(selected?.payload ?? defaultPayload(), null, 2);
   find("remove").disabled = !selected;
+  find("definition-diff").hidden = true;
+  const versions = find("definition-version");
+  versions.replaceChildren();
+  for (let version = selected?.version ?? 0; version > 0; version--) versions.add(new Option(String(version), String(version)));
+  versions.disabled = !selected;
+  find("harness-assets").hidden = kind.value !== "harness";
 }
 
 async function refreshProjects(chosen, editSelected = false) {
@@ -108,6 +114,18 @@ find("archive").addEventListener("click", report(async () => {
 }));
 kind.addEventListener("change", report(async () => refreshDefinitions("")));
 definition.addEventListener("change", showDefinition);
+find("definition-version").addEventListener("change", report(async (event) => {
+  const selected = definitions.find((entry) => entry.id === definition.value);
+  if (!selected) return;
+  const historical = await request("definitions/version", { id: selected.id, version: event.currentTarget.value });
+  if (definition.value !== selected.id) return;
+  const previous = JSON.stringify(historical.payload, null, 2);
+  const current = JSON.stringify(selected.payload, null, 2);
+  find("payload").value = previous;
+  const diff = find("definition-diff");
+  diff.hidden = current === previous;
+  if (!diff.hidden) diff.textContent = `현재 버전 ${selected.version}\n${current}\n\n선택한 버전 ${historical.version}\n${previous}`;
+}));
 find("definition-form").addEventListener("submit", report(async (event) => {
   const old = definitions.find((entry) => entry.id === definition.value);
   const payload = JSON.parse(formValues(event).payload);

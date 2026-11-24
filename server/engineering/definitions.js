@@ -1,5 +1,6 @@
 "use strict";
 
+const { harnessAssets } = require("./harness-assets");
 const { problem } = require("./state");
 
 function string(value, label, max = 240) {
@@ -25,7 +26,7 @@ function definition(kind, body) {
     if (!["omp", "claude"].includes(body.adapter)) throw problem(400, "Unsupported harness");
     return { name, adapter: body.adapter, model: string(body.model, "model definition id"),
       role: string(body.role, "role"), instructions: body.instructions ? string(body.instructions, "instructions", 12000) : "",
-      permission: "workspace-only" };
+      permission: "workspace-only", assets: harnessAssets(body.assets) };
   }
   if (kind !== "loop") throw problem(400, "Unsupported definition kind");
   if (!Array.isArray(body.checks) || !body.checks.length || body.checks.length > 10) throw problem(400, "Supply 1–10 checks");

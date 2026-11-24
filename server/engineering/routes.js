@@ -69,6 +69,9 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       if (req.method === "GET") {
         if (endpoint === "projects") result = definitions.projects();
         if (endpoint === "definitions") result = definitions.definitions(query("project"));
+        if (endpoint === "definitions/version") {
+          result = definitions.versionOf(query("id"), integer(Number(query("version")), "version", 1, Number.MAX_SAFE_INTEGER));
+        }
         if (endpoint === "runs") result = runs.list(query("project"));
         if (endpoint === "run") {
           const id = query("id");

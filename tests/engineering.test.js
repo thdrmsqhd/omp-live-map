@@ -60,6 +60,14 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
       payload: { ...model.payload, model: "fake-2" } });
     assert.equal(newer.version, 2);
     assert.equal(definitions.dependency(harness).payload.model, "fake-1");
+    assert.throws(() => definitions.saveDefinition({ project: project.id, kind: "harness",
+      payload: { ...harness.payload, name: "bad profile", assets: { mcp: { env: { API_KEY: "forbidden" } } } } }),
+    /cannot contain credentials/);
+    const saved = definitions.saveDefinition({ project: project.id, kind: "harness", id: harness.id, version: 1,
+      payload: { ...harness.payload, assets: { agents: "Project instructions", skills: [{ name: "verify", markdown: "Run phased tests." }] } } });
+    assert.equal(saved.payload.assets.skills[0].name, "verify");
+    assert.deepEqual(definitions.versionOf(harness.id, 1).payload.assets.skills, []);
+    assert.equal(definitions.dependency(saved).payload.model, "fake-2");
 
     const key = randomUUID();
     const { run } = store.create(body, key);
