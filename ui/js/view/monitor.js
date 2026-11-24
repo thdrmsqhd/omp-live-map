@@ -1,5 +1,5 @@
 /* 관제/워크스페이스/맵 셸. 기존 열린 카드 상태 및 좌표는 모드 전환 때 보존한다. */
-let mapMode = readJSON("omp-map-view-mode","map");
+let mapMode = readJSON("omp-map-view-mode-v2","overview");
 if (!["map","overview","workspace"].includes(mapMode)) mapMode="map";
 let overviewDensity = readJSON("omp-map-overview-density","standard");
 if (!["compact","standard","detailed"].includes(overviewDensity)) overviewDensity="standard";
@@ -12,7 +12,7 @@ function setMapMode(mode, render = true) {
   if (!["map","overview","workspace"].includes(mode)) return;
   stopMomentum();
   mapMode = mode;
-  writeJSON("omp-map-view-mode", mode);
+  writeJSON("omp-map-view-mode-v2", mode);
   if (mode === "workspace" && !openIds.has(activeCardId)) activeCardId = [...openIds].at(-1) || null;
   paintMode();
   if (render) renderMap(false,true);

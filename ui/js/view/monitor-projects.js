@@ -1,6 +1,6 @@
 /* 관제 탐색 및 DOM 갱신: 화면 모드와 독립된 관제 상태 */
 let MON_QUERY="", MON_FILTER="all";
-const MON_FOLDED=new Set(strList(readJSON("omp-map-mon-folded",[]))), MON_EXPANDED=new Set(), MON_RANK=new Map();
+const MON_FOLDED=new Set(), MON_EXPANDED=new Set(), MON_RANK=new Map();
 function monitorStableRank(s){if(!MON_RANK.has(s.key))MON_RANK.set(s.key,MON_RANK.size);return MON_RANK.get(s.key);}
 function monitorCategory(s){const st=monitorSessionStats(s,overviewMemory),n=st.main;if(!n)return "idle";return askPending(n.id)||st.resourceWarning||ATTN.has(n.id)?"attention":n.status==="live"||st.running?"live":"idle";}
 function monitorVisibleSessions(sessions){
@@ -95,7 +95,7 @@ function monitorSessionHTML(s) {
     <div class="mon-metrics"><div><small>에이전트</small><strong>${st.running}/${st.total}</strong></div><div><small>컨텍스트</small><strong>${ctx?esc(ctx.text):"—"}</strong></div><div><small>비용</small><strong>${esc(krw(st.cost))}</strong></div><div><small>CPU (코어 합)</small><strong>${st.cpu===null?"—":Math.round(st.cpu)+"%"}</strong></div><div><small>RAM</small><strong>${st.ram===null?"—":esc(memSize(st.ram))}</strong></div><div><small>토큰</small><strong>${esc(fmt(st.tokens))}</strong></div></div>`}
     ${(overviewDensity==="detailed"||MON_EXPANDED.has(n.id))?`<div class="mon-agent-list">${s.nodes.map((a)=>`<button data-mon-open="${esc(a.id)}"><i class="dot ${esc(a.status)}"></i>${esc(a.kind==="main"?"Main":displayName(a))}<span>${esc(monStatus[a.status]||a.status)}</span></button>`).join("")}</div>
       <div class="mon-trend">${(n.res?.hist||[]).length?miniSpark(n.res.hist,170,25,"#4aa8ff"):"CPU 추세 미수집"}<span>누적 오류 ${st.errors}건</span></div>`:""}
-    <div class="mon-card-actions"><button class="mon-primary" data-mon-open="${id}">작업 열기 ↗</button><button data-mon-detail="${id}" aria-expanded="${MON_EXPANDED.has(n.id)}">상세</button><button data-mon-map="${id}">지도</button><button data-mon-pin="${id}">${PINNED.has(s.key)?"고정 해제":"고정"}</button>${att?.kind==="done"?`<button data-mon-ack="${id}">완료 확인</button>`:""}</div>
+    <div class="mon-card-actions"><button class="mon-primary" data-mon-open="${id}">작업 열기 ↗</button><button data-mon-detail="${id}" aria-expanded="${MON_EXPANDED.has(n.id)}">상세</button><button data-mon-editor="${id}">코드</button><button data-mon-map="${id}">지도</button><button data-mon-pin="${id}">${PINNED.has(s.key)?"고정 해제":"고정"}</button>${att?.kind==="done"?`<button data-mon-ack="${id}">완료 확인</button>`:""}</div>
   </article>`;
 }
 function paintOverview(sessions) {
@@ -131,8 +131,9 @@ $("overview").addEventListener("click",(e)=>{
   const b=e.target.closest("button");if(!b)return;
   const d=b.dataset;
   if(d.monFilter){MON_FILTER=d.monFilter;paintOverview(filteredSessions());}
-  else if(d.monFold){if(MON_FOLDED.has(d.monFold))MON_FOLDED.delete(d.monFold);else MON_FOLDED.add(d.monFold);writeJSON("omp-map-mon-folded",[...MON_FOLDED]);paintOverview(filteredSessions());}
+  else if(d.monFold){if(MON_FOLDED.has(d.monFold))MON_FOLDED.delete(d.monFold);else MON_FOLDED.add(d.monFold);paintOverview(filteredSessions());}
   else if(d.monDetail){if(MON_EXPANDED.has(d.monDetail))MON_EXPANDED.delete(d.monDetail);else MON_EXPANDED.add(d.monDetail);paintOverview(filteredSessions());}
+  else if(d.monEditor){setMapMode("workspace",false);openNode(d.monEditor);showCardEditor(d.monEditor);}
   else if(d.monOpen){setMapMode("workspace",false);openNode(d.monOpen);}
   else if(d.monMap){setMapMode("map",false);openNode(d.monMap);}
   else if(d.monAck){attnClear(d.monAck);paintOverview(filteredSessions());}

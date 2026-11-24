@@ -35,8 +35,8 @@ function registerBlock(def) {
 // 서브에이전트 카드는 chat 만 기본: 터미널 등은 블록 메뉴로 직접 더한다.
 // editor 블록(VS Code형: 탐색기+탭+Monaco)이 파일 트리를 대신한다. 서브에이전트 카드에는 넣지 않는다.
 const BLOCK_DEFAULTS = (n) => (n.kind === "sub" ? ["chat"]
-  : n.kind === "main" ? ["editor", "chat", "terminal"]
-  : n.kind === "local" ? ["editor", "terminal"] : ["terminal"]);
+  : n.kind === "main" ? ["chat", "terminal"]
+  : n.kind === "local" ? ["terminal"] : ["terminal"]);
 
 function cardBlockTypes(n) {
   const base = BLOCK_DEFAULTS(n);
@@ -177,4 +177,12 @@ function paintBlockFocus(card) {
     b.classList.toggle("block-focused", !!valid && b.dataset.bkey === selected);
     b.querySelector("[data-bmax]")?.setAttribute("aria-pressed", String(!!valid && b.dataset.bkey === selected));
   }
+}
+
+// 편집기는 사용자가 명시적으로 요청한 카드에서만 활성화한다.
+function showCardEditor(id){
+  const n=nodeById(id);if(!n||!["main","local"].includes(n.kind))return;
+  if(!cardBlockTypes(n).includes("editor"))toggleBlock(id,"editor");
+  const u=cardUI(id);if(u.collapsed.editor){delete u.collapsed.editor;saveCardUI();}
+  renderMap(false,true);
 }

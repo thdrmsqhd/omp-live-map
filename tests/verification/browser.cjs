@@ -47,9 +47,14 @@ test("existing map opens a session card, restores panel state and renders update
       await page.goto(`http://127.0.0.1:${config.PORT}`);
       const sessionName = (title) => page.getByText(title, { exact: true }).and(page.locator("#slList .sl-row.main .nm"));
       const first = sessionName("Timing 0");
+      await page.waitForSelector("#overview .mon-card",filter);
+      assert.equal(await page.locator("#overview .mon-card").count(),10);
+      await page.locator('[data-mode="workspace"]').click();
       await first.click(filter);
       await page.waitForSelector("#slList .sl-row.open", filter);
       await page.waitForFunction(() => document.querySelector("#nodes").innerText.includes("Timing 0"), null, filter);
+      assert.equal(await page.locator(".node.big.active-card [data-blk=editor]").count(),0);
+      await page.locator(".node.big.active-card [data-card-editor]").click();
       const explorerFile = page.locator("#nodes .exr").filter({ hasText: editorFixture });
       await explorerFile.click(filter);
       await page.waitForFunction(() => document.querySelector("#nodes .view-lines")?.innerText.includes("original"), null, filter);

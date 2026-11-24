@@ -43,7 +43,7 @@ function sessionChrome(n) {
       <button class="x" data-rename="${esc(n.id)}" title="이름 변경${isLocal ? "" : " (비우면 원래 이름)"}">✎</button>
       ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제" aria-label="카드 삭제">🗑</button>` : n.kind === "main" ? `<button class="x danger session-close" data-dismiss="1" ${STOP_PENDING.has(n.id) ? "disabled" : ""} title="세션 종료 요청 (카드 유지)">${STOP_PENDING.has(n.id) ? "종료 요청 중…" : "세션 종료"}</button>` : ""}
       ${profileChip(n)}${typeof dockTag === "function" ? dockTag(n) : ""}${isLocal ? `<span class="mod">local</span>` : n.kind === "sub" || !cardBlockTypes(n).includes("chat") ? modelChip(n) : ""}
-      ${cardWindowActions(n.id)}</div>
+      ${n.kind!=="sub"?`<button class="x" data-card-editor="1" title="코드 편집기 열기">코드</button>`:""}${cardWindowActions(n.id)}</div>
     <div class="sub-t${SUB_OPEN.has(n.id) ? " open" : ""}" data-subtoggle="${esc(n.id)}" title="${esc(subtitleFull(n, isLocal))}">${esc(subtitleOf(n, isLocal))}</div>
     ${isLocal ? resRow(n, true) : `${tokenSection(n)}
     <div class="sparkwrap" style="height:34px">

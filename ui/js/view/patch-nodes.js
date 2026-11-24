@@ -60,6 +60,7 @@ function onNodesClick(ev) {
   const hit = (sel) => ev.target.closest(sel);
   const menu = hit("button[data-card-menu]");
   if (menu) { const r = menu.getBoundingClientRect(); return openCardMenu(r.left, r.bottom, id); }
+  if (hit("button[data-card-editor]")) return showCardEditor(id);
   if (hit("button[data-card-focus]")) return toggleCardFocus(id);
   if (hit("button[data-card-resume]")) return openNode(id);
   if (hit("button[data-dismiss]")) return closeSession(id);
