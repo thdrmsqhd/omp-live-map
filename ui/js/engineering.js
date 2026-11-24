@@ -1,4 +1,5 @@
 import { bindRuntimeControls } from "./engineering-runtime.js";
+import { bindWorkflow } from "./workflow-editor.js";
 
 const find = (id) => document.getElementById(id);
 const status = find("status");
@@ -10,6 +11,7 @@ const runs = find("runs");
 let definitions = [];
 let projects = [];
 let currentRunRequest = null;
+let workflow;
 
 async function request(endpoint, params, payload) {
   if (!window.engineeringDesktop) throw new Error("데스크톱 앱에서 Engineering을 열어 주세요.");
@@ -74,6 +76,7 @@ async function refreshDefinitions(chosen) {
   options(definition, definitions.filter((entry) => entry.kind === kind.value), "새 정의", chosen);
   options(loop, definitions.filter((entry) => entry.kind === "loop"), "Loop 선택");
   showDefinition();
+  await workflow?.selectProject(selected?.id ?? "");
   await refreshRuns();
 }
 
@@ -151,15 +154,16 @@ find("actions").addEventListener("click", report(async (event) => {
     await refreshRuns();
   }
 }));
-for (const view of ["design", "execution"]) {
+for (const view of ["design", "workflow", "execution"]) {
   find(view + "-nav").addEventListener("click", () => {
-    for (const name of ["design", "execution"]) {
+    for (const name of ["design", "workflow", "execution"]) {
       find(name).hidden = view !== name;
       find(name + "-nav").setAttribute("aria-pressed", String(view === name));
     }
   });
 }
 if (window.engineeringDesktop) {
+  workflow = bindWorkflow({ find, request, report, definitions: () => definitions });
   const runtimeStatus = bindRuntimeControls({ find, request, report, status, formValues });
   report(async () => { await Promise.all([refreshProjects(), runtimeStatus()]); })();
   setInterval(() => {

@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Engineering · OMP Live Map</title>
   <link rel="stylesheet" href="/css/engineering.css">
+  <link rel="stylesheet" href="/css/workflow.css">
   <script type="module" src="/js/engineering.js"></script>
 </head>
 <body>
@@ -13,6 +14,7 @@
     <strong>OMP Live Map</strong>
     <nav aria-label="워크스페이스">
       <button id="design-nav" aria-pressed="true">설계</button>
+      <button id="workflow-nav" aria-pressed="false">Workflow</button>
       <button id="execution-nav" aria-pressed="false">실행</button>
       <a href="/">관측</a>
     </nav>
@@ -53,6 +55,36 @@
         <label>정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
         <div><button>버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
       </form>
+    </section>
+    <section id="workflow" hidden>
+      <h2>Workflow Graph</h2>
+      <div class="workflow-controls">
+        <label>Workflow <select id="workflow-list"></select></label>
+        <label>이름 <input id="workflow-name" maxlength="240"></label>
+        <button id="workflow-plan" type="button">실행 계획 확인</button>
+        <button id="workflow-save" type="button">Workflow 저장</button>
+      </div>
+      <p id="workflow-status" role="status"></p>
+      <div class="workflow-controls">
+        <label>노드 종류 <select id="workflow-type"></select></label>
+        <button id="workflow-add" type="button">노드 추가</button>
+        <label>출발 노드 <select id="workflow-from"></select></label>
+        <label>출력 포트 <select id="workflow-port"></select></label>
+        <label>대상 노드 <select id="workflow-to"></select></label>
+        <button id="workflow-connect" type="button">연결</button>
+      </div>
+      <div class="workflow-scroll" aria-label="Workflow 캔버스">
+        <div id="workflow-canvas"><svg id="workflow-lines" aria-hidden="true"></svg><div id="workflow-nodes"></div></div>
+      </div>
+      <div class="workflow-details">
+        <form id="workflow-node-form" hidden>
+          <label>노드 이름 <input name="label" maxlength="240" required></label>
+          <label>설정 및 입출력 <textarea name="settings" rows="7" spellcheck="false" required></textarea></label>
+          <div><button>노드 적용</button> <button id="workflow-delete" type="button">노드 삭제</button></div>
+        </form>
+        <div><h3>연결</h3><ul id="workflow-edges"></ul></div>
+        <div><h3>실행 계획</h3><ol id="workflow-order"></ol></div>
+      </div>
     </section>
     <section id="execution" hidden>
       <h2>Loop 실행</h2>

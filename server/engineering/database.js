@@ -4,8 +4,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
-const version = 1;
+const version = 2;
 const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
+const graphSchema = fs.readFileSync(path.join(__dirname, "schema-v2.sql"), "utf8");
 
 function transaction(db, fn) {
   db.exec("BEGIN IMMEDIATE");
@@ -28,7 +29,8 @@ function openDatabase(file) {
     transaction(db, () => {
       const current = db.prepare("PRAGMA user_version").get().user_version;
       if (current > version) throw new Error("Unsupported engineering database version");
-      if (current < 1) db.exec(schema + "; PRAGMA user_version=1");
+      if (current < 1) db.exec(schema);
+      if (current < 2) db.exec(graphSchema + "; PRAGMA user_version=2");
     });
     return db;
   } catch (error) {

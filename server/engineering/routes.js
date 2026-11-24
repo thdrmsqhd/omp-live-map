@@ -4,6 +4,7 @@ const { timingSafeEqual } = require("node:crypto");
 const path = require("node:path");
 const { openDatabase } = require("./database");
 const { catalog } = require("./catalog");
+const { workflowCatalog } = require("./workflow-catalog");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
@@ -52,7 +53,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const definitions = catalog(db);
       const runs = runStore(db, definitions);
       runs.recover();
-      services = { definitions, runs, loop: loopEngine(runs, definitions, runner, worktrees(path.resolve(directory, "worktrees"))) };
+      services = { definitions, workflows: workflowCatalog(db, definitions), runs,
+        loop: loopEngine(runs, definitions, runner, worktrees(path.resolve(directory, "worktrees"))) };
       return services;
     } catch (error) {
       db.close();
@@ -62,12 +64,18 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, runs, loop } = initialize();
+      const { definitions, workflows, runs, loop } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
       if (req.method === "GET") {
         if (endpoint === "projects") result = definitions.projects();
+        if (endpoint === "workflows") result = workflows.list(query("project"));
+        if (endpoint === "workflow") {
+          const version = url.searchParams.get("version");
+          result = workflows.get(query("project"), query("id"), version === null ? undefined
+            : integer(Number(version), "workflow version", 1, Number.MAX_SAFE_INTEGER));
+        }
         if (endpoint === "definitions") result = definitions.definitions(query("project"));
         if (endpoint === "definitions/version") {
           result = definitions.versionOf(query("id"), integer(Number(query("version")), "version", 1, Number.MAX_SAFE_INTEGER));
@@ -104,6 +112,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = runner.status();
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
+        if (endpoint === "workflows") result = workflows.save(input);
+        if (endpoint === "workflows/plan") result = workflows.plan(string(input.project, "project"), input.payload);
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
         if (endpoint === "definitions/remove") {

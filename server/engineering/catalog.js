@@ -110,7 +110,8 @@ function catalog(db) {
       return transaction(db, () => {
         versionOf(id);
         if (db.prepare("SELECT 1 FROM definition_ref WHERE target=?").get(id) ||
-            db.prepare("SELECT 1 FROM run WHERE definition=?").get(id)) throw problem(409, "Definition is referenced");
+            db.prepare("SELECT 1 FROM run WHERE definition=?").get(id) ||
+            db.prepare("SELECT 1 FROM workflow_definition WHERE target=?").get(id)) throw problem(409, "Definition is referenced");
         db.prepare("DELETE FROM definition WHERE id=?").run(id);
         event(db, "definition.deleted", { id });
       });

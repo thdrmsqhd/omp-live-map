@@ -35,18 +35,20 @@ function definition(kind, body) {
     attempts: integer(body.attempts, "attempt count", 1, 8),
     timeoutMs: integer(body.timeoutMs, "timeoutMs", 100, 3600000),
     budgetCents: integer(body.budgetCents, "budgetCents", 0, 100000),
-    checks: body.checks.map((check) => {
-      if (!check || !Array.isArray(check.args) || check.args.length > 24) throw problem(400, "Invalid check arguments");
-      return {
-        command: string(check.command, "check command"),
-        args: check.args.map((arg) => {
-          if (typeof arg !== "string" || arg.length > 1000 || arg.includes("\0")) throw problem(400, "Invalid check argument");
-          return arg;
-        }),
-        code: integer(check.code ?? 0, "exit code", 0, 255),
-      };
-    }),
+    checks: body.checks.map(checkCommand),
   };
 }
 
-module.exports = { string, integer, definition };
+function checkCommand(check) {
+  if (!check || !Array.isArray(check.args) || check.args.length > 24) throw problem(400, "Invalid check arguments");
+  return {
+    command: string(check.command, "check command"),
+    args: check.args.map((arg) => {
+      if (typeof arg !== "string" || arg.length > 1000 || arg.includes("\0")) throw problem(400, "Invalid check argument");
+      return arg;
+    }),
+    code: integer(check.code ?? 0, "exit code", 0, 255),
+  };
+}
+
+module.exports = { string, integer, definition, checkCommand };

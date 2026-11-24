@@ -1,0 +1,13 @@
+.workflow-controls { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; margin-bottom: .65rem; }
+.workflow-scroll { overflow: auto; height: 420px; border: 1px solid #56647b; border-radius: .5rem; }
+#workflow-canvas { position: relative; background: radial-gradient(#526178 1px, transparent 1px) 0 0 / 22px 22px; }
+#workflow-lines, #workflow-nodes { position: absolute; inset: 0; }
+#workflow-lines { pointer-events: none; }
+.workflow-node { position: absolute; width: 132px; height: 52px; margin: 0; cursor: grab; touch-action: none; overflow: hidden; }
+.workflow-node strong, .workflow-node small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-node[aria-pressed="true"] { outline: 2px solid #73baff; }
+.workflow-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.workflow-details form { min-width: 0; }
+#workflow-edges button { margin-left: .5rem; }
+#workflow-lines path { fill: none; stroke: #84b6e5; }
+#workflow-lines text { fill: #84b6e5; font: 11px system-ui; }
