@@ -37,7 +37,7 @@ function defaultPayload() {
   const harness = definitions.find((entry) => entry.kind === "harness");
   if (kind.value === "model") return { name: "", provider: "", model: "", reasoning: "" };
   if (kind.value === "harness") return { name: "", adapter: "omp", model: model?.id ?? "", role: "개발", instructions: "" };
-  return { name: "", harness: harness?.id ?? "", attempts: 3, timeoutMs: 600000, budgetCents: 0,
+  return { name: "", harness: harness?.id ?? "", attempts: 3, timeoutMs: 600000, budgetCents: 300,
     checks: [{ command: "npm", args: ["test"], code: 0 }] };
 }
 
@@ -79,7 +79,7 @@ async function refreshRuns(chosen) {
   const selected = runs.value;
   const detail = selected ? await request("run", { id: selected }) : null;
   if (selected !== runs.value) return;
-  find("run-summary").textContent = detail ? `${detail.run.status} · ${detail.run.workspace ?? "작업 공간 없음"}` : "";
+  find("run-summary").textContent = detail ? `${detail.run.status} · ${detail.blockedReason ?? detail.run.workspace ?? "작업 공간 없음"}` : "";
   find("attempts").replaceChildren(...(detail?.attempts ?? []).map((attempt) => {
     const line = document.createElement("li");
     const output = document.createElement("pre");
@@ -141,11 +141,21 @@ for (const view of ["design", "execution"]) {
     }
   });
 }
+async function runtimeStatus() {
+  const current = await request("runtime");
+  find("runtime-status").textContent = current.detail;
+  find("prepare-runtime").disabled = ["ready", "checking", "building"].includes(current.status);
+}
+
+find("prepare-runtime").addEventListener("click", report(async () => {
+  await request("runtime", {}, { build: true });
+  await runtimeStatus();
+}));
+
 if (window.engineeringDesktop) {
-  report(async () => {
-    await refreshProjects();
-    const available = await request("capabilities");
-    if (!available.omp && !available.claude) status.textContent = "격리 검증을 통과한 실행 하네스가 없습니다. 설정 편집과 이력 조회를 사용할 수 있습니다.";
-  })();
-  setInterval(() => { if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {}); }, 1800);
+  report(async () => { await refreshProjects(); await runtimeStatus(); })();
+  setInterval(() => {
+    if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {});
+    void runtimeStatus().catch(() => {});
+  }, 1800);
 } else status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";

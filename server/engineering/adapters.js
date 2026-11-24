@@ -29,7 +29,7 @@ function execution(backend, name, run) {
 async function omp(backend, context) {
   const { cwd, model, signal, budgetCents } = context;
   const rpc = open({
-    cwd, launch: (program, args, options) => backend.launch(program, args, options, { budgetCents, signal }),
+    cwd, launch: (program, args, options) => backend.launch(program, args, options, { budgetCents, signal, model }),
     terminate: (child) => backend.terminate(child),
     mainPrompt: backend.ompPrompt,
   });
@@ -59,13 +59,13 @@ async function omp(backend, context) {
   };
   try {
     const session = await call({ type: "get_state" });
-    await call({ type: "set_model", provider: model.provider, modelId: model.model });
+    await call({ type: "set_model", provider: backend.protocol ? "omp-bridge" : model.provider, modelId: model.model });
     if (model.reasoning) await call({ type: "set_thinking_level", level: model.reasoning });
     await call({ type: "prompt", message: prompt(context) });
     await done;
     signal.throwIfAborted();
     if (!turns || !session.sessionId) throw new Error("OMP returned no completed turn or session");
-    return { sessionId: session.sessionId, model: model.model, costCents };
+    return { sessionId: session.sessionId, model: model.model, costCents: rpc.child.cost?.() ?? costCents };
   } finally {
     signal.removeEventListener("abort", onAbort);
     rpc.close();
@@ -79,7 +79,9 @@ async function claude(backend, context) {
   const sessionId = randomUUID();
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
     "--permission-mode", "acceptEdits", "--session-id", sessionId, "--model", model.model];
-  const child = backend.launch("claude", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] }, { budgetCents, signal });
+  if (backend.protocol) args.push("--tools", "Read,Edit,Write,Glob,Grep", "--allowedTools", "Read,Edit,Write,Glob,Grep",
+    "--setting-sources", "user", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
+  const child = backend.launch("claude", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] }, { budgetCents, signal, model });
   const closed = once(child, "close");
   closed.catch(() => {});
   const terminate = () => backend.terminate(child);
@@ -100,7 +102,7 @@ async function claude(backend, context) {
     if (code !== 0 || !result || result.is_error || !Number.isFinite(result.total_cost_usd) || result.total_cost_usd < 0) {
       throw new Error("Claude returned no successful result with valid cost");
     }
-    return { sessionId, model: model.model, costCents: result.total_cost_usd * 100 };
+    return { sessionId, model: model.model, costCents: child.cost?.() ?? result.total_cost_usd * 100 };
   } finally {
     signal.removeEventListener("abort", terminate);
     lines.close();

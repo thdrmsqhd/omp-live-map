@@ -97,8 +97,8 @@ function loopEngine(store, catalog, runner, worktrees) {
       try {
         const { loop, harness, model } = resolve(result.run);
         runner.requireAdapter(harness, model, loop.checks);
-      } catch {
-        store.change(result.run.id, "blocked");
+      } catch (error) {
+        store.block(result.run.id, redact(error.message));
         return store.get(result.run.id);
       }
       void execute(result.run.id).catch((error) => console.error("Loop start failed:", redact(error.message)));

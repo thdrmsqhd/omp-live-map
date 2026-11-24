@@ -76,6 +76,14 @@ function runStore(db, catalog) {
   }
   return {
     create, get, startAttempt, finishAttempt, recover,
+    block: (id, detail) => transaction(db, () => {
+      change(id, "blocked");
+      event(db, "run.blocked", { detail }, id);
+    }),
+    blockedReason: (id) => {
+      const entry = db.prepare("SELECT payload FROM event WHERE run=? AND kind='run.blocked' ORDER BY seq DESC LIMIT 1").get(id);
+      return entry ? JSON.parse(entry.payload).detail : null;
+    },
     change: (id, target) => transaction(db, () => change(id, target)),
     workspace: (id, workspace) => db.prepare("UPDATE run SET workspace=? WHERE id=?").run(workspace, id),
     attempts: (id) => db.prepare("SELECT * FROM attempt WHERE run=? ORDER BY number").all(id)

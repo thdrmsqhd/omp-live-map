@@ -13,9 +13,11 @@ const { addClient, removeClient } = require("./sse");
 const localfs = require("./routes-localfs");
 const images = require("./routes-images");
 const { prefix, createEngineeringRoutes } = require("./engineering/routes");
+const { runtime } = require("./engineering/runtime");
 const engineering = createEngineeringRoutes({
   token: process.env.OMP_MAP_ENGINEERING_TOKEN,
   directory: process.env.OMP_MAP_ENGINEERING_DATA,
+  runner: process.env.OMP_MAP_ENGINEERING_DATA ? runtime(process.env.OMP_MAP_ENGINEERING_DATA, process.env.ANTHROPIC_API_KEY) : undefined,
 });
 delete process.env.OMP_MAP_ENGINEERING_TOKEN;
 

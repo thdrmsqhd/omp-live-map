@@ -41,7 +41,8 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
       assert.equal(monaco.status, 200);
       assert.match(monaco.headers.get("content-type"), /javascript/);
     }
-    await page.getByText("격리 검증을 통과한 실행 하네스가 없습니다.", { exact: false }).waitFor({ timeout: 8000 });
+    await page.getByRole("button", { name: "실행 환경 준비" }).waitFor({ timeout: 8000 });
+    assert.ok(await page.locator("#runtime-status").textContent());
     const repository = path.join(directory, "fixture-repo");
     await fs.mkdir(repository);
     for (const command of [["init", "-b", "main"], ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",

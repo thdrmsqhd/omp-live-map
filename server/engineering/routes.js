@@ -72,9 +72,13 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "runs") result = runs.list(query("project"));
         if (endpoint === "run") {
           const id = query("id");
-          result = { run: runs.get(id), attempts: runs.attempts(id) };
+          result = { run: runs.get(id), attempts: runs.attempts(id), blockedReason: runs.blockedReason(id) };
         }
         if (endpoint === "capabilities") result = { omp: runner.available("omp"), claude: runner.available("claude") };
+        if (endpoint === "runtime") {
+          if (runner.status?.().status === "unchecked") void runner.prepare();
+          result = runner.status?.() ?? { status: "unavailable", detail: "Engineering runtime is unavailable" };
+        }
         if (endpoint === "events") {
           const after = integer(Number(req.headers["last-event-id"] ?? url.searchParams.get("after") ?? 0), "event cursor", 0, Number.MAX_SAFE_INTEGER);
           const events = runs.events(after);
@@ -88,6 +92,10 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       }
       if (req.method === "POST") {
         const input = await body(req);
+        if (endpoint === "runtime" && runner.prepare) {
+          void runner.prepare(input.build === true);
+          result = runner.status();
+        }
         if (endpoint === "projects") result = await definitions.saveProject(input);
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
