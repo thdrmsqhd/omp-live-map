@@ -59,3 +59,91 @@ test("real CLI binaries talk through an offline container to the model broker", 
     await fs.rm(temp, { recursive: true, force: true, maxRetries: 3 });
   }
 });
+
+test("real Claude Code writes files and Loop retries until the isolated verification succeeds", { timeout: 120000 }, async () => {
+  const { execFileSync } = require("node:child_process");
+  const { setTimeout: delay } = require("node:timers/promises");
+  const { openDatabase } = require("../../server/engineering/database");
+  const { catalog } = require("../../server/engineering/catalog");
+  const { runStore } = require("../../server/engineering/run-store");
+  const { loopEngine } = require("../../server/engineering/loop");
+  const { worktrees } = require("../../server/engineering/worktree");
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), "omp-docker-loop-"));
+  let db;
+  try {
+    const projectRoot = path.join(temp, "source");
+    const workspaceRoot = path.join(temp, "worktrees");
+    await fs.mkdir(projectRoot);
+    await fs.mkdir(workspaceRoot);
+    await fs.writeFile(path.join(projectRoot, "verify.test.cjs"), [
+      'const test = require("node:test");',
+      'const assert = require("node:assert/strict");',
+      'const fs = require("node:fs");',
+      'test("third attempt result", () => assert.equal(fs.readFileSync("attempt-3.txt", "utf8"), "fixed"));',
+    ].join("\n"));
+    for (const args of [["init", "-b", "main"], ["add", "verify.test.cjs"],
+      ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-m", "fixture"]]) {
+      execFileSync("git", args, { cwd: projectRoot });
+    }
+    let attempts = 0;
+    const modelName = "claude-sonnet-4-6";
+    const runner = dockerRunner({ image: process.env.OMP_RUNTIME_TEST_IMAGE, context: "default",
+      binary: "/usr/bin/docker", workspaceRoot, key: "host-fixture-key",
+      upstream: (url, options) => {
+        const body = JSON.parse(options.body);
+        if (url.endsWith("count_tokens")) return Response.json({ input_tokens: 500 });
+        const last = body.messages.at(-1);
+        if (Array.isArray(last.content) && last.content.some((block) => block.type === "tool_result")) {
+          return providerFixture(url, options, []);
+        }
+        const tool = body.tools.find(({ name }) => name === "Write");
+        assert.ok(tool, "Claude Write tool was not exposed");
+        const input = { file_path: "/workspace/attempt-" + (++attempts) + ".txt", content: "fixed" };
+        return toolResponse(body, tool.name, input, attempts);
+      },
+    });
+    db = openDatabase(path.join(temp, "engineering.sqlite"));
+    const definitions = catalog(db);
+    const project = await definitions.saveProject({ name: "fixture", root: projectRoot, branch: "main" });
+    const model = definitions.saveDefinition({ project: project.id, kind: "model",
+      payload: { name: "Claude", provider: "anthropic", model: modelName } });
+    const harness = definitions.saveDefinition({ project: project.id, kind: "harness",
+      payload: { name: "Claude editor", adapter: "claude", role: "developer", model: model.id } });
+    const loop = definitions.saveDefinition({ project: project.id, kind: "loop",
+      payload: { name: "verify", harness: harness.id, attempts: 3, timeoutMs: 90000, budgetCents: 1600,
+        checks: [{ command: "node", args: ["--test"], code: 0 }] } });
+    const store = runStore(db, definitions);
+    const engine = loopEngine(store, definitions, runner, worktrees(workspaceRoot));
+    const { id } = engine.start({ project: project.id, definition: loop.id, title: "fixture",
+      instruction: "Use Write to save a plain text fix in the workspace." }, randomUUID());
+    const deadline = Date.now() + 95000;
+    while (store.get(id).status === "running" && Date.now() < deadline) await delay(200);
+    const result = store.get(id);
+    const history = store.attempts(id);
+    assert.equal(result.status, "succeeded", JSON.stringify(history));
+    assert.deepEqual(history.map(({ status }) => status), ["rejected", "rejected", "passed"]);
+    assert.equal(await fs.readFile(path.join(result.workspace, "attempt-3.txt"), "utf8"), "fixed");
+    assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: projectRoot, encoding: "utf8" }), "");
+  } finally {
+    db?.close();
+    await fs.rm(temp, { recursive: true, force: true, maxRetries: 3 });
+  }
+});
+
+function toolResponse(body, name, input, attempt) {
+  const message = { id: "msg_tool_" + attempt, type: "message", role: "assistant", model: body.model,
+    content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 500, output_tokens: 0 } };
+  const block = { type: "tool_use", id: "toolu_fixture_" + attempt, name, input: {} };
+  const events = [
+    { type: "message_start", message },
+    { type: "content_block_start", index: 0, content_block: block },
+    { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify(input) } },
+    { type: "content_block_stop", index: 0 },
+    { type: "message_delta", delta: { stop_reason: "tool_use", stop_sequence: null }, usage: { output_tokens: 25 } },
+    { type: "message_stop" },
+  ];
+  if (!body.stream) return Response.json({ ...message, content: [{ ...block, input }], stop_reason: "tool_use",
+    usage: { input_tokens: 500, output_tokens: 25 } });
+  return new Response(events.map((item) => `event: ${item.type}\ndata: ${JSON.stringify(item)}\n\n`).join(""),
+    { headers: { "content-type": "text/event-stream" } });
+}

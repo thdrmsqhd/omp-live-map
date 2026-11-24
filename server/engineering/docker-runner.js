@@ -15,6 +15,7 @@ const { problem } = require("./state");
 
 const permitted = [
   { command: "npm", args: ["test"] }, { command: "node", args: ["--test"] },
+  { command: "python3", args: ["-m", "unittest", "discover"] },
 ];
 const bridgeFile = "/usr/local/lib/omp-engineering/bridge.cjs";
 
