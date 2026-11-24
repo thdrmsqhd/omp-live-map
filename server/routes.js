@@ -14,10 +14,17 @@ const localfs = require("./routes-localfs");
 const images = require("./routes-images");
 const { prefix, createEngineeringRoutes } = require("./engineering/routes");
 const { runtime } = require("./engineering/runtime");
+const engineeringRuntime = process.env.OMP_MAP_ENGINEERING_DATA
+  ? runtime(process.env.OMP_MAP_ENGINEERING_DATA, process.env.ANTHROPIC_API_KEY) : undefined;
+if (process.connected && engineeringRuntime) {
+  process.on("message", (message) => {
+    if (message?.type === "desktop-runtime-key") engineeringRuntime.setKey(message.key);
+  });
+}
 const engineering = createEngineeringRoutes({
   token: process.env.OMP_MAP_ENGINEERING_TOKEN,
   directory: process.env.OMP_MAP_ENGINEERING_DATA,
-  runner: process.env.OMP_MAP_ENGINEERING_DATA ? runtime(process.env.OMP_MAP_ENGINEERING_DATA, process.env.ANTHROPIC_API_KEY) : undefined,
+  runner: engineeringRuntime,
 });
 delete process.env.OMP_MAP_ENGINEERING_TOKEN;
 

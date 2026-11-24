@@ -4,6 +4,7 @@ const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const path = require("node:path");
+const credentials = require("./credentials.cjs");
 
 const port = 7800;
 const origin = `http://127.0.0.1:${port}`;
@@ -14,7 +15,7 @@ if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
 const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
 const endpoints = new Set([
   "projects", "projects/archive", "definitions", "definitions/remove",
-  "runs", "run", "runs/action", "capabilities", "events", "runtime",
+  "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key",
 ]);
 
 function startServer() {
@@ -54,6 +55,14 @@ ipcMain.handle("engineering:request", async (event, { endpoint, params, payload 
       frame.url !== origin + "/engineering.html" || !endpoints.has(endpoint)) {
     return { ok: false, error: "Request denied" };
   }
+  if (endpoint === "runtime/key") {
+    try {
+      if (payload?.remove) credentials.remove();
+      else credentials.save(payload?.value);
+      child.send({ type: "desktop-runtime-key", key: payload?.remove ? null : payload.value });
+      return { ok: true, value: {} };
+    } catch (error) { return { ok: false, error: error.message }; }
+  }
   const target = new URL("/api/engineering/" + endpoint, origin);
   target.search = new URLSearchParams(params ?? {}).toString();
   const headers = { "x-omp-engineering-token": token, "content-type": "application/json" };
@@ -67,6 +76,8 @@ ipcMain.handle("engineering:request", async (event, { endpoint, params, payload 
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
   await startServer();
+  const key = credentials.load();
+  if (key) child.send({ type: "desktop-runtime-key", key });
   window = new BrowserWindow({
     width: 1450, height: 960,
     webPreferences: {

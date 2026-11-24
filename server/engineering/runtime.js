@@ -43,7 +43,7 @@ function runtime(directory, key) {
     fs.mkdirSync(workspaceRoot, { recursive: true, mode: 0o700 });
     delegate = dockerRunner({ image, context, binary, workspaceRoot, key });
     status = key ? "ready" : "missing-key";
-    detail = key ? "격리 런타임 사용 가능" : "ANTHROPIC_API_KEY를 설정한 뒤 앱을 다시 시작해 주세요.";
+    detail = key ? "격리 런타임 사용 가능" : "Anthropic API 키를 저장해 주세요.";
   }
   function prepare(build = false) {
     if (pending) return pending;
@@ -63,6 +63,10 @@ function runtime(directory, key) {
     requireAdapter: (...args) => delegate.requireAdapter(...args),
     verify: (...args) => delegate.verify(...args),
     prepare,
+    setKey(value) {
+      key = typeof value === "string" ? value : null;
+      if (!pending) void prepare();
+    },
     status: () => ({ status, detail, omp: delegate.available("omp"), claude: delegate.available("claude") }),
   };
 }

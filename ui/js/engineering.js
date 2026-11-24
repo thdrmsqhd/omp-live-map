@@ -152,6 +152,18 @@ find("prepare-runtime").addEventListener("click", report(async () => {
   await runtimeStatus();
 }));
 
+find("provider-key").addEventListener("submit", report(async (event) => {
+  const form = event.currentTarget;
+  const { value } = formValues(event);
+  form.reset();
+  await request("runtime/key", {}, { value });
+  status.textContent = "Windows 사용자 비밀 저장소에 키를 저장했습니다.";
+}));
+find("remove-key").addEventListener("click", report(async () => {
+  await request("runtime/key", {}, { remove: true });
+  status.textContent = "저장된 키를 삭제했습니다.";
+}));
+
 if (window.engineeringDesktop) {
   report(async () => { await refreshProjects(); await runtimeStatus(); })();
   setInterval(() => {

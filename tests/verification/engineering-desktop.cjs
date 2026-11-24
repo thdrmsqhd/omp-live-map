@@ -43,6 +43,15 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
     }
     await page.getByRole("button", { name: "실행 환경 준비" }).waitFor({ timeout: 8000 });
     assert.ok(await page.locator("#runtime-status").textContent());
+    const testKey = "sk-ant-v2-fixture-12345678901234567890";
+    await page.locator("#provider-key input").fill(testKey);
+    await page.getByRole("button", { name: "키 저장" }).click();
+    await page.getByText("Windows 사용자 비밀 저장소에 키를 저장했습니다.").waitFor();
+    const storedKey = path.join(directory, "anthropic-key.dpapi");
+    assert.equal((await fs.readFile(storedKey)).includes(Buffer.from(testKey)), false);
+    await page.getByRole("button", { name: "키 삭제" }).click();
+    await page.getByText("저장된 키를 삭제했습니다.").waitFor();
+    await assert.rejects(fs.stat(storedKey), { code: "ENOENT" });
     const repository = path.join(directory, "fixture-repo");
     await fs.mkdir(repository);
     for (const command of [["init", "-b", "main"], ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",

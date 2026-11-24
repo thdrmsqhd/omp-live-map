@@ -4,7 +4,7 @@ const { randomUUID } = require("node:crypto");
 const { once } = require("node:events");
 const { createInterface } = require("node:readline");
 const { open } = require("../rpc");
-const { problem } = require("./state");
+const { problem, redact } = require("./state");
 
 function prompt(context) {
   const { harness, instruction, feedback } = context;
@@ -33,6 +33,8 @@ async function omp(backend, context) {
     terminate: (child) => backend.terminate(child),
     mainPrompt: backend.ompPrompt,
   });
+  let diagnostics = "";
+  if (backend.protocol) rpc.child.stderr.on("data", (data) => { diagnostics = (diagnostics + data).slice(-4000); });
   const closed = once(rpc.child, "close");
   closed.catch(() => {});
   const onAbort = () => backend.terminate(rpc.child);
@@ -66,6 +68,9 @@ async function omp(backend, context) {
     signal.throwIfAborted();
     if (!turns || !session.sessionId) throw new Error("OMP returned no completed turn or session");
     return { sessionId: session.sessionId, model: model.model, costCents: rpc.child.cost?.() ?? costCents };
+  } catch (error) {
+    if (diagnostics) throw new Error(error.message + ": " + redact(diagnostics));
+    throw error;
   } finally {
     signal.removeEventListener("abort", onAbort);
     rpc.close();
