@@ -93,9 +93,16 @@ async function repairFixture(adapter) {
     let attempts = 0;
     const requests = [];
     const modelName = "claude-sonnet-4-6";
+    const credential = adapter === "claude"
+      ? { oauth: async () => "fixture-oauth-token" }
+      : { key: "host-fixture-key" };
     const runner = dockerRunner({ image: process.env.OMP_RUNTIME_TEST_IMAGE, context: "default",
-      binary: "/usr/bin/docker", workspaceRoot, key: "host-fixture-key",
+      binary: "/usr/bin/docker", workspaceRoot, ...credential,
       upstream: (url, options) => {
+        if (adapter === "claude") {
+          assert.equal(options.headers.authorization, "Bearer fixture-oauth-token");
+          assert.equal(options.headers["x-api-key"], undefined);
+        } else assert.equal(options.headers["x-api-key"], credential.key);
         const body = JSON.parse(options.body);
         if (url.endsWith("count_tokens")) return Response.json({ input_tokens: 500 });
         requests.push({ tools: body.tools?.map(({ name, input_schema }) => ({ name, properties: Object.keys(input_schema?.properties ?? {}) })),
