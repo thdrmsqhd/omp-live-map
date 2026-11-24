@@ -97,14 +97,28 @@ function hideSession(id, key = sessionKeyOfNode(id)) {
   renderMap(false, true);
 }
 
-// 맵 소유 세션 종료와 귀속 프로세스 정리를 함께 요청한 뒤 카드 자리를 비운다.
-// 이미 프로세스·기록이 없는 카드도 닫혀야 하므로 정리 요청 실패는 닫기를 막지 않는다.
+// 종료는 카드 닫기·숨김과 별개의 명령이다. 서버 응답 실패를 숨기지 않는다.
+const STOP_PENDING = new Set();
 async function closeSession(id) {
-  await Promise.allSettled([
-    postJSON("/api/session/stop", { node: id }),
-    postJSON("/api/release", { node: id }),
-  ]);
-  hideSession(id);
+  if (STOP_PENDING.has(id)) return;
+  const n = nodeById(id) || nodeInData(id);
+  if (!n || n.kind !== "main") return;
+  if (!confirm("세션에 종료를 요청하고 귀속 백그라운드 프로세스를 정리할까요? 카드와 기록은 유지됩니다.")) return;
+  STOP_PENDING.add(id);
+  renderMap(false, true);
+  try {
+    const send = async (path) => {
+      const response = await postJSON(path, { node: id });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.out || result.error || "HTTP " + response.status);
+      return result;
+    };
+    await send("/api/session/stop");
+    const released = await send("/api/release");
+    alert("세션 종료 요청을 전송했습니다. 실제 종료 상태는 관제 화면에서 확인하세요." +
+      (released.skipped?.length ? " 일부 프로세스 정리 제외: " + released.skipped.length + "개" : ""));
+  } catch (e) { alert("종료 또는 정리 실패: " + e.message + "\n카드를 유지합니다. 상태 확인 후 다시 시도하세요."); }
+  finally { STOP_PENDING.delete(id); await reloadGraph(); renderMap(false, true); }
 }
 
 async function releaseSession(id) {
@@ -151,14 +165,16 @@ function openCardMenu(clientX, clientY, id) {
   if (!n) return;
   const key = sessionKeyOfNode(id);
   const items = [
-    { label: openIds.has(id) ? "카드 축소" : "카드 열기", hint: openIds.has(id) ? "− 버튼" : "목록 클릭", run: () => toggleCard(id) },
+    { label: openIds.has(id) ? "카드 닫기" : "카드 열기", hint: openIds.has(id) ? "세션 유지" : "목록 클릭", run: () => toggleCard(id) },
     null,
     ...blockMenuItems(n),
   ];
   if (n.kind === "main") {
     const to = capsOf(n).id === "claude" ? "omp" : "Claude Code";
-    items.push(null, { label: to + "로 전환", hint: "요약 이어받기", run: () => switchCardHarness(id) });
+    items.push(null, { label: to + "로 전환", hint: "요약 이어받기", run: () => switchCardHarness(id) },
+      { label: "세션 종료 요청", disabled: STOP_PENDING.has(id), run: () => closeSession(id) });
   }
+  if (ATTN.get(id)?.kind === "done") items.push({ label: "완료 알림 확인", run: () => attnClear(id) });
   if (n.kind === "local") items.push(null, { label: "카드 삭제", run: () => deleteLocal(id) });
   else if (key) {
     items.push(null,

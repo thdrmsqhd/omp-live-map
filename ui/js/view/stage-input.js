@@ -119,7 +119,8 @@ function bindStageInput() {
       if (cancelCardDrag()) return;
       if ($("ctxmenu").classList.contains("open")) closeMenu();
       else if (SELECTED.size) { SELECTED.clear(); paintSelection(); }
-      else if (openIds.size) { closeCard(); renderMap(false, true); }
+      else if (typeof focusedCardId !== "undefined" && focusedCardId) toggleCardFocus(focusedCardId);
+      else if (activeCardId && openIds.has(activeCardId)) { closeCard(activeCardId); renderMap(false, true); }
     }
   });
   addEventListener("keyup", (e) => {

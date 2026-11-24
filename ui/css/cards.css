@@ -158,3 +158,6 @@
   .node .hz { font-size: 9.5px; line-height: normal; padding: 1px 6px; border-radius: 8px; flex: none; white-space: nowrap;
     color: #9ecbff; background: #16273a; border: 1px solid #2a4a6b; }
   .node .hz.cl { color: #ffc79e; background: #3a2517; border-color: #6b4a2a; }
+
+.node.big.active-card { z-index: 29; border-color: #8bc7ff; outline: 1px solid #4aa8ff66; }
+.node.big.focus-card { z-index: 31; }

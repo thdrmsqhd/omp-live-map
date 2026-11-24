@@ -59,7 +59,7 @@ function syncSubDocks() {
     const n = nodeInData(id);
     if (!n) continue;
     if (n.kind === "sub") {
-      if (!subRunning(n) && SUBDOCK.has(id)) { closeCard(id); closed.push(id); }   // 자동으로 붙인 서브가 끝났다 — 도킹·연결선·BIGPOS 정리 + DOCK_OFF
+      if (!subRunning(n) && SUBDOCK.has(id) && HIDE_DONE_SUBS && !DOCK_FREE.has(id)) { closeCard(id); closed.push(id); }   // 자동으로 붙인 서브가 끝났다 — 도킹·연결선·BIGPOS 정리 + DOCK_OFF
       continue;
     }
     if (n.kind !== "main") continue;
@@ -73,7 +73,6 @@ function syncSubDocks() {
   for (const [subId, mainId] of [...SUBDOCK]) {
     if (openIds.has(subId) && openIds.has(mainId)) continue;
     SUBDOCK.delete(subId);
-    DOCK_FREE.delete(subId);
     changed = true;
   }
   // 이번 렌더의 NODES 는 닫기 전에 만들어졌다 — 남겨 두면 접힌 카드가 한 번 그려진다.
@@ -94,9 +93,10 @@ function placeDocked() {
     const m = SATS.get(mainId);
     const rows = Math.min(DOCK_ROWS, Math.ceil(subs.length / Math.ceil(subs.length / DOCK_ROWS)));
     const cols = Math.ceil(subs.length / rows);
+    let x = m.x + m.w + DOCK_GAP;
     for (let c = 0; c < cols; c++) {
-      const first = SATS.get(subs[c * rows]);
-      const x = m.x + m.w + DOCK_GAP + c * (first.w + DOCK_GAP);
+      const column = subs.slice(c * rows, (c + 1) * rows);
+      const width = Math.max(...column.map((id) => SATS.get(id).w));
       let y = m.y;
       for (let r = 0; r < rows; r++) {
         const subId = subs[c * rows + r];
@@ -109,6 +109,7 @@ function placeDocked() {
         }
         y += cur.h + DOCK_GAP;
       }
+      x += width + DOCK_GAP;
     }
   }
   return moved;
@@ -143,11 +144,11 @@ function dockOnClose(id) {
   let dirty = false;
   for (const [subId, mainId] of [...SUBDOCK]) {
     if (mainId !== id) continue;
-    openIds.delete(subId); SATS.delete(subId);
-    SUBDOCK.delete(subId); DOCK_FREE.delete(subId); DOCK_OFF.delete(subId);
+    if (!DOCK_FREE.has(subId)) { openIds.delete(subId); SATS.delete(subId); }
+    SUBDOCK.delete(subId);
     dirty = true;
   }
-  if (SUBDOCK.delete(id)) { DOCK_FREE.delete(id); dirty = true; }
+  if (SUBDOCK.delete(id)) { dirty = true; }
   const n = nodeInData(id);
   if (n && n.kind === "sub" && !DOCK_OFF.has(id)) { DOCK_OFF.add(id); dirty = true; }
   if (dirty) saveDock();
@@ -155,15 +156,9 @@ function dockOnClose(id) {
 
 // 메인을 새로 열 때: 그 세션의 서브는 다시 자동으로 붙인다(직접 닫기·떼어 두기 초기화).
 function dockOnOpen(mainId) {
-  const s = sessionOf(mainId);
-  if (!s) return;
-  let dirty = false;
-  for (const n of s.nodes) {
-    if (n.kind !== "sub") continue;
-    dirty = DOCK_OFF.delete(n.id) || dirty;
-    dirty = DOCK_FREE.delete(n.id) || dirty;
-  }
-  if (dirty) saveDock();
+  const n = nodeInData(mainId);
+  // 직접 다시 연 서브만 자동 열림 제외를 해제한다. 메인 재오픈은 사용자 설정을 보존한다.
+  if (n?.kind === "sub" && DOCK_OFF.delete(mainId)) saveDock();
 }
 
 function dockClassOf(id) {

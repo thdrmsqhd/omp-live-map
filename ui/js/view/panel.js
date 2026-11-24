@@ -8,6 +8,7 @@ function openNode(id) {
     if (typeof dockOnOpen === "function") dockOnOpen(id);   // 메인을 다시 열면 그 세션 서브를 다시 붙인다
     saveOpenCards();
   }
+  activateCard(id);
   renderMap(false, true);
   if (!openIds.has(id)) return;
   if (was) { focusCluster(id); flashCard(id); }
@@ -51,7 +52,7 @@ function flashCard(id) {
 
 // 카드 하나를 화면 가운데로 가져와 잠깐 강조한다(세션 컨텍스트 목록·알림에서 이동). 닫혀 있으면 연다.
 function focusCard(id) {
-  if (typeof attnClear === "function") attnClear(id);   // 카드로 이동해 보면 주의는 끝난다
+  activateCard(id);
   if (!openIds.has(id)) { if (nodeInData(id)) openNode(id); return; }
   const g = SATS.get(id);
   if (!g) return;

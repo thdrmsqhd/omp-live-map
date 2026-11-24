@@ -50,8 +50,11 @@ function onNodesClick(ev) {
   }
   if (el.dataset.metric) return selectOnly(clusterByKey("host:host"));
   const id = el.dataset.id;
-  if (typeof attnClear === "function") attnClear(id);   // 그 카드를 열어 본 것으로 보고 주의를 해제한다
+  if (el.classList.contains("big")) activateCard(id);
   const hit = (sel) => ev.target.closest(sel);
+  const menu = hit("button[data-card-menu]");
+  if (menu) { const r = menu.getBoundingClientRect(); return openCardMenu(r.left, r.bottom, id); }
+  if (hit("button[data-card-focus]")) return toggleCardFocus(id);
   if (hit("button[data-dismiss]")) return closeSession(id);
   const act = hit("button[data-act]");
   if (act) return infraAction(act.dataset.act, act.dataset.t, id);
@@ -63,5 +66,5 @@ function onNodesClick(ev) {
   if (el.classList.contains("big") && hit(".chrome") && chromeClick(ev.target, id)) return;
   if (hit(CARD_INTERACTIVE)) return;
   // 한 번 클릭은 선택(로컬·인프라 클러스터), 카드 열기는 더블클릭 또는 세션 목록 클릭.
-  selectOnly(clusterOfCard(id));
+  if (!el.classList.contains("big")) selectOnly(clusterOfCard(id));
 }

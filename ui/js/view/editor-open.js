@@ -5,7 +5,7 @@ function edCloseTab(s, path) {
   if (!f || !s.tabs.has(path)) return;
   if (f.dirty && f.refs.size < 2 && !confirm(`'${path}' 의 변경을 저장하지 않았습니다. 닫을까요?`)) return;
   if (s.active === path) { s.editor.setModel(null); s.active = null; }
-  edRelease(s, path);
+  edRelease(s, path, true);
   const next = [...s.tabs.keys()].pop();
   if (next) edShow(s, next);
   else {
@@ -18,13 +18,14 @@ function edCloseTab(s, path) {
 }
 
 // 카드가 파일을 놓는다. 마지막 참조면 모델을 dispose 한다.
-function edRelease(s, path) {
+function edRelease(s, path, discard = false) {
   s.tabs.delete(path);
   if (s.preview === path) s.preview = null;
   const f = ED_FILES.get(path);
   if (!f) return;
   f.refs.delete(s.id);
-  if (!f.refs.size) { f.model.dispose(); ED_FILES.delete(path); }
+  // 카드 닫기나 블록 제거 시 미저장 모델은 보존한다. 명시적 탭 닫기만 폐기한다.
+  if (!f.refs.size && (!f.dirty || discard)) { f.model.dispose(); ED_FILES.delete(path); }
 }
 
 // 카드를 닫거나 편집기 블록을 뺄 때: 그 카드의 Monaco 인스턴스·탭·모델 참조를 모두 정리한다.
@@ -87,3 +88,7 @@ async function openEditor(nodeId, path, opts) {
     if (!s.editor) edQ(s, ".edw-msg").textContent = msg;
   }
 }
+
+addEventListener("beforeunload", (event) => {
+  if ([...ED_FILES.values()].some((f) => f.dirty)) { event.preventDefault(); event.returnValue = ""; }
+});

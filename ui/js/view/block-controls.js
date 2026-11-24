@@ -22,7 +22,7 @@ function dragBlockOrder(e, grip) {
     col.removeEventListener("pointercancel", done);
     blk.classList.remove("bmoving");
     const u = cardUI(card.dataset.id);
-    const slot = ["side", "left"].includes(blk.dataset.slot) ? blk.dataset.slot : "main";
+    const slot = ["main", "side", "left", "edit"].includes(blk.dataset.slot) ? blk.dataset.slot : "main";
     const now = [...col.children].filter((x) => x.classList.contains("blk")).map((x) => x.dataset.bkey || x.dataset.blk);
     // 이 카드에서 빠진 블록의 예전 순서는 뒤에 보존한다.
     const prev = u.order[slot] || [];

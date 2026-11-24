@@ -41,9 +41,9 @@ function sessionChrome(n) {
       ${askBadge(n.id)}<span class="attn-badge"></span>
       ${!isLocal && n.startedAt ? `<span class="since" title="시작 ${esc(new Date(n.startedAt).toLocaleString("ko-KR"))}">시작 ${ago(n.startedAt)}</span>` : ""}
       <button class="x" data-rename="${esc(n.id)}" title="이름 변경${isLocal ? "" : " (비우면 원래 이름)"}">✎</button>
-      ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제">🗑</button>` : `<button class="x danger session-close" data-dismiss="1" title="세션 종료 · 리소스 정리 · 카드 제거">세션 닫기</button>`}
+      ${isLocal ? `<button class="x" data-del="${esc(n.id)}" title="카드 삭제" aria-label="카드 삭제">🗑</button>` : n.kind === "main" ? `<button class="x danger session-close" data-dismiss="1" ${STOP_PENDING.has(n.id) ? "disabled" : ""} title="세션 종료 요청 (카드 유지)">${STOP_PENDING.has(n.id) ? "종료 요청 중…" : "세션 종료"}</button>` : ""}
       ${profileChip(n)}${typeof dockTag === "function" ? dockTag(n) : ""}${isLocal ? `<span class="mod">local</span>` : n.kind === "sub" || !cardBlockTypes(n).includes("chat") ? modelChip(n) : ""}
-      <button class="x" data-close="1" title="큰 카드 축소 (Esc)" aria-label="큰 카드 축소">−</button></div>
+      ${cardWindowActions(n.id)}</div>
     <div class="sub-t${SUB_OPEN.has(n.id) ? " open" : ""}" data-subtoggle="${esc(n.id)}" title="${esc(subtitleFull(n, isLocal))}">${esc(subtitleOf(n, isLocal))}</div>
     ${isLocal ? resRow(n, true) : `${tokenSection(n)}
     <div class="sparkwrap" style="height:34px">
@@ -62,7 +62,7 @@ function infraChrome(n) {
   const acts = infraActions(n, true);
   return `<div class="hd"><i class="dot ${n.status}"></i><span class="nm">${esc(n.name)}</span>
       <span class="mod">${esc(n.kind)}</span>
-      <button class="x" data-close="1" title="닫기 (Esc)">✕</button></div>
+      ${cardWindowActions(n.id)}</div>
     <div class="sub-t">${esc([n.meta1, n.meta2].filter(Boolean).join(" · "))}</div>
     ${c ? `<div class="chips">
       <span class="chip">image ${esc(modelShort(c.image))}</span>
@@ -121,7 +121,7 @@ function commitRename(id, value) {
     if (value) { L.title = value; saveLocals(); }
   } else {
     const n = nodeById(id);
-    const base = n && (n.kind === "main" ? "main" : n.name);
+    const base = n && (n.kind === "main" ? n.sessionTitle || "main" : n.name);
     if (value && value !== base) ALIAS.set(id, value); else ALIAS.delete(id);
     saveAlias();
   }
