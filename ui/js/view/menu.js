@@ -207,4 +207,4 @@ $("stage").addEventListener("contextmenu", (e) => {
   else openStageMenu(e.clientX, e.clientY);
 });
 
-document.addEventListener("click", (e) => { if (!e.target.closest("#ctxmenu")) closeMenu(); });
+document.addEventListener("click", (e) => { if (!e.target.closest("#ctxmenu,[data-card-menu],[data-slmenu],[data-mon-menu]")) closeMenu(); });

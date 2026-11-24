@@ -43,9 +43,9 @@ $("viewModes").addEventListener("click",(e)=> {
   if (b) setMapMode(b.dataset.mode);
 });
 $("new-session-action").onclick=()=>{
+  if (mapMode!=="map") setMapMode("map");
   const rect=$("stage").getBoundingClientRect();
   const pt=worldPoint(rect.left+rect.width/2,rect.top+rect.height/2);
-  if (mapMode==="overview") setMapMode("map");
   openNewSession(pt);
 };
 $("overview-density").value=overviewDensity;

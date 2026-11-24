@@ -18,6 +18,7 @@ function cardClosed(id) {
   if (focusedCardId === id) focusedCardId = null;
   if (activeCardId === id) activeCardId = [...openIds].at(-1) || null;
   if (typeof clearParkedCard === "function") clearParkedCard(id);
+  if (typeof GROUP_CARDS !== "undefined") GROUP_CARDS.delete(id);
 }
 function toggleCardFocus(id) {
   if (!openIds.has(id)) return;

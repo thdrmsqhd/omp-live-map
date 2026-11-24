@@ -99,6 +99,7 @@ function renderMap(resetView, force) {
   paintSelection();
   renderSessionList(sessions);
   paintActiveCards();
+  paintGroupCards();
   for (const el of box.querySelectorAll(".node.big")) paintBlockFocus(el);
   if (typeof paintAttention === "function") paintAttention();
   paintMonitor(sessions);

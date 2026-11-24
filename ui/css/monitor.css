@@ -77,3 +77,6 @@
 .chat-history-nav .cmore{width:auto;margin:0}
 .node.big .body{overscroll-behavior:contain}
 .node.big .cmsgs,.node.big .tout,.node.big .ctlist{overscroll-behavior:contain}
+
+.node.big.group-selected{outline:3px solid #a98bff;outline-offset:3px}
+#layout-preset{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:4px;font:inherit}

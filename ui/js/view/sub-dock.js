@@ -144,7 +144,7 @@ function dockOnClose(id) {
   let dirty = false;
   for (const [subId, mainId] of [...SUBDOCK]) {
     if (mainId !== id) continue;
-    if (!DOCK_FREE.has(subId)) { openIds.delete(subId); SATS.delete(subId); }
+    if (!DOCK_FREE.has(subId)) { openIds.delete(subId); SATS.delete(subId); if (typeof edDispose==="function") edDispose(subId); if(typeof cardClosed==="function")cardClosed(subId); }
     SUBDOCK.delete(subId);
     dirty = true;
   }

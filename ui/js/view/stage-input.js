@@ -15,7 +15,7 @@ function bindStageInput() {
     const onCard = e.target.closest(".node, .cluster .ch, .jcard");
     const wantPan = e.button === 1 || (e.button === 0 && (spaceDown || !onCard));
     if (!wantPan) return;
-    if (!onCard && !spaceDown && SELECTED.size) { SELECTED.clear(); paintSelection(); }
+    if (!onCard && !spaceDown) { SELECTED.clear(); GROUP_CARDS.clear(); paintSelection(); paintGroupCards(); }
     e.preventDefault();
     stopMomentum();
     drag = { x: e.clientX - view.x, y: e.clientY - view.y, lx: e.clientX, ly: e.clientY, lt: performance.now() };
@@ -108,6 +108,10 @@ function bindStageInput() {
       return;
     }
     if (typing) return;
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase()==="z") { if(redoLayout())e.preventDefault();return; }
+    if (e.altKey && ["1","2","3"].includes(e.key)) { e.preventDefault();setMapMode({1:"overview",2:"workspace",3:"map"}[e.key]);return; }
+    if (e.altKey && e.key.toLowerCase()==="n") { e.preventDefault();$("new-session-action").click();return; }
+    if (e.altKey && e.key.toLowerCase()==="f" && activeCardId) {e.preventDefault();toggleCardFocus(activeCardId);return;}
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
       if ((cancelBlockGesture && (cancelBlockGesture(), true)) || cancelCardDrag() || undoLayout()) e.preventDefault();   // 이동 중이면 되돌리기 대신 이동만 취소한다
       return;
@@ -120,7 +124,7 @@ function bindStageInput() {
     else if (e.key === "Escape") {
       if (cancelCardDrag()) return;
       if ($("ctxmenu").classList.contains("open")) closeMenu();
-      else if (SELECTED.size) { SELECTED.clear(); paintSelection(); }
+      else if (SELECTED.size || GROUP_CARDS.size) { SELECTED.clear(); GROUP_CARDS.clear(); paintSelection(); paintGroupCards(); }
       else if (activeCardId && BLOCK_FOCUS.has(activeCardId)) { BLOCK_FOCUS.delete(activeCardId); renderMap(false, true); }
       else if (mapMode === "workspace") { focusedCardId = null; setMapMode("map"); }
       else if (activeCardId && openIds.has(activeCardId)) { closeCard(activeCardId); renderMap(false, true); }
