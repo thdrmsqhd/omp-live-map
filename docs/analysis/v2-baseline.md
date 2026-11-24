@@ -32,25 +32,34 @@ V3는 Phase 4~6의 Graph·SDLC·PR/CI·통합 인수와 설치 업데이트·이
 
 - Linux Node 24에서 원본 `node --test`는 1건 통과했습니다. README의 수동 검증 외에 자동 테스트도 존재합니다.
 - 기존 ADR-0002의 JSONL 관측 원본 결정은 유지합니다. 신규 실행 상태 저장과 검증 기반 재시도를 허용하는 경계는 T002에서 별도로 결정해야 합니다.
-- Windows 설치·Git Bash·WSL·Docker 동작과 실제 브라우저 카드 조작, 10세션 수신부터 화면 반영까지의 성능은 별도 검증이 필요합니다.
-- T001은 소스 인벤토리와 호환 계약을 갖췄습니다. Gate 0의 남은 완료 조건은 아래 표에 기록했습니다.
+- Windows 호스팅 러너에서 Git Bash·브라우저 동작과 성능 기준선을 확인했습니다. 실제 WSL2·Docker 및 설치 패키지의 검증은 제품 인수에서 수행합니다.
+- Gate 0 완료를 아래에 기록했습니다. 기준은 Task List의 기술 실행 가능성, 호환 계약, 기존 핵심 기능 회귀와 성능 기준선입니다.
 
 ## Phase 0 검증 현황
+
+**Gate 0 통과. T001~T005 완료.** 검증 커밋은 `e12a5fdcb89a7a6c7a689951a41c4b0f451c2f30`입니다.
 
 | Task | 상태 | 근거 |
 | --- | --- | --- |
 | T001 | 완료 | 위 소스 인벤토리와 호환 계약 |
-| T002 | 검토 중 | [ADR-0003](../adr/0003-v2-desktop-state-and-isolation.md). Windows Electron과 SQLite PoC 통과. 설치 패키지와 실제 CLI 권한 격리 검증 필요 |
+| T002 | 완료 | [ADR-0003](../adr/0003-v2-desktop-state-and-isolation.md). Windows Electron·SQLite·AppContainer 기술 검증과 강제 불가 시 실행 거부 정책 |
 | T003 | 완료 | `node --test`, 임시 상태·JSONL 디렉터리 및 loopback HTTP fixture |
-| T004 | 완료 | 기존 API에서 두 가짜 CLI 실행, OMP 대기·취소, Claude 스트리밍·오류와 메인·서브 수집, SSE 재연결을 자동 검증 |
-| T005 | 진행 중 | 기존 API·편집기 저장 충돌·잡 종료, 브라우저 카드·목록 상태, SSE 반영, 모의 WSL/Docker API 검증. 실제 Windows Git Bash·WSL2·Docker 연동은 미검증 |
+| T004 | 완료 | 기존 API에서 두 가짜 CLI 실행, OMP 대기·취소, Claude 스트리밍·오류와 메인·서브 수집, SSE 재연결 자동 검증 |
+| T005 | 완료 | 기존 API·세션·Git Bash·Monaco·카드 UI·모의 WSL/Docker 회귀와 10세션 성능 기준선 |
 
 ### 호스팅 Windows 검증
 
-[GitHub Actions 실행 45311233515](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45311233515)의 Windows Server 2025 러너에서 아래 항목을 확인했습니다.
+[GitHub Actions 실행 45312014159](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45312014159)의 Windows Server 2025 러너가 통과했습니다.
 
-- Node 24 회귀 테스트 10건 통과. 기존 9건과 WSL·Docker 명령 및 응답을 모의한 API 테스트 1건을 실행했습니다.
-- SQLite 파일 DB를 닫고 다시 열었을 때 확정된 실행 상태만 남았습니다.
-- Electron 43.8.12가 별도 Node 자식 프로세스로 기존 서버를 시작하고 Live Map 창을 열었습니다. 포트가 이미 사용 중이면 충돌을 보고하고 기존 서버를 보존했습니다. 종료 후에는 앱이 시작한 서버 PID와 포트가 정리됐습니다.
-- Chromium에서 세션 카드 열기와 새로고침 후 목록 패널 상태 복원을 확인했습니다. 모의 세션 10개에서 JSONL 스캔 시작부터 SSE를 거쳐 브라우저 DOM에 반영되기까지 20회 측정한 p95는 18.3ms였습니다. 이 수치는 호스팅 러너의 기준선입니다.
-- 검증 스크립트는 테스트 전용입니다. 설치형 배포 및 실제 하네스 권한 격리, WSL2·Docker 실연동 증거는 남아 있습니다.
+- Node 24 회귀 테스트 10건과 실제 Windows Git Bash를 기존 터미널 API에서 호출하는 테스트를 통과했습니다. WSL·Docker 명령 및 응답은 모의 환경에서 검증했습니다.
+- SQLite 파일 DB를 다시 열었을 때 확정된 실행 상태만 남았습니다.
+- Electron 43.8.12가 별도 Node 자식 프로세스로 기존 서버를 시작하고 Live Map 창을 열었습니다. 포트 충돌 시 기존 서버를 보존했고, 종료 시 소유 서버 PID와 포트를 정리했습니다.
+- AppContainer에서 허용 작업 폴더에 쓰고, 폴더 밖의 파일 읽기·쓰기와 호스트 loopback 연결을 거부했습니다. 같은 바이너리로 실행한 자식 프로세스에서도 AppContainer 토큰을 확인했습니다.
+- Chromium에서 세션 카드 열기, 실제 Monaco에서 파일 편집·저장, 새로고침 후 목록 패널 상태 복원을 확인했습니다. Monaco 자산은 테스트에서 로컬 파일로 제공했습니다.
+- 모의 세션 10개에서 JSONL 스캔 시작부터 SSE를 거쳐 DOM에 반영되기까지 20회 측정한 p95는 **11.2ms**였습니다. 이 수치는 호스팅 러너의 기준선입니다.
+
+### 후속 검증
+
+- T012에서 제품용 데스크톱 셸과 서버 생명주기를 구현합니다. V2 초기 설치·실행·오프라인 자산 검증은 T051의 초기 배포 범위에서 수행합니다.
+- T022에서 실제 OMP·Claude, 자식 프로세스·도구, 명령 허용 정책 및 모델 연결 네트워크 권한을 검증합니다. 테스트 바이너리에 대한 AppContainer 결과는 플랫폼 실행 가능성의 근거입니다.
+- 기존 WSL2·Docker 실연동은 테스트 환경을 갖춘 후 T054의 배포 회귀에서 확인합니다. V2의 Windows 호환 인수 항목에도 기록합니다.
