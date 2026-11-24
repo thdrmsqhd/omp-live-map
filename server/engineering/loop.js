@@ -14,7 +14,8 @@ function loopEngine(store, catalog, runner, worktrees) {
   async function execute(id) {
     const run = store.get(id);
     const { loop, harness, model } = resolve(run);
-    const agent = runner.requireAdapter(harness, model, loop.checks);
+    const execution = runner.snapshot?.() ?? runner;
+    const agent = execution.requireAdapter(harness, model, loop.checks);
     const stop = new AbortController();
     const control = { stop, pause: false };
     active.set(id, control);
@@ -44,10 +45,10 @@ function loopEngine(store, catalog, runner, worktrees) {
           }
           used += output.costCents;
           const overBudget = used > loop.budgetCents;
-          const results = overBudget ? [] : await runner.verify(loop.checks, workspace, signal);
+          const results = overBudget ? [] : await execution.verify(loop.checks, workspace, signal);
           const passed = !overBudget && results.every((result) => result.passed);
           store.finishAttempt(id, number, passed ? "passed" : "rejected", {
-            checks: results, costCents: output.costCents, sessionId: output.sessionId ?? null,
+            checks: results, costCents: output.costCents, costBasis: output.costBasis ?? "reported", sessionId: output.sessionId ?? null,
           });
           if (overBudget) return store.change(id, "limit_exceeded");
           if (passed) return store.change(id, "succeeded");

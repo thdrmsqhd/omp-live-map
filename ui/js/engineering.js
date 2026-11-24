@@ -35,10 +35,10 @@ function options(control, values, first, chosen = control.value) {
 function defaultPayload() {
   const model = definitions.find((entry) => entry.kind === "model");
   const harness = definitions.find((entry) => entry.kind === "harness");
-  if (kind.value === "model") return { name: "", provider: "", model: "", reasoning: "" };
-  if (kind.value === "harness") return { name: "", adapter: "omp", model: model?.id ?? "", role: "개발", instructions: "" };
+  if (kind.value === "model") return { name: "Claude Sonnet 4.6", provider: "anthropic", model: "claude-sonnet-4-6", reasoning: "" };
+  if (kind.value === "harness") return { name: "Claude Code", adapter: "claude", model: model?.id ?? "", role: "개발", instructions: "" };
   return { name: "", harness: harness?.id ?? "", attempts: 3, timeoutMs: 600000, budgetCents: 300,
-    checks: [{ command: "npm", args: ["test"], code: 0 }] };
+    checks: [{ command: "node", args: ["--test"], code: 0 }] };
 }
 
 function showDefinition() {

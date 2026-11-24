@@ -42,7 +42,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
       assert.match(monaco.headers.get("content-type"), /javascript/);
     }
     await page.getByRole("button", { name: "실행 환경 준비" }).waitFor({ timeout: 8000 });
-    assert.ok(await page.locator("#runtime-status").textContent());
+    await page.waitForFunction(() => Boolean(document.querySelector("#runtime-status")?.textContent));
     const testKey = "sk-ant-v2-fixture-12345678901234567890";
     await page.locator("#provider-key input").fill(testKey);
     await page.getByRole("button", { name: "키 저장" }).click();

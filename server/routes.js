@@ -19,6 +19,7 @@ const engineeringRuntime = process.env.OMP_MAP_ENGINEERING_DATA
 if (process.connected && engineeringRuntime) {
   process.on("message", (message) => {
     if (message?.type === "desktop-runtime-key") engineeringRuntime.setKey(message.key);
+    if (message?.type === "desktop-shutdown") engineeringRuntime.shutdown();
   });
 }
 const engineering = createEngineeringRoutes({

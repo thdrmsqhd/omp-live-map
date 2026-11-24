@@ -28,20 +28,22 @@ function runtime(directory, key) {
   let detail = "런타임 확인이 필요합니다.";
   let delegate = secureRunner();
   let pending;
+  const runners = new Set();
   async function discover(build) {
     const { binary, context } = localDocker();
-    const run = (args, timeout = 10000) => execute(binary, ["--context", context, ...args],
+    const run = (options, args, timeout = 10000) => execute(binary, [...options, ...args],
       { timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024, env: isolatedEnv });
-    const result = await run(["context", "inspect", context, "--format", "{{.Endpoints.docker.Host}}"]);
+    const result = await run(["--context", context], ["context", "inspect", context, "--format", "{{.Endpoints.docker.Host}}"]);
     const expected = process.platform === "win32" ? "npipe:////./pipe/dockerDesktopLinuxEngine" : "unix:///var/run/docker.sock";
     if (result.stdout.trim() !== expected) throw problem(409, "Docker context does not point to the local Linux engine");
-    if (build) await run(["build", "--tag", tag, path.join(__dirname, "docker")], 900000);
-    const inspected = await run(["image", "inspect", tag, "--format", '{{.Id}} {{index .Config.Labels "dev.omplivemap.runtime"}}']);
+    if (build) await run(["--host", expected], ["build", "--tag", tag, path.join(__dirname, "docker")], 900000);
+    const inspected = await run(["--host", expected], ["image", "inspect", tag, "--format", '{{.Id}} {{index .Config.Labels "dev.omplivemap.runtime"}}']);
     const [image, label] = inspected.stdout.trim().split(/\s+/);
     if (label !== "engine-v2.1") throw problem(409, "The approved runtime image could not be identified");
     const workspaceRoot = path.join(directory, "worktrees");
     fs.mkdirSync(workspaceRoot, { recursive: true, mode: 0o700 });
-    delegate = dockerRunner({ image, context, binary, workspaceRoot, key });
+    delegate = dockerRunner({ image, context, binary, workspaceRoot, key, daemon: expected });
+    runners.add(delegate);
     status = key ? "ready" : "missing-key";
     detail = key ? "격리 런타임 사용 가능" : "Anthropic API 키를 저장해 주세요.";
   }
@@ -63,10 +65,12 @@ function runtime(directory, key) {
     requireAdapter: (...args) => delegate.requireAdapter(...args),
     verify: (...args) => delegate.verify(...args),
     prepare,
+    snapshot: () => delegate,
     setKey(value) {
       key = typeof value === "string" ? value : null;
       if (!pending) void prepare();
     },
+    shutdown: () => { for (const active of runners) active.shutdown(); },
     status: () => ({ status, detail, omp: delegate.available("omp"), claude: delegate.available("claude") }),
   };
 }

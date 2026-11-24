@@ -48,7 +48,9 @@ async function omp(backend, context) {
         if (!Number.isFinite(usd) || usd < 0) reject(new Error("OMP returned no valid cost"));
         else { costCents += usd * 100; turns++; }
       }
-      if (frame.type === "extension_ui_request") reject(new Error("Interactive OMP request is unsupported in a Loop"));
+      if (frame.type === "extension_ui_request" && ["ask", "select", "confirm", "input", "editor"].includes(frame.method)) {
+        reject(new Error("Interactive OMP request is unsupported in a Loop: " + frame.method));
+      }
       if (frame.type === "agent_end") resolve();
     });
     closed.then(() => reject(new Error("OMP closed before the turn finished")), reject);
@@ -67,7 +69,7 @@ async function omp(backend, context) {
     await done;
     signal.throwIfAborted();
     if (!turns || !session.sessionId) throw new Error("OMP returned no completed turn or session");
-    return { sessionId: session.sessionId, model: model.model, costCents: rpc.child.cost?.() ?? costCents };
+    return { sessionId: session.sessionId, model: model.model, costCents: rpc.child.cost?.() ?? costCents, costBasis: backend.protocol ? "reserved" : "reported" };
   } catch (error) {
     if (diagnostics) throw new Error(error.message + ": " + redact(diagnostics));
     throw error;
@@ -107,7 +109,7 @@ async function claude(backend, context) {
     if (code !== 0 || !result || result.is_error || !Number.isFinite(result.total_cost_usd) || result.total_cost_usd < 0) {
       throw new Error("Claude returned no successful result with valid cost");
     }
-    return { sessionId, model: model.model, costCents: child.cost?.() ?? result.total_cost_usd * 100 };
+    return { sessionId, model: model.model, costCents: child.cost?.() ?? result.total_cost_usd * 100, costBasis: backend.protocol ? "reserved" : "reported" };
   } finally {
     signal.removeEventListener("abort", terminate);
     lines.close();

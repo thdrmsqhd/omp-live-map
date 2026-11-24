@@ -84,3 +84,7 @@ parent.on("line", (line) => {
   if (message.kind === "data") response.write(Buffer.from(message.data, "base64"));
   if (message.kind === "end") response.end();
 });
+
+parent.on("close", () => {
+  if (agent && agent.exitCode === null && agent.signalCode === null) agent.kill();
+});

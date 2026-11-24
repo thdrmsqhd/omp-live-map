@@ -82,7 +82,7 @@ function bridgeProcess(raw, broker, abort) {
   return channel;
 }
 
-function dockerRunner({ image, context, binary, workspaceRoot, key, upstream, launchProcess = spawn }) {
+function dockerRunner({ image, context, binary, workspaceRoot, key, daemon, upstream, launchProcess = spawn }) {
   if (!/^sha256:[a-f0-9]{64}$/.test(image) || !path.isAbsolute(binary) ||
       !["default", "desktop-linux"].includes(context)) throw problem(409, "A local Docker runtime and immutable image are required");
   const root = fs.realpathSync(workspaceRoot);
@@ -90,8 +90,9 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, upstream, la
   for (const variable of Object.keys(env)) {
     if (/^(docker_|anthropic_|omp_map_engineering_token)/i.test(variable)) delete env[variable];
   }
-  const prefix = ["--context", context];
+  const prefix = daemon ? ["--host", daemon] : ["--context", context];
   const user = process.platform === "win32" ? "1000:1000" : `${process.getuid()}:${process.getgid()}`;
+  const cleanup = new Set();
   const supports = (name, model) => Boolean(key && model.provider === "anthropic" && models.has(model.model) &&
     (!model.reasoning || name === "omp"));
 
@@ -106,7 +107,7 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, upstream, la
     const agent = program === "omp" || program === "claude";
     const flags = ["run", "--rm", "-i", "--pull=never", "--name", name, "--network", "none", "--read-only",
       "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--memory", "2g", "--cpus", "2",
-      "--pids-limit", "128", "--user", user, "--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777,size=256m",
+      "--stop-timeout", "2", "--pids-limit", "128", "--user", user, "--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777,size=256m",
       "--mount", "type=bind,src=" + cwd + ",dst=/workspace,bind-propagation=rprivate,bind-recursive=disabled",
       "--workdir", "/workspace", "--env", "HOME=/tmp", "--env", "CI=1"];
     if (agent) flags.push("--env", "ANTHROPIC_BASE_URL=http://127.0.0.1:7351",
@@ -118,6 +119,8 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, upstream, la
     const raw = launchProcess(binary, [...prefix, ...flags, ...command], {
       cwd: root, env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
     });
+    cleanup.add(abort);
+    raw.stdin.on("error", () => {});
     function remove() {
       const process = launchProcess(binary, [...prefix, "rm", "-f", name], { env, windowsHide: true, stdio: "ignore" });
       process.on("error", () => {});
@@ -130,6 +133,7 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, upstream, la
     }
     lifetime.addEventListener("abort", abort, { once: true });
     raw.once("close", () => {
+      cleanup.delete(abort);
       lifetime.removeEventListener("abort", abort);
       if (lifetime.aborted) remove();
       if (!controller.signal.aborted) controller.abort();
@@ -146,7 +150,10 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, upstream, la
     terminate: (child) => child.abortIsolation ? child.abortIsolation() : child.kill(),
     protocol: "docker-anthropic",
   };
-  return secureRunner(adaptersFor(backend), commandRunner(backend, permitted));
+  return {
+    ...secureRunner(adaptersFor(backend), commandRunner(backend, permitted)),
+    shutdown: () => { for (const terminate of cleanup) terminate(); },
+  };
 }
 
 module.exports = { dockerRunner, bridgeProcess, permitted };
