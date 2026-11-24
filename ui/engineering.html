@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Engineering · OMP Live Map</title>
   <link rel="stylesheet" href="/css/engineering.css">
   <script src="/js/engineering.js" defer></script>
@@ -22,7 +22,7 @@
     <p id="status" role="status"></p>
     <p id="runtime-status" role="status"></p>
     <button id="prepare-runtime" type="button">실행 환경 준비</button>
-    <form id="provider-key">
+    <form id="provider-key" method="post">
       <label>Anthropic API 키 <input name="value" type="password" autocomplete="off" required></label>
       <div><button>키 저장</button> <button id="remove-key" type="button">키 삭제</button></div>
     </form>

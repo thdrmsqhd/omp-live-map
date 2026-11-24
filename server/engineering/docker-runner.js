@@ -26,6 +26,7 @@ function bridgeProcess(raw, broker, abort) {
   channel.exitCode = null;
   channel.signalCode = null;
   channel.cost = () => broker.spent();
+  let pending = 0, requestCount = 0;
   channel.stdin = new Writable({
     write(chunk, _, done) { transmit({ kind: "input", data: chunk.toString("base64") }, done); },
     final(done) { transmit({ kind: "input-end" }, done); },
@@ -39,11 +40,16 @@ function bridgeProcess(raw, broker, abort) {
     return raw.stdin.write(JSON.stringify(frame) + "\n", done);
   }
   async function reply(request) {
+    let headersSent = false;
+    const admitted = pending < 8 && requestCount < 64;
+    if (admitted) { pending++; requestCount++; }
     try {
+      if (!admitted) throw new Error("Model request limit exceeded");
       const response = await broker.request(request);
       const type = response.headers.get("content-type")?.split(";")[0];
       transmit({ kind: "headers", id: request.id, status: response.status,
         type: type === "text/event-stream" ? type : "application/json" });
+      headersSent = true;
       // Treat the provider body as opaque for the CLI. Only fixed upstream URLs are consulted.
       let written = 0;
       if (response.body) for await (const piece of response.body) {
@@ -53,17 +59,20 @@ function bridgeProcess(raw, broker, abort) {
             !raw.stdin.destroyed) await once(raw.stdin, "drain");
       }
     } catch {
+      if (headersSent) { abort(); return; }
       transmit({ kind: "headers", id: request.id, status: 400, type: "application/json" });
       const error = JSON.stringify({ type: "error", error: { type: "invalid_request_error",
         message: "The local model broker denied or could not complete the request" } });
       transmit({ kind: "data", id: request.id, data: Buffer.from(error).toString("base64") });
     } finally {
+      if (admitted) pending--;
       transmit({ kind: "end", id: request.id });
     }
   }
 
   const lines = createInterface({ input: raw.stdout });
   lines.on("line", (line) => {
+    if (line.length > 2 * 1024 * 1024) { abort(); return; }
     let frame;
     try { frame = JSON.parse(line); } catch { abort(); return; }
     if (frame.kind === "request") void reply(frame);
