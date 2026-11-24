@@ -1,0 +1,30 @@
+name: V2 Phase 0 verification
+
+on:
+  push:
+    branches: ['v2/phase-0-baseline']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Existing regression tests
+        run: node --test
+      - name: SQLite recovery probe
+        run: node tests/verification/sqlite.cjs
+      - name: Prepare Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install chromium
+      - name: Browser regression and 10-session measurement
+        run: node tests/verification/browser.cjs
