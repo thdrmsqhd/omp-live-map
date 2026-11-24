@@ -6,10 +6,8 @@ const { randomBytes } = require("node:crypto");
 const path = require("node:path");
 const credentials = require("./credentials.cjs");
 
-const port = 7800;
-const origin = `http://127.0.0.1:${port}`;
 const token = randomBytes(32).toString("hex");
-let child, shutdown = false, window;
+let child, origin, shutdown = false, window;
 const userData = app.commandLine.getSwitchValue("user-data-dir");
 if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
 const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
@@ -20,22 +18,25 @@ const endpoints = new Set([
 
 function startServer() {
   const data = app.getPath("userData");
-  child = spawn(process.execPath, [path.join(root, "server.js"), "--port", String(port)], {
+  child = spawn(process.execPath, [path.join(root, "server.js"), "--port", "0"], {
     windowsHide: true,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1",
       OMP_MAP_ENGINEERING_TOKEN: token, OMP_MAP_ENGINEERING_DATA: data,
       ...(app.isPackaged ? { OMP_MAP_STATE: path.join(data, "legacy-state") } : {}) },
-    stdio: ["ignore", "pipe", "pipe", "ipc"],
+    stdio: ["ignore", "ignore", "pipe", "ipc"],
   });
   return new Promise((resolve, reject) => {
-    let output = "", errors = "";
+    let errors = "";
     const timeout = setTimeout(() => reject(new Error("Live Map did not start within 15 seconds")), 15000);
-    child.stdout.on("data", (chunk) => {
-      output = (output + chunk.toString()).slice(-8192);
-      if (!output.includes("omp live map: " + origin)) return;
+    function ready(message) {
+      const port = message?.port;
+      if (message?.type !== "desktop-ready" || !Number.isInteger(port) || port < 1 || port > 65535) return;
+      child.off("message", ready);
       clearTimeout(timeout);
+      origin = `http://127.0.0.1:${port}`;
       resolve();
-    });
+    }
+    child.on("message", ready);
     child.stderr.on("data", (chunk) => { errors = (errors + chunk.toString()).slice(-8192); });
     child.once("error", (error) => {
       clearTimeout(timeout);
@@ -43,7 +44,7 @@ function startServer() {
     });
     child.once("close", () => {
       clearTimeout(timeout);
-      reject(new Error(errors.includes("EADDRINUSE") ? "Port 7800 is already in use." : "Live Map server exited."));
+      reject(new Error(errors.includes("EADDRINUSE") ? "Could not bind a local port." : "Live Map server exited."));
       if (window && !shutdown) app.quit();
     });
   });
