@@ -40,7 +40,8 @@ function startObservation() {
     scan(includeClaude).catch((error) => console.error("Session observation:", error.code ?? error.name));
   };
   void refreshProc();
-  setInterval(refreshProc, 4000);
+  async function pollProc(){try{await refreshProc();}finally{setTimeout(pollProc,require("./performance").policy().pollMs).unref();}}
+  setTimeout(pollProc,4000).unref();
   require("./ext-live").start();
   setInterval(() => schedule(true), 2000);
 

@@ -5,11 +5,15 @@ const { snapshot } = require("./snapshot");
 const lineage = require("./lineage");
 
 const clients = new Set();
+const {writeFrame}=require("./sse-writer");
+let sentBytes=0,sentFrames=0,slowClients=0;
+function send(res,frame){if(!writeFrame(res,frame)){clients.delete(res);slowClients++;return false;}sentBytes+=Buffer.byteLength(frame);sentFrames++;return true;}
+function metrics(){return {clients:clients.size,sentBytes,sentFrames,slowClients};}
 const journal=require("./event-journal").createJournal();
 const path=require("node:path");const activity=require("./activity-store").createActivityStore(process.env.OMP_MAP_STATE||path.join(require("./config").ROOT,"data"));
 const {randomUUID}=require("node:crypto");const turns=new Map();
-function publish(payload){const frame=journal.append(payload);for(const res of clients){try{res.write(frame);}catch{clients.delete(res);}}}
-function replay(res,id){const frames=journal.replay(id);if(!frames)return false;for(const frame of frames)res.write(frame);return true;}
+function publish(payload){const frame=journal.append(payload);for(const res of clients)send(res,frame);}
+function replay(res,id){const frames=journal.replay(id);if(!frames)return false;for(const frame of frames)if(!send(res,frame))break;return true;}
 let lastSig = "";
 
 // 화면은 카드 id 로만 노드를 찾는다. 실제 파일로 온 이벤트는 계보를 거쳐 카드 id 로 바꿔 보낸다.
@@ -45,6 +49,7 @@ function resSig(s) {
 }
 
 function broadcast() {
+  if(!clients.size){lastSig="";return;}
   const data = snapshot();
   const sig = JSON.stringify(data.sessions.map((s) => [
     s.key, s.lastTs, s.totals.tokens, s.live, ...resSig(s),
@@ -54,7 +59,7 @@ function broadcast() {
   if (sig === lastSig) return;
   lastSig = sig;
   const frame = `data: ${JSON.stringify(data)}\n\n`;
-  for (const res of clients) res.write(frame);
+  for (const res of clients) send(res,frame);
 }
 
-module.exports = { addClient, removeClient, pushChat, pushLive, pushAsk, pushQueue, replay, broadcast, activityHistory:activity.read };
+module.exports = { addClient, removeClient, pushChat, pushLive, pushAsk, pushQueue, replay, broadcast, activityHistory:activity.read,metrics };

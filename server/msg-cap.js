@@ -18,7 +18,7 @@ function capMessages(list) {
   const keep = new Map(); // node -> Set(index)
   total = 0;
   for (const x of all) {
-    if (total + x.size > MSG_BUDGET) break;
+    if (total + x.size > MSG_BUDGET) continue;
     total += x.size;
     if (!keep.has(x.n)) keep.set(x.n, new Set());
     keep.get(x.n).add(x.i);

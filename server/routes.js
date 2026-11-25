@@ -35,6 +35,7 @@ const ROUTES = {
   ...require("./routes-context"),
   ...require("./routes-editor"),
   ...localfs.routes,
+  "GET /api/performance": (req,res)=>json(res,{...require("./performance").read(),sse:require("./sse").metrics(),sessions:require("./sessions").list().map(({node,pid,busy,state,harness})=>({node,pid,busy,state,harness,resources:require("./proc").resFor(node)}))}),
   "* /api/graph": (req, res) => json(res, snapshot()),
   "* /api/events": (req, res) => {
     res.writeHead(200, {

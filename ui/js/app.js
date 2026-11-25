@@ -47,18 +47,19 @@ async function boot() {
     else apply(data);
   };
 
-  setInterval(loadInfra, 5000);
-  setInterval(loadSys, 3000);
+  function adaptive(fn,ms){let running=false;const tick=async()=>{if(running||document.hidden)return;running=true;try{await fn();}catch{}finally{running=false;}};setInterval(tick,ms);document.addEventListener("visibilitychange",()=>{if(!document.hidden)void tick();});}
+  adaptive(loadInfra, 10000);
+  adaptive(loadSys, 5000);
   setInterval(() => { if (LOCALS.length) loadLocalRes(); }, 5000);
-  setInterval(() => { for (const id of openIds) if(cardContentVisible(id)) loadBg(id); }, 1200);
+  adaptive(async()=>{for(const id of openIds)if(cardContentVisible(id))await loadBg(id);},2000);
   loadBgAll();
-  setInterval(loadBgAll, 2500);
-  setInterval(() => { if (pendingRender && !DEFER && !typingNow()) renderMap(false); }, 700);
+  adaptive(loadBgAll, 5000);
+  setInterval(() => { if (!document.hidden && pendingRender && !DEFER && !typingNow()) renderMap(false); }, 700);
   // 도는 잡이 있으면 경과 시간·출력 꼬리가 흐르도록 다시 그린다. 열린 출력은 스크롤 위치를 지킨다.
   setInterval(() => {
-    if (!typingNow() && JOBS.some((j) => !j.done)) renderMap(false);
+    if (!document.hidden && !typingNow() && JOBS.some((j) => !j.done)) renderMap(false);
   }, 2000);
-  setInterval(paintJobScroll, 500);
+  adaptive(paintJobScroll,1000);
   addEventListener("resize", paintMinimap);
 }
 

@@ -22,6 +22,10 @@ const runs = new Map(); // 낮춘 카드 경로 -> { node, child, busy, cancelle
 const cwds = new Map(); // 낮춘 카드 경로 -> 작업 폴더(방금 만든 세션은 기록 스캔 전에도 필요)
 const norm = (p) => {const v=path.normalize(String(p || ""));return process.platform==="win32"?v.toLowerCase():v;};
 const MAX_RUNS=Math.max(1,Math.min(32,Number(process.env.OMP_MAP_CLAUDE_MAX_RUNS)||4));
+const {policy}=require("../performance");
+const idleOverride=process.env.OMP_MAP_CLAUDE_IDLE_MS;
+function idleMs(){return idleOverride!==undefined&&Number.isFinite(Number(idleOverride))?Math.max(0,Math.min(300000,Number(idleOverride))):policy().idleMs;}
+function closeIdle(s){if(!s?.transport||s.busy||s.state!=="idle")return false;clearTimeout(s.idleTimer);s.state="closing";s.transport.close();setTimeout(()=>{if(!s.transport.ended)killTree(s.child);},3000).unref();return true;}
 const MAX_FRAME=8*1024*1024;
 const diagnostics=new Map();
 const redact=s=>String(s||"").replace(/(?:sk-ant-|Bearer\s+)[A-Za-z0-9._-]+/gi,"[redacted]").slice(-4096);
@@ -153,7 +157,7 @@ function spawnStream(s,loc,text,images){
  child.stderr?.setEncoding("utf8");child.stderr?.on("data",d=>{s.stderr=redact(s.stderr+d);});
  s.transport=transport(child,{
  frame:o=>{if(o.type==="assistant"){const blocks=o.message?.content||[];if(!s.streamed)emitText(s,blocks.filter(b=>b.type==="text").map(b=>b.text).join(""));return;}
- if(o.type==="result"){if(!s.busy)return;if(!s.streamed&&typeof o.result==="string")emitText(s,o.result);finish(s,o.is_error?1:0);s.state="idle";uiAsk.drop(s.node);queue.done(s.node,!o.is_error&&!s.cancelled);if(!s.busy){s.state="idle";s.idleTimer=setTimeout(()=>{if(!s.busy){s.state="closing";s.transport.close();setTimeout(()=>{if(!s.transport.ended)killTree(child);},3000).unref();}},60000);s.idleTimer.unref();}return;}onFrame(s,o);},
+ if(o.type==="result"){if(!s.busy)return;if(!s.streamed&&typeof o.result==="string")emitText(s,o.result);finish(s,o.is_error?1:0);s.state="idle";uiAsk.drop(s.node);queue.done(s.node,!o.is_error&&!s.cancelled);if(!s.busy){s.state="idle";s.idleSince=Date.now();s.idleTimer=setTimeout(()=>closeIdle(s),idleMs());s.idleTimer.unref();}return;}onFrame(s,o);},
  permission:(id,r,respond)=>{s.state="waiting_approval";const tool=r.tool_name||"Tool";const q=input.askOf([{type:"tool_use",name:tool,id,input:r.input}],new Set());
  if(q){uiAsk.ask(s.node,{...q,deadline:Date.now()+120000},answer=>{if(answer?.cancelled||answer?.timedOut){respond({behavior:"deny",message:"User cancelled"});s.state="running";return {ok:true};}const answers={};for(const [i,a] of (answer?.answers||[]).entries()){const question=q.questions[i]?.question;if(question)answers[question]=[...(a.selectedOptions||[]),a.customInput].filter(Boolean).join(", ");}if(Object.keys(answers).length!==q.questions.length){respond({behavior:"deny",message:"Incomplete answers"});}else respond({behavior:"allow",updatedInput:{...r.input,answers}});s.state="running";return {ok:true};});return;}
  uiAsk.ask(s.node,{id,method:"confirm",deadline:Date.now()+120000,title:"Claude 도구 승인: "+tool,message:JSON.stringify(r.input||{}).slice(0,4000)},answer=>{s.state="running";const allow=answer?.confirmed===true&&!answer.cancelled;return {ok:respond(allow?{behavior:"allow",updatedInput:r.input||{}}:{behavior:"deny",message:"User denied"})};});},
@@ -165,7 +169,7 @@ function startTurn(card, text, images) {
   const existing=runs.get(norm(card));
   if(existing?.transport&&!existing.busy&&existing.state==="idle"){const signature=JSON.stringify([settings.get(card),model.modelOf(card)||model.DEFAULT_MODEL]);if(signature!==existing.optionsSignature||existing.sessionId!==locate(card).sessionId){clearTimeout(existing.idleTimer);existing.state="closing";existing.transport.close();setTimeout(()=>{if(!existing.transport.ended)killTree(existing.child);},3000).unref();return {ok:false,out:"실행 설정이 변경되어 기존 프로세스를 정리 중입니다. 잠시 후 다시 보내세요."};}return streamTurn(existing,text,images);}
   if(existing)return {ok:false,out:"이전 실행이 아직 정리되지 않았습니다"};
-  if(runs.size>=MAX_RUNS)return {ok:false,out:"Claude 동시 실행 제한 "+MAX_RUNS+"개"};
+  if(runs.size>=MAX_RUNS||!policy().admit){const idle=[...runs.values()].filter(x=>!x.busy&&x.state==="idle").sort((a,b)=>(a.idleSince||0)-(b.idleSince||0));if(idle.length)closeIdle(idle[0]);return {ok:false,retryable:true,out:!policy().admit?"가용 RAM 부족 · 실행 대기":"Claude 동시 실행 제한 "+MAX_RUNS+"개 · 실행 대기"};}
   const loc = locate(card);
   if (!loc.exists && !loc.known) return { ok: false, out: "Claude 세션 기록 없음" };
   const s = { node: card, seen: new Set() };
@@ -179,11 +183,12 @@ function startTurn(card, text, images) {
 const busyRun = (card) => { const s = runs.get(norm(card)); return s && s.busy ? s : null; };
 
 const queue=createQueue({start:startTurn,changed:pushQueue,busy:card=>{const s=runs.get(norm(card));return !!s&&(!s.transport||s.busy||s.state!=="idle"&&s.state!=="completed");}});
+const pressureTimer=setInterval(()=>{if(policy().level>=2)for(const s of runs.values())closeIdle(s);queue.retry();},3000);pressureTimer.unref();
 function queueCard(node){return lineage.cardOf(node)||node;}
 function prompt(node, text, images) {
   const card = lineage.cardOf(node) || node;
   if (busyRun(card)) return { ok: false, out: "이미 응답을 생성하고 있습니다" };
-  return startTurn(card, text, images);
+  const r=startTurn(card,text,images);return r.retryable?queue.enqueue(card,text,images):r;
 }
 
 // 질문 답: 도는 턴이 있으면 그 턴을 끊고(질문에 답할 수 없는 -p 모드) 끝난 뒤 다음 프롬프트로 잇는다.

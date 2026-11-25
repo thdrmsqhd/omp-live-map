@@ -2,7 +2,7 @@
 
 // node(기록 파일 경로) → 항목 배열. 키는 liveKey 로 맞춘다(구분자·대소문자 차이를 흡수).
 const LIVE = new Map();
-const LIVE_MAX = 200;        // node 당 보관 항목 수
+const LIVE_MAX = 120;        // node 당 보관 항목 수
 const LIVE_TEXT_MAX = 8000;  // 글·생각 한 항목이 쥐는 글자 수(끝쪽을 남긴다)
 const LIVE_DIRTY = new Set();
 const LIVE_HISTORY=new Map();
@@ -32,7 +32,7 @@ function liveTouch(node) {
       LIVE_DIRTY.clear();
       for (const k of nodes) {
         const id = liveNodeId(k);
-        if (id && typeof paintChat === "function") paintChat(id);
+        if (id && !document.hidden && cardContentVisible(id) && typeof paintChat === "function") paintChat(id);
       }
     });
   }
@@ -80,7 +80,7 @@ function handleLiveEvent(ev) {
     else livePush(list, { kind: ev.kind, text: add.slice(-LIVE_TEXT_MAX) });
   } else if (ev.kind === "tool") {
     const existing=tool();if(existing){if(ev.args)existing.args=String(ev.args);liveTouch(ev.node);return;}
-    const item = { startedAt:Number(ev.ts)||Date.now(),kind: "tool", id: ev.id, name: String(ev.name ?? ""), args: String(ev.args ?? ""), out: "", done: false, error: false };
+    const item = { startedAt:Number(ev.ts)||Date.now(),kind: "tool", id: ev.id, name: String(ev.name ?? ""), args: String(ev.args ?? "").slice(0,16000), out: "", done: false, error: false };
     const end = list.findLastIndex((x) => x.kind === "turn_end");
     // 기록에서 읽힌 툴 시작은 확장의 turn_end 보다 늦게 도착할 수 있다(yield 로 끝나는 서브는 항상). 턴이 끝나기 전에 시작한 툴이면 끝난 턴 쪽에 끼워 "진행 중"으로 되살리지 않는다.
     if (end >= 0 && Number(ev.ts) > 0 && Number(ev.ts) <= list[end].ts) { item.done = true; item.seq = ++liveSeq; list.splice(end, 0, item); }
@@ -89,7 +89,7 @@ function handleLiveEvent(ev) {
     const t = tool();
     const out = String(ev.text ?? "");
     if (!t || t.out === out) return;
-    t.out = out;
+    t.out = out.slice(-12000);
     // 백그라운드 잡으로 넘어간 툴의 출력은 잡 카드가 보여준다. 여기에는 한 줄만 남긴다.
     const bg = out.match(/Backgrounded[^]*?job (bg_\d+)/);
     if (bg) t.job = bg[1];
@@ -114,3 +114,6 @@ function handleLiveEvent(ev) {
   } else return;
   liveTouch(ev.node);
 }
+
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)for(const id of openIds)liveTouch(id);});
+setInterval(()=>{const keep=new Set([...openIds].map(liveKey));for(const s of DATA.sessions||[])for(const n of s.nodes)if(n.status==="live"||CHAT.get(n.id)?.busy)keep.add(liveKey(n.id));for(const k of LIVE.keys())if(!keep.has(k))LIVE.delete(k);for(const k of LIVE_HISTORY.keys())if(!keep.has(k))LIVE_HISTORY.delete(k);},60000);

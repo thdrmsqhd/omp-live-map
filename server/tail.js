@@ -4,7 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const { StringDecoder } = require("node:string_decoder");
-const { SESSIONS } = require("./config");
+const { SESSIONS, HOURS } = require("./config");
 const { newFileState, parentOf, ingest } = require("./ingest");
 
 const files = new Map(); // abs path -> file state
@@ -35,7 +35,7 @@ function* track(file) {
   let st = files.get(file);
   let size;
   try {
-    size = fs.statSync(file).size;
+    const stat=fs.statSync(file);if(stat.mtimeMs<Date.now()-Math.max(HOURS,24)*3600000){files.delete(file);return;}size=stat.size;
   } catch {
     return;
   }
@@ -82,6 +82,7 @@ function* scanSteps(seen = new Set()) {
     }
   }
   yield* walk(SESSIONS, 0);
+  for(const key of files.keys())if(!seen.has(key)&&!fs.existsSync(key))files.delete(key);
 }
 
 function scan() {

@@ -1,0 +1,6 @@
+"use strict";
+const {test}=require("node:test"),assert=require("node:assert/strict");
+const {policy,sample}=require("../server/performance"),{writeFrame}=require("../server/sse-writer"),{createQueue}=require("../server/harness/claude-queue");
+test("resource policy keeps low RAM admission closed",()=>{const gb=1024**3;assert.equal(policy(6*gb,16*gb).level,0);assert.equal(policy(4*gb,16*gb).idleMs,15000);assert.equal(policy(2*gb,16*gb).admit,false);assert.equal(policy(.4*gb,16*gb).level,3);assert.ok(sample().memory.rss>0);});
+test("slow SSE clients are disconnected instead of accumulating buffers",()=>{let destroyed=false,writes=0;const r={writableLength:100,write(){writes++;},destroy(){destroyed=true;}};assert.equal(writeFrame(r,"abc",104),true);assert.equal(writeFrame(r,"abcde",104),false);assert.equal(writes,1);assert.ok(destroyed);});
+test("resource-blocked queue resumes without dropping work",()=>{let blocked=true,started=[];const q=createQueue({busy:()=>false,start:(k,t)=>blocked?{ok:false,retryable:true,out:"RAM"}:(started.push(t),{ok:true})});q.enqueue("n","work");assert.equal(q.view("n").paused,false);assert.equal(q.view("n").items.length,1);blocked=false;q.retry();assert.deepEqual(started,["work"]);assert.equal(q.view("n").items.length,0);});

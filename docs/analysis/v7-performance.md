@@ -1,0 +1,3 @@
+# V7 performance — first implementation
+
+Based on verified V6 c0c81d6. Adds runtime Node memory, CPU, loop and SSE metrics; PID index; adaptive polling; memory-pressure admission and idle CLI release; retryable queue; slow-client disconnect; bounded Markdown cache and activity buffers; old OMP file pruning. Thresholds provisional and host tests needed. Remaining: Electron process metrics, full delta graph protocol, persistent history paging, true virtualization, async activity storage, model eviction, native process sampler, sustained and actual CLI benchmarks. Do not claim percentage savings without matched baseline measurements.

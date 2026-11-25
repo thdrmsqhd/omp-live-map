@@ -13,6 +13,7 @@ const CORES = Math.max(1, os.cpus().length);
 const HIST_N = 10; // 노드별 자원 표본 수(4초 주기 ≈ 40초)
 const QUIET_MS = 30 * 60_000;
 const hist = new Map(); // file -> [{cpu, mb}] 오래된 것부터
+let byPid=new Map();
 let owners = new Map(); // 메인 파일 경로 -> omp 본체 pid
 let claims = new Map(); // 노드 파일 -> Set(pid), 노드끼리 겹치지 않는다(server/attrib.js)
 
@@ -25,7 +26,7 @@ function readProcs() {
     let out = "", done = false;
     const finish = () => { if (done) return; done = true; clearTimeout(timer); resolve(out); };
     const timer = setTimeout(() => { try { child.kill(); } catch {} finish(); }, 25000);
-    child.stdout.on("data", (d) => (out += d));
+    child.stdout.on("data", d=>{out+=d;if(out.length>8*1024*1024){try{child.kill();}catch{}out="";finish();}});
     child.stderr.on("data", () => {});
     child.on("close", finish);
     child.on("error", finish);
@@ -57,6 +58,7 @@ async function refreshProc() {
       return { pid: p.ProcessId, ppid: p.ParentProcessId, name: p.Name, mb: Math.round((p.WorkingSetSize || 0) / 1048576), cpu: +cpuPct.toFixed(1),
         cmd: String(p.CommandLine || "").slice(0, 500), start: Number(p.Start) || 0 };
     });
+    byPid=new Map(PROC.list.map(p=>[p.pid,p]));
     PROC.prev = next;
     PROC.atWall = now;
     PROC.at = now;
@@ -111,8 +113,8 @@ function resFor(nodeId) {
   const pids = claims.get(nodeId) || new Set();
   let cpu = 0, mb = 0, n = 0;
   const procs = [];
-  for (const p of PROC.list) {
-    if (!pids.has(p.pid)) continue;
+  for (const pid of pids) {
+    const p=byPid.get(pid);if(!p)continue;
     cpu += p.cpu;
     mb += p.mb;
     n += 1;
@@ -149,7 +151,7 @@ function procState() {
 }
 
 function findProc(pid) {
-  return PROC.list.find((x) => x.pid === pid) || null;
+  return byPid.get(pid) || null;
 }
 
 module.exports = { refreshProc, reloadProc, resFor, releaseSet, histOf, procState, findProc };
