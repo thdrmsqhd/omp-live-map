@@ -1,3 +1,4 @@
+import { bindHarnessPreview } from "./harness-preview.js";
 import { bindHarnessEditor } from "./harness-editor.js";
 
 export function bindDefinitionEditor({ find, request, report, options, definitions: entries, refreshDefinitions }) {
@@ -19,6 +20,11 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     showDefinition();
     harnessEditor.show(payload, models, true, true);
   } });
+  const preview = bindHarnessPreview({ find, request, payload: harnessEditor.payload,
+    project: () => project.value, saved: () => definition.value ? {
+      id: definition.value, version: Number(find("definition-version").value),
+    } : null,
+  });
   const selection = [project, kind, definition, find("definition-version")];
   const priorSelection = new Map();
   function rememberSelection() {
@@ -42,6 +48,7 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     for (let version = selected?.version ?? 0; version > 0; version--) versions.add(new Option(String(version), String(version)));
     versions.disabled = !selected;
     harnessEditor.show(selected?.payload ?? defaultPayload(), entries().filter((entry) => entry.kind === "model"), kind.value === "harness");
+    preview.reset();
     rememberSelection();
   }
 
@@ -58,6 +65,7 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     const current = JSON.stringify(selected.payload, null, 2);
     find("payload").value = previous;
     harnessEditor.show(historical.payload, entries().filter((entry) => entry.kind === "model"), kind.value === "harness");
+    preview.reset();
     rememberSelection();
     const diff = find("definition-diff");
     diff.hidden = current === previous;

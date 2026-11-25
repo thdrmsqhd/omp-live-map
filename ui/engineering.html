@@ -79,6 +79,17 @@
             <label>Hooks <textarea name="hooks" rows="4" spellcheck="false"></textarea></label>
           </details>
           <p id="harness-draft" role="status"></p>
+          <div class="workflow-controls">
+            <button id="harness-preview-open" type="button">편집 중 설정 보기</button>
+            <button id="harness-preview-saved" type="button" disabled>선택한 저장 버전 보기</button>
+          </div>
+          <p id="harness-preview-status" role="status"></p>
+          <div id="harness-preview" hidden aria-label="하네스 적용값">
+            <h3>실제 적용값</h3>
+            <dl id="harness-preview-settings"></dl>
+            <h4>프롬프트로 전달되는 순서</h4>
+            <ol id="harness-preview-prompt"></ol>
+          </div>
         </fieldset>
         <pre id="definition-diff" aria-label="현재 버전과의 변경 내역" hidden></pre>
         <label id="definition-json">정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
