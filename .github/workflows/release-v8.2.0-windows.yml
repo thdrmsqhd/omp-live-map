@@ -21,28 +21,31 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: '0ad34a6ec1cf4b37a015d35b7442154e4eee1836'
+          ref: '23b511922d77acc08d63c6caddce2ffdc2653892'
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - name: Download the v8.2.0 installer from the first build
-        uses: actions/download-artifact@v4
+      - name: Build Windows installer
+        run: |
+          npm --prefix desktop pkg set version=8.2.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop install --package-lock=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop run build:windows -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
         with:
           name: OMP-Live-Map-8.2.0-Windows-x64
-          path: desktop/dist
-          run-id: 45572921187
-          github-token: ${{ github.token }}
+          path: desktop/dist/OMP-Live-Map-V3-Setup.exe
+          if-no-files-found: error
       - name: Install on hosted Windows and verify local assets
         run: |
           $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
           $setup = Join-Path $PWD 'desktop/dist/OMP-Live-Map-V3-Setup.exe'
           $result = Start-Process -FilePath $setup -ArgumentList '/S',"/D=$target" -Wait -PassThru
-          if ($result.ExitCode -ne 0) {
-            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddMinutes(-3)} -ErrorAction SilentlyContinue |
-              Where-Object { $_.Message -match 'OMP-Live-Map-V3-Setup' } | Format-List TimeCreated, Message
-            throw "Installer failed: $($result.ExitCode)"
-          }
+          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
           $env:OMP_MAP_INSTALLED_EXE = Join-Path $target 'OMP Live Map V3.exe'
           if (!(Test-Path -LiteralPath $env:OMP_MAP_INSTALLED_EXE)) { throw 'Installed executable not found' }
           npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
@@ -69,7 +72,8 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $mainCommit -ne $sourceCommit) {
             throw 'The verified commit is no longer the head of main'
           }
-          $verification = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/45572884275/jobs" --jq '.jobs[] | select(.name == "windows") | .conclusion'
+          $jobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/45573402355/jobs" | ConvertFrom-Json
+          $verification = ($jobs.jobs | Where-Object { $_.name -eq 'windows' }).conclusion
           if ($LASTEXITCODE -ne 0 -or $verification -ne 'success') {
             throw 'Windows verification on main has not passed'
           }
@@ -82,6 +86,7 @@ jobs:
           - Live Map에서 관제와 Workflow 실행을 함께 관리합니다.
           - Engineering에서 에이전트 프로필을 노드로 연결하고, 새 세션에 저장한 하네스를 적용할 수 있습니다.
           - 하네스 저장 범위를 개인·팀·프로젝트로 선택할 수 있습니다.
+          - Windows 데스크톱과 설치 파일에 OMP Live Map 전용 아이콘을 적용했습니다.
 
           Windows x64 설치 파일과 SHA-256 체크섬을 제공합니다. 설치 파일에는 코드 서명이 적용되어 있지 않습니다.
           '@ | Set-Content -LiteralPath release-notes.md -Encoding utf8
