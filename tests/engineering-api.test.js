@@ -21,6 +21,12 @@ test("engineering API requires its desktop token and preserves the original grap
       assert.equal((await request("/api/engineering/runtime/login", {
         method: "POST", headers: { "content-type": "application/json" }, body: "{}",
       })).status, 403);
+      for (const endpoint of ["harness/preview", "harness/apply", "harness/trial", "harness/trial/cancel", "harness/trial/retry"]) {
+        const response = await request("/api/engineering/" + endpoint, {
+          method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+        });
+        assert.equal(response.status, 403, endpoint);
+      }
       const headers = { "x-omp-engineering-token": token };
       const response = await request("/api/engineering/capabilities", { headers });
       assert.deepEqual(JSON.parse(response.text), { omp: false, claude: false });

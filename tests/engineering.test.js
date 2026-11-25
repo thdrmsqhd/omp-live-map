@@ -257,12 +257,16 @@ test("harness comparison shares one commit and inputs, with isolated worktrees a
       return { async run(context) {
         actual.push({ cwd: context.cwd, instruction: context.instruction, sources: context.harness.resolvedSources,
           commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: context.cwd, encoding: "utf8" }).trim() });
+        if (context.harness.result && actual.length > 2) {
+          await fs.writeFile(path.join(context.cwd, context.harness.result.path), '[{"file":"main.js"}]');
+        }
         return { sessionId: "fixture", costCents: 1, output: "done" };
       } };
     },
   };
   const compare = harnessTrials(definitions, runner, work, budget);
-  const draft = { ...harness.payload, instructions: "Updated", assets: { inputs: ["report"] } };
+  const draft = { ...harness.payload, instructions: "Updated", assets: { inputs: ["report"] },
+    result: { path: "review.json", shape: "array", fields: ["file"] } };
   const body = { key: "comparison", baseline: { id: harness.id, version: 1 }, payload: draft,
     instruction: "Review changes", materials: { report: "Tests passed" }, budgetCents: 6, timeoutMs: 4000 };
   const first = await compare.start(project.id, body);
@@ -273,7 +277,8 @@ test("harness comparison shares one commit and inputs, with isolated worktrees a
   const end = compare.inspect(project.id, first.id);
   assert.equal(end.status, "finished");
   assert.equal(end.results.baseline.status, "succeeded");
-  assert.equal(end.results.draft.status, "succeeded");
+  assert.equal(end.results.draft.status, "failed");
+  assert.equal(end.results.draft.validation.passed, false);
   assert.equal(actual.length, 2);
   assert.equal(actual[0].commit, end.commit);
   assert.equal(actual[1].commit, end.commit);
@@ -281,5 +286,13 @@ test("harness comparison shares one commit and inputs, with isolated worktrees a
   assert.equal(actual[0].instruction, actual[1].instruction);
   assert.equal(actual[1].sources[0].text, "Tests passed");
   assert.equal(budget.get(project.id).committed, 2);
+  compare.retry(project.id, first.id, "draft");
+  while (compare.inspect(project.id, first.id).status === "running" && Date.now() < deadline) await delay(20);
+  const retried = compare.inspect(project.id, first.id);
+  assert.equal(retried.results.draft.status, "succeeded");
+  assert.deepEqual(retried.results.baseline, end.results.baseline);
+  assert.equal(actual.length, 3);
+  assert.equal(actual[2].commit, end.commit);
+  assert.equal(budget.get(project.id).committed, 3);
   await assert.rejects(compare.start(project.id, { ...body, key: "over-budget" }), /budget would be exceeded/);
 });
