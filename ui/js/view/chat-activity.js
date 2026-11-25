@@ -61,12 +61,13 @@ function actSummary(items) {
 // 대화 목록 끝에 붙는 활동 묶음. 도는 중이면 펼치고, 끝난 턴은 한 줄 요약으로 접는다(펼침은 chatState 에 보관).
 function chatActivityHTML(nodeId, st) {
   const { items, running } = actItems(nodeId);
-  if (!items.length) return "";
+  const history=chatTurnHistory(nodeId);const archive=history.slice(0,running?history.length:-1).filter(x=>x.items.length);const old=archive.length?`<details class="chat-old-activity"><summary>이전 작업 ${archive.length}턴</summary>${archive.map(x=>`<details><summary>${esc(new Date(x.ts).toLocaleTimeString())} · ${esc(actSummary(x.items))}</summary>${x.items.map(liveItemHTML).join("")}</details>`).join("")}</details>`:"";
+  if (!items.length) return old;
   const list = items.map(liveItemHTML).join("");
-  if(running){const active=items.filter(x=>x.kind==="tool"&&!x.done||x.kind==="sub"&&LIVE_RUNNING.test(x.status||""));const failed=items.filter(x=>x.error);const completed=items.filter(x=>!active.includes(x)&&!failed.includes(x));return `<div class="lvact">${active.map(liveItemHTML).join("")}${failed.map(liveItemHTML).join("")}${completed.length?`<details class="chat-activity-done"><summary>이전 활동 ${completed.length}건</summary>${completed.map(liveItemHTML).join("")}</details>`:""}</div>`;}
+  if(running){const active=items.filter(x=>x.kind==="tool"&&!x.done||x.kind==="sub"&&LIVE_RUNNING.test(x.status||""));const failed=items.filter(x=>x.error);const completed=items.filter(x=>!active.includes(x)&&!failed.includes(x));return old+`<div class="lvact">${active.map(liveItemHTML).join("")}${failed.map(liveItemHTML).join("")}${completed.length?`<details class="chat-activity-done"><summary>이전 활동 ${completed.length}건</summary>${completed.map(liveItemHTML).join("")}</details>`:""}</div>`;}
   const seq = items[items.length - 1].seq;
   if (st.actTurn !== seq) { st.actTurn = seq; st.actOpen = false; }
   const open = !!st.actOpen;
-  return `<button class="lvsum" data-actsum="1" title="${open ? "활동 접기" : "활동 펼치기"}"><span class="lvk">작업 내역</span><span class="lva">${esc(actSummary(items))}</span><span class="lvcar">${open ? "▴" : "▾"}</span></button>`
+  return old+`<button class="lvsum" data-actsum="1" title="${open ? "활동 접기" : "활동 펼치기"}"><span class="lvk">작업 내역</span><span class="lva">${esc(actSummary(items))}</span><span class="lvcar">${open ? "▴" : "▾"}</span></button>`
     + (open ? `<div class="lvact">${list}</div>` : "");
 }

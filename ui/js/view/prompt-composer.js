@@ -30,7 +30,7 @@ function mountPromptComposer(box,n,s){
   s.shortcut=readJSON("omp-map-prompt-shortcut","ctrl")==="enter"?"enter":"ctrl";shortcut.value=s.shortcut;
   let generation=0,tokenStart=null,timer=null;const refCache=new Map();
   const close=()=>{clearTimeout(timer);generation++;list.hidden=true;list.innerHTML="";tokenStart=null;};
-  const show=(rows,empty="항목 없음")=>{list.hidden=false;list.innerHTML=rows.length?rows.map((r,i)=>`<button data-prompt-choice="${i}" title="${esc(r.label)}">${esc(r.label)}</button>`).join(""):`<span>${esc(empty)}</span>`;list.__rows=rows;};
+  const show=(rows,empty="항목 없음")=>{list.hidden=false;list.innerHTML=rows.length?rows.map((r,i)=>`<button data-prompt-choice="${i}" title="${esc(r.label)}">${esc(r.label)}</button>`).join(""):`<span>${esc(empty)}</span>`;list.__rows=rows;delete list.dataset.choice;};
   const commands=[{label:"/compact — 컨텍스트 압축",run:()=>{if(capsOf(n).compact)compactChat(id);}},{label:"/clear — 대화 비우기",run:()=>{if(capsOf(n).clear)clearChat(id);}},{label:"요약 — 세션 요약",run:()=>summarize(id)}];
   async function choices(kind,q=""){
     const gen=++generation,query=q.toLowerCase();
@@ -52,6 +52,8 @@ function mountPromptComposer(box,n,s){
   ta.addEventListener("input",()=>{s.draft=ta.value;persistPromptDraft(id,s);fitChatInput(ta);paintPromptComposer(box,n,s);const m=ta.value.slice(0,ta.selectionStart).match(/(?:^|\s)([@/#])([^\s@/#]*)$/);if(m){tokenStart=ta.selectionStart-m[1].length-m[2].length;clearTimeout(timer);generation++;timer=setTimeout(()=>void choices({"@":"refs","/":"commands","#":"tasks"}[m[1]],m[2]),180);}else close();});
   ta.addEventListener("keydown",e=>{
     if(e.isComposing||e.keyCode===229)return;
+    if(!list.hidden&&["ArrowDown","ArrowUp"].includes(e.key)){e.preventDefault();const buttons=[...list.querySelectorAll("button")];if(buttons.length){const i=Number(list.dataset.choice||"-1");const next=(i+(e.key==="ArrowDown"?1:-1)+buttons.length)%buttons.length;list.dataset.choice=String(next);buttons.forEach((b,j)=>b.classList.toggle("choice-active",j===next));buttons[next].scrollIntoView({block:"nearest"});}return;}
+    if(!list.hidden&&e.key==="Enter"&&!e.ctrlKey&&!e.metaKey&&list.dataset.choice!==undefined){const b=list.querySelectorAll("button")[Number(list.dataset.choice)];if(b){e.preventDefault();b.click();return;}}
     if(e.key==="Escape"&&!list.hidden){e.preventDefault();e.stopPropagation();close();return;}
     if(e.key==="Enter"&&((e.ctrlKey||e.metaKey)||(s.shortcut==="enter"&&!e.shiftKey))){e.preventDefault();e.stopPropagation();submitPrompt(id);}
   });

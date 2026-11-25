@@ -5,6 +5,8 @@ const LIVE = new Map();
 const LIVE_MAX = 200;        // node 당 보관 항목 수
 const LIVE_TEXT_MAX = 8000;  // 글·생각 한 항목이 쥐는 글자 수(끝쪽을 남긴다)
 const LIVE_DIRTY = new Set();
+const LIVE_HISTORY=new Map();
+function chatTurnHistory(id){return LIVE_HISTORY.get(liveKey(id))||[];}
 let liveSeq = 0;
 
 const liveKey = (node) => String(node ?? "").replace(/\\/g, "/").toLowerCase();
@@ -105,6 +107,7 @@ function handleLiveEvent(ev) {
   } else if (ev.kind === "turn_end") {
     // 턴이 끝났는데 닫히지 않은 툴은 더 돌지 않는 것으로 본다(백그라운드로 넘어간 출력은 계속 반영된다).
     for (const it of list) if (it.kind === "tool") it.done = true;
+    const range=actRange(list);if(range.running&&range.items.length){const hist=chatTurnHistory(ev.node).slice(-19);hist.push({ts:Number(ev.ts)||Date.now(),items:range.items.filter(x=>x.kind==="tool"||x.kind==="sub").map(x=>({...x,out:String(x.out||"").slice(-12000)}))});LIVE_HISTORY.set(key,hist);if(LIVE_HISTORY.size>100)LIVE_HISTORY.delete(LIVE_HISTORY.keys().next().value);}
     livePush(list, { kind: "turn_end", ts: Number(ev.ts) || Date.now() });
     scheduleSubDockCheck(ev.node);
   } else return;

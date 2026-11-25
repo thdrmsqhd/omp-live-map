@@ -212,6 +212,7 @@ function retryChat(id) {
 // SSE chat 이벤트. 보낸 탭은 sendChat 이 입력을 이미 기록했으므로 다른 탭에서 보낸 것만 여기서 기록한다.
 function handleChatEvent(c) {
   const st = chatState(c.node);
+  if(c.turnId&&c.kind==="req"){if(st.turnId===c.turnId)return;st.turnId=c.turnId;}
   if (c.kind === "req") {
     const last = st.log[st.log.length - 1];
     const mine = st.busy && last && last.role === "user" && (last.text === c.text || last.attach);
@@ -231,6 +232,7 @@ function handleChatEvent(c) {
     st.busy = true;
     st.stream = (st.stream + String(c.text||"")).slice(0,1000000);
   } else if (c.kind === "done") {
+    if(c.turnId&&st.lastDone===c.turnId)return;st.lastDone=c.turnId;
     commitStream(st, c.text);
     st.busy = false;
     queuePromptDone(c.node,!c.cancelled&&!c.code);

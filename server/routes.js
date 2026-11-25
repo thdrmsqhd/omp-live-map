@@ -9,7 +9,7 @@ const { snapshot } = require("./snapshot");
 const { outsFor } = require("./live");
 const { asksFor } = require("./ui-requests");
 const { recentFor } = require("./ext-live");
-const { addClient, removeClient } = require("./sse");
+const { addClient, removeClient, replay } = require("./sse");
 const localfs = require("./routes-localfs");
 const images = require("./routes-images");
 const { prefix, createEngineeringRoutes } = require("./engineering/routes");
@@ -44,6 +44,7 @@ const ROUTES = {
     });
     const data = snapshot();
     res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if(req.headers["last-event-id"]&&replay(res,req.headers["last-event-id"])){addClient(res);req.on("close",()=>removeClient(res));return;}
     // 이미 지나간 출력도 붙자마자 보이게 한다(맵 rpc 세션의 툴 출력).
     for (const s of data.sessions) {
       for (const n of s.nodes) {

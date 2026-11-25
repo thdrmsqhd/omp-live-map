@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
-const { pushChat, pushLive } = require("../sse");
+const { pushChat, pushLive, pushQueue } = require("../sse");
 const { killTree } = require("../rpc");
 const lineage = require("../lineage");
 const uiAsk = require("../ui-requests");
@@ -41,7 +41,7 @@ function finish(s, code) {
 
 function emitText(s, text) {
   if (!text) return;
-  s.full = (s.full + text).slice(-4000);
+  s.full = (s.full + text).slice(0,1000000);
   pushChat({ node: s.node, kind: "delta", text });
   pushLive({ node: s.node, kind: "text", text });
 }
@@ -178,7 +178,7 @@ function startTurn(card, text, images) {
 
 const busyRun = (card) => { const s = runs.get(norm(card)); return s && s.busy ? s : null; };
 
-const queue=createQueue({start:startTurn,busy:card=>{const s=runs.get(norm(card));return !!s&&(!s.transport||s.busy||s.state!=="idle"&&s.state!=="completed");}});
+const queue=createQueue({start:startTurn,changed:pushQueue,busy:card=>{const s=runs.get(norm(card));return !!s&&(!s.transport||s.busy||s.state!=="idle"&&s.state!=="completed");}});
 function queueCard(node){return lineage.cardOf(node)||node;}
 function prompt(node, text, images) {
   const card = lineage.cardOf(node) || node;

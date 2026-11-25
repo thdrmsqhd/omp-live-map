@@ -7,10 +7,11 @@ const { resultsOf, CALL_MAX } = require("./agent-msgs");
 const HOUR_MS = 3_600_000;
 const TOOL_TAGS = 12; // 툴 전용 병합 항목의 tools 최대 개수
 const EMPTY_TEXT = /^[.·,\s]*$/;
-const MSG_TEXT_MAX = 8000; // 기록 메시지 한 건의 글자 수. 줄바꿈은 지켜야 대화 블록 markdown 이 살아난다.
+const MSG_TEXT_MAX = 64000; // 기록 메시지 한 건의 글자 수. 줄바꿈은 지켜야 대화 블록 markdown 이 살아난다.
 const keepText = (t) => t.replace(/\r\n?/g, "\n").trim().slice(0, MSG_TEXT_MAX);
 
 function pushMessage(st, msg) {
+  st.messageSeq=(st.messageSeq||0)+1;msg.id=String(st.sessionId||st.id||st.file||"session")+":"+st.messageSeq;
   st.messages.push(msg);
   if (st.messages.length > MSG_KEEP) st.messages = st.messages.slice(-MSG_KEEP);
 }

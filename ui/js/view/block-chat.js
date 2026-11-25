@@ -2,8 +2,11 @@
 
 const CHAT_SHOW = 24, CHAT_PAGE = 40;
 const CHAT_SELECTION_PENDING = new Set();
+function bookmarkKey(m){return String(m.id||m.uuid||[m.role,m.ts||m.since||0,String(m.text||"").slice(0,100)].join(":"));}
+function chatBookmarks(id){const v=readJSON("omp-map-chat-bookmarks:"+id,[]);return Array.isArray(v)?v:[];}
+function highlightChatCode(code){if(!code||code.dataset.highlighted)return;const lang=String(code.dataset.lang||"").toLowerCase();if(!/^(js|javascript|ts|typescript|py|python|java|cpp|c|rust|rs|go|json|sql|bash|sh)$/.test(lang))return;const text=code.textContent;if(text.length>30000)return;const re=/("(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|\b(?:const|let|var|function|class|return|if|else|for|while|import|from|def|async|await|try|catch|throw|public|private|fn|struct|impl|match|select|where|true|false|null|None)\b|\b\d+(?:\.\d+)?\b)/gi;let pos=0;const frag=document.createDocumentFragment();for(const m of text.matchAll(re)){frag.append(document.createTextNode(text.slice(pos,m.index)));const span=document.createElement("span");span.className=/^["\x27]/.test(m[0])?"code-str":/^\d/.test(m[0])?"code-num":"code-key";span.textContent=m[0];frag.append(span);pos=m.index+m[0].length;}frag.append(document.createTextNode(text.slice(pos)));code.replaceChildren(frag);code.dataset.highlighted="1";}
 function chatViewPrefs(id){const p=readJSON("omp-map-chat-view:"+id,{});return {font:Math.max(12,Math.min(18,Number(p?.font)||14))};}
-function patchChatRows(host,html){const t=document.createElement("template");t.innerHTML=html;const old=new Map([...host.children].filter(x=>x.dataset.chatKey).map(x=>[x.dataset.chatKey,x]));let cursor=host.firstElementChild;for(const fresh of [...t.content.children]){let node=fresh;const prev=old.get(fresh.dataset.chatKey);if(prev){old.delete(fresh.dataset.chatKey);if(prev.__source===fresh.outerHTML||prev.outerHTML===fresh.outerHTML)node=prev;else if(fresh.dataset.chatKey==="stream"){const tx=prev.querySelector(".tx"),next=fresh.querySelector(".tx");if(tx&&next){tx.innerHTML=next.innerHTML;node=prev;}}}node.__source=fresh.outerHTML;if(node!==cursor)host.insertBefore(node,cursor);cursor=node.nextElementSibling;}while(cursor){const next=cursor.nextElementSibling;cursor.remove();cursor=next;}for(const pre of host.querySelectorAll(".cmsg pre")){if(pre.parentElement.classList.contains("chat-code"))continue;const wrap=document.createElement("div");wrap.className="chat-code";const bar=document.createElement("header");const lang=document.createElement("span");lang.textContent=pre.querySelector("code")?.dataset.lang||"code";const btn=document.createElement("button");btn.dataset.codeCopy="1";btn.textContent="코드 복사";bar.append(lang,btn);pre.before(wrap);wrap.append(bar,pre);}}
+function patchChatRows(host,html){const t=document.createElement("template");t.innerHTML=html;const old=new Map([...host.children].filter(x=>x.dataset.chatKey).map(x=>[x.dataset.chatKey,x]));let cursor=host.firstElementChild;for(const fresh of [...t.content.children]){let node=fresh;const prev=old.get(fresh.dataset.chatKey);if(prev){old.delete(fresh.dataset.chatKey);if(prev.__source===fresh.outerHTML||prev.outerHTML===fresh.outerHTML)node=prev;else if(fresh.dataset.chatKey==="stream"){const tx=prev.querySelector(".tx"),next=fresh.querySelector(".tx");if(tx&&next){tx.innerHTML=next.innerHTML;node=prev;}}}node.__source=fresh.outerHTML;if(node!==cursor)host.insertBefore(node,cursor);cursor=node.nextElementSibling;}while(cursor){const next=cursor.nextElementSibling;cursor.remove();cursor=next;}for(const pre of host.querySelectorAll(".cmsg pre")){if(pre.parentElement.classList.contains("chat-code"))continue;const wrap=document.createElement("div");wrap.className="chat-code";const bar=document.createElement("header");const lang=document.createElement("span");lang.textContent=pre.querySelector("code")?.dataset.lang||"code";const btn=document.createElement("button");btn.dataset.codeCopy="1";btn.textContent="코드 복사";bar.append(lang,btn);pre.before(wrap);wrap.append(bar,pre);highlightChatCode(pre.querySelector("code"));}}
 
 
 // 세션 기록의 대화 + 아직 기록에 안 올라온 로컬 표시분. 툴 칩으로 거른 상태면 그 툴을 쓴 턴만.
@@ -12,9 +15,9 @@ function chatMsgs(node, st) {
   const tool = CHAT_TOOL.get(node.id) || "";
   const base = [...(node.messages || []), ...st.log];
   const query=String(st.search||"").trim().toLowerCase();
-  const all = base.filter(m=>(!tool||(m.tools||[]).includes(tool))&&(!query||String(m.text||"").toLowerCase().includes(query)));
+  const all = base.filter(m=>(!st.bookmarksOnly||st.bookmarkIds?.includes(bookmarkKey(m)))&&(!tool||(m.tools||[]).includes(tool))&&(!query||String(m.text||"").toLowerCase().includes(query)));
   const offset = Math.min(Math.max(0, Number(st.historyOffset)||0), Math.max(0, all.length-1));
-  const end = all.length-offset, start = Math.max(0,end-(offset?CHAT_PAGE:CHAT_SHOW));
+  const end = all.length-offset, start = Math.max(0,end-(offset?CHAT_PAGE:Math.min(120,st.visibleCount||CHAT_SHOW)));
   return { all, shown: all.slice(start,end), tool, start, end, offset };
 }
 
@@ -44,10 +47,10 @@ function chatListHTML(st, shown, tool, act, agent="에이전트") {
     // 이미지를 실은 턴의 "(이미지 첨부)" 자리 표시 글은 같은 그림이 이미 있어 숨긴다.
     const text = imgs && /^\(이미지 첨부\)$/.test(label) ? "" : label;
     return `<div data-chat-key="${esc(String(m.id||m.uuid||[m.role,m.ts||m.since||0,i].join(":")))}" class="cmsg ${m.role === "user" ? "u" : "a"}"${!toolOnly && names ? ` title="사용 도구: ${esc(names)}"` : ""}>
-      <header class="cmsg-head"><span class="who">${m.role === "user" ? "나" : toolOnly ? "도구 실행" : esc(agent)}</span><span class="cact">${cts}${toolOnly ? "" : `${m.role==="user"?`<button data-chat-reuse="${i}" title="입력창에서 다시 사용">재사용</button>`:""}<button class="ccopy" data-copy="${i}" aria-label="메시지 복사">복사</button>`}</span></header><div class="tx${toolOnly ? " dim" : ""}">${imgs}${m.role === "user" || toolOnly ? chatBodyHTML(text) : mdHTML(label, true)}${agentCallsHTML(st, m)}</div></div>`;
+      <header class="cmsg-head"><span class="who">${m.role === "user" ? "나" : toolOnly ? "도구 실행" : esc(agent)}</span><span class="cact">${cts}${toolOnly ? "" : `<button data-chat-bookmark="${i}" aria-label="북마크">${st.bookmarkIds?.includes(bookmarkKey(m))?"★":"☆"}</button>${m.role==="user"?`<button data-chat-reuse="${i}" title="입력창에서 다시 사용">재사용</button>`:""}<button class="ccopy" data-copy="${i}" aria-label="메시지 복사">복사</button>`}</span></header><div class="tx${toolOnly ? " dim" : ""}">${imgs}${m.role === "user" || toolOnly ? chatBodyHTML(text) : mdHTML(label, true)}${agentCallsHTML(st, m)}</div></div>`;
   }).join("");
   // 도는 중인 활동에 답변 글이 있으면 같은 글을 말풍선으로 또 그리지 않는다.
-  const stream = st.stream ? `<div class="cmsg a streaming" data-chat-key="stream"><header class="cmsg-head"><span class="who">${esc(agent)}</span><span class="stream-label">응답 생성 중</span></header><div class="tx">${mdHTML(st.stream, true)}</div></div>` : "";
+  const stream = st.stream && !st.historyOffset && !st.search && !st.bookmarksOnly ? `<div class="cmsg a streaming" data-chat-key="stream"><header class="cmsg-head"><span class="who">${esc(agent)}</span><span class="stream-label">응답 생성 중</span></header><div class="tx">${mdHTML(st.stream, true)}</div></div>` : "";
   // 기록 메시지 → 마지막 턴 활동 → 흘러나오는 답변 순서.
   if (html || act || stream) return html + act + stream;
   return `<div class="cmsg"><div class="tx dim">${st.search ? "검색 결과 없음" : tool ? "최근 기록에 이 툴을 쓴 턴이 없습니다" : "대화를 시작하세요"}</div></div>`;
@@ -60,7 +63,7 @@ const chatSumHTML = (st) => esc(st.summary)
   + (st.error ? `<div class="cerr"><span>${esc(st.error)}</span>${st.retry ? '<button data-retry="1">다시 시도</button>' : ""}</div>` : "");
 
 function chatBlock(n) {
-  const st = chatState(n.id);
+  const st = chatState(n.id);st.bookmarkIds=chatBookmarks(n.id);
   const caps = capsOf(n);
   const page = chatMsgs(n, st);
   const { all, shown, tool } = page;
@@ -69,7 +72,7 @@ function chatBlock(n) {
   return `<div class="chat${ro ? " ro" : ""}">
     ${ro ? '<div class="rodock">메인 카드에 연결된 서브에이전트 — 대화는 읽기 전용입니다</div>' : ""}
     <div class="cfilter"${tool ? "" : " hidden"}><span>${esc(tool)} 사용 턴만 표시 중</span><button data-unfilter="1">해제</button></div>
-    <div class="chat-headbar"><strong>세션 대화</strong><span class="chat-status" role="status"></span><span class="chat-head-spacer"></span><button data-chat-search-toggle="1" aria-label="대화 검색" aria-expanded="${!!st.searchOpen}">검색</button><button data-chat-focus="1" aria-pressed="false">집중</button><button data-chat-export="1">내보내기</button><button data-chat-font="1" title="글자 크기 변경">Aa</button></div>
+    <div class="chat-headbar"><strong>세션 대화</strong><span class="chat-status" role="status"></span><span class="chat-head-spacer"></span><button data-chat-search-toggle="1" aria-label="대화 검색" aria-expanded="${!!st.searchOpen}">검색</button><button data-chat-focus="1" aria-pressed="false">집중</button><button data-chat-bookmarks="1" aria-pressed="${!!st.bookmarksOnly}">북마크</button><button data-chat-export="1">내보내기</button><button data-chat-font="1" title="글자 크기 변경">Aa</button></div>
     <div class="chat-searchbar"${st.searchOpen||st.search?"":" hidden"}><input type="search" class="chat-search" aria-label="대화 검색" placeholder="대화 내용 검색" value="${esc(st.search||"")}"><button data-chat-search-clear="1" title="검색 초기화">초기화</button></div>
     <div class="chat-history-nav"${page.offset||st.searchOpen?"":" hidden"}><button class="cmore" data-more="1"${page.start>0?"":" disabled"}>${esc(chatMoreText(page))}</button><span class="chat-page-label">${esc(chatPageLabel(page))}</span><button data-newer="1"${page.offset?"":" disabled"}>다음</button><button data-latest="1"${page.offset?"":" disabled"}>최신</button></div>
     <div class="cmsgs" style="--chat-font:${prefs.font}px">${chatListHTML(st, shown, tool, page.offset||st.search||tool?"":chatActivityHTML(n.id, st),agent)}</div>
@@ -194,6 +197,8 @@ function mountChat(blk, n) {
     const b = e.target.closest("button");
     if (!b) return;
     if(b.dataset.chatSearchToggle){st.searchOpen=!st.searchOpen;if(!st.searchOpen){st.search="";search.value="";st.historyOffset=0;}paintChat(id);if(st.searchOpen)search.focus();}
+    else if(b.dataset.chatBookmarks){st.bookmarksOnly=!st.bookmarksOnly;st.historyOffset=0;b.setAttribute("aria-pressed",String(st.bookmarksOnly));paintChat(id);}
+    else if(b.dataset.chatBookmark!==undefined){const m=st.renderedMessages?.[+b.dataset.chatBookmark];if(m){const key=bookmarkKey(m),ids=chatBookmarks(id);st.bookmarkIds=ids.includes(key)?ids.filter(x=>x!==key):[...ids,key].slice(-200);writeJSON("omp-map-chat-bookmarks:"+id,st.bookmarkIds);paintChat(id);}}
     else if(b.dataset.chatFocus){const on=box.classList.toggle("chat-focused");b.setAttribute("aria-pressed",String(on));if(on)box.querySelector(".cin").focus();}
     else if(b.dataset.chatFont){const prefs=chatViewPrefs(id);prefs.font=prefs.font>=18?12:prefs.font+2;writeJSON("omp-map-chat-view:"+id,prefs);box.querySelector(".cmsgs").style.setProperty("--chat-font",prefs.font+"px");}
     else if(b.dataset.chatExport){const text=chatMsgs(nodeById(id),st).all.map(m=>"## "+(m.role==="user"?"나":harnessLabel(nodeById(id)))+"\n\n"+(m.text||"")).join("\n\n");const url=URL.createObjectURL(new Blob([text],{type:"text/markdown;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="conversation.md";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -233,7 +238,8 @@ function mountChat(blk, n) {
   const list = box.querySelector(".cmsgs");
   st.renderedMessages = chatMsgs(n,st).shown;
   list.scrollTop = list.scrollHeight;
-  list.addEventListener("scroll",()=>{box.querySelector(".chat-jump").hidden=!st.historyOffset&&list.scrollTop+list.clientHeight>=list.scrollHeight-24;},{passive:true});
+  list.addEventListener("wheel",()=>{st.allowHistoryScroll=true;},{passive:true});
+  list.addEventListener("scroll",()=>{if(list.scrollTop<24&&!st.historyOffset&&!st.search&&!st.bookmarksOnly&&st.allowHistoryScroll){const p=chatMsgs(nodeById(id),st);if(p.start>0){st.visibleCount=Math.min(120,(st.visibleCount||CHAT_SHOW)+CHAT_PAGE);paintChat(id);}}box.querySelector(".chat-jump").hidden=!st.historyOffset&&list.scrollTop+list.clientHeight>=list.scrollHeight-24;},{passive:true});
   box.addEventListener("keydown",e=>{if(e.key==="Escape"&&box.classList.contains("chat-focused")){e.stopPropagation();box.classList.remove("chat-focused");box.querySelector("[data-chat-focus]").setAttribute("aria-pressed","false");}});
   box.querySelector("[data-send]").disabled=!!st.sending||(!ta.value.trim()&&!st.files.length);
   mountChatModel(box, id);
