@@ -14,7 +14,7 @@ const userData = app.commandLine.getSwitchValue("user-data-dir");
 if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
 const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
 const endpoints = new Set([
-  "projects", "projects/archive", "definitions", "definitions/remove", "definitions/version", "harness/preview", "harness/uses", "harness/apply",
+  "projects", "projects/archive", "teams", "definitions", "definitions/remove", "definitions/version", "harness/preview", "harness/uses", "harness/apply",
   "harness/trial", "harness/trial/cancel", "harness/trial/retry",
   "workflows", "workflows/launch", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",

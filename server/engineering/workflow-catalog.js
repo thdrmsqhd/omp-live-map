@@ -33,7 +33,7 @@ function workflowCatalog(db, catalog) {
       if (item.type === "subgraph") item.version = get(project, item.workflow, item.version).version;
       if (!item.definition) continue;
       const target = catalog.versionOf(item.definition, item.version);
-      if (target.project !== project || target.kind !== (item.type === "agent" ? "harness" : "loop")) {
+      if (!catalog.availableTo(target, project) || target.kind !== (item.type === "agent" ? "harness" : "loop")) {
         throw problem(400, "Workflow node references a definition of the wrong project or kind");
       }
       item.version = target.version;
@@ -80,7 +80,7 @@ function workflowCatalog(db, catalog) {
 
   function harnessUses(project, id) {
     const record = catalog.versionOf(id);
-    if (record.project !== project || record.kind !== "harness") throw problem(404, "Harness not found");
+    if (!catalog.availableTo(record, project) || record.kind !== "harness") throw problem(404, "Harness not found");
     return db.prepare(`SELECT w.id AS workflow, w.name, w.version, x.node,
       COALESCE(r.target_version,x.target_version) AS harnessVersion,
       CASE WHEN r.source IS NOT NULL THEN x.target END AS loop,
@@ -106,7 +106,7 @@ function workflowCatalog(db, catalog) {
       const previous = node.type === "loop" ? catalog.dependency(pinned) : pinned;
       const next = catalog.versionOf(string(body.harness, "harness"),
         integer(body.harnessVersion, "harness version", 1, Number.MAX_SAFE_INTEGER));
-      if (!previous || next.project !== project || next.kind !== "harness" || next.id !== previous.id) {
+      if (!previous || !catalog.availableTo(next, project) || next.kind !== "harness" || next.id !== previous.id) {
         throw problem(400, "The selected profile does not match the workflow's harness");
       }
       if (next.version === previous.version) return { workflow, loop: null };

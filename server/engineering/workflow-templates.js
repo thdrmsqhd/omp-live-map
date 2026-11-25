@@ -20,8 +20,9 @@ function checkText(payload) {
   }
 }
 
-function lookupName(records, name, kind) {
-  const match = records.find((row) => row.name === name && (!kind || row.kind === kind));
+function lookupName(records, name, kind, scope) {
+  const match = records.find((row) => row.name === name && (!kind || row.kind === kind) &&
+    (!kind || (row.scope ?? "project") === (scope ?? "project")));
   if (!match) throw problem(409, "Create a matching project definition before importing: " + name);
   return match.id;
 }
@@ -39,7 +40,8 @@ function workflowTemplates(catalog, workflows) {
         if (!node.definition) return node;
         const { definition, version, ...base } = node;
         const target = catalog.versionOf(definition, version);
-        return { ...base, reference: { name: target.name, version } };
+        return { ...base, reference: { name: target.name, version,
+          ...(target.scope !== "project" ? { scope: target.scope } : {}) } };
       });
       const payload = { ...saved.payload, nodes };
       checkText(payload);
@@ -63,7 +65,7 @@ function workflowTemplates(catalog, workflows) {
           return portable;
         }
         return { ...node, definition: lookupName(definitions, string(node.reference?.name, "definition name"),
-          node.type === "agent" ? "harness" : "loop"),
+          node.type === "agent" ? "harness" : "loop", node.reference?.scope),
         version: integer(node.reference?.version, "referenced version", 1, Number.MAX_SAFE_INTEGER) };
       });
       return workflows.save({ project, payload: { ...template.payload, name: name || template.payload.name, nodes } });

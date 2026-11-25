@@ -75,7 +75,7 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       } else showRunStates();
     },
   });
-  bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
+  const templateButtons = bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
     await loadList(record.project);
     if (record.project !== project) return;
     if (runDetail) await runs.refresh("");
@@ -441,7 +441,10 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
   }
   render();
   fit();
-  return { showRun: runs.refresh, async selectProject(id) {
+  return { showRun: runs.refresh, refreshProfiles() {
+    harness.refreshChoices();
+    templateButtons.refresh();
+  }, async selectProject(id) {
     if (id === project) return;
     project = id;
     selector.value = "";

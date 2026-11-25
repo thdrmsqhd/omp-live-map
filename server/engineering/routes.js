@@ -125,7 +125,9 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflows/export") {
           result = templates.export(query("project"), query("id"), integer(Number(query("version")), "workflow version", 1, Number.MAX_SAFE_INTEGER));
         }
-        if (endpoint === "definitions") result = definitions.definitions(query("project"));
+        if (endpoint === "teams") result = definitions.teams();
+        if (endpoint === "definitions") result = definitions.definitions(
+          url.searchParams.get("project"), url.searchParams.get("scope"), url.searchParams.get("team"));
         if (endpoint === "harness/trial") result = trials.inspect(query("project"), query("id"));
         if (endpoint === "harness/uses") result = workflows.harnessUses(query("project"), query("id"));
         if (endpoint === "definitions/version") {

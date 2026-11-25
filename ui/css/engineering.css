@@ -53,6 +53,17 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .harness-comparison article { border: 1px solid var(--border); padding: .75rem; }
 .harness-comparison pre { max-height: 18rem; overflow: auto; }
 @media (max-width: 620px) { .harness-comparison { grid-template-columns: 1fr; } }
+
+.definition-scopes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+.definition-scopes button { display: grid; text-align: start; gap: .25rem; padding: .75rem; border: 1px solid var(--border); border-radius: .45rem; }
+.definition-scopes button[aria-pressed="true"] { border: 2px solid var(--accent); padding: calc(.75rem - 1px); background: color-mix(in srgb, var(--accent) 10%, var(--field)); }
+.definition-scopes span, #definition-model-hint { font-size: .875rem; }
+.definition-owner { margin-top: .6rem; padding: .5rem .75rem; border-inline-start: 3px solid var(--accent); }
+.definition-owner p { margin: .3rem 0; font-weight: 600; }
+#definition-content { display: grid; min-width: 0; gap: .7rem; border: 0; padding: 0; margin: 0; }
+#definition-content[hidden], .definition-owner [hidden] { display: none; }
+@media (max-width: 480px) { .definition-scopes { grid-template-columns: 1fr; } }
+
 .session-harnesses { max-width: 42rem; }
 #session-harness-editor > p { color: var(--muted); }
 #session-harness-status { color: var(--accent); margin: 0; }

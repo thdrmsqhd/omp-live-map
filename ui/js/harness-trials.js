@@ -31,7 +31,7 @@ export function bindHarnessTrials({ find, request, options, payload, project, en
   }
 
   function controls() {
-    start.disabled = pending || record?.status === "running" || !version.value;
+    start.disabled = !project() || pending || record?.status === "running" || !version.value;
     cancel.hidden = record?.status !== "running";
     cancel.disabled = pending;
   }

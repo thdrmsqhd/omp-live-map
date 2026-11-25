@@ -15,7 +15,7 @@ function nodeDefinitions(catalog, project, node) {
     };
   }
   const target = catalog.versionOf(node.definition, node.version);
-  if (target.project !== project || target.kind !== (node.type === "agent" ? "harness" : "loop")) {
+  if (!catalog.availableTo(target, project) || target.kind !== (node.type === "agent" ? "harness" : "loop")) {
     throw problem(409, "Pinned workflow execution definition is invalid");
   }
   const loop = node.type === "loop" ? target.payload : null;
