@@ -76,6 +76,7 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     preview.reset();
     trial.update();
     rememberSelection();
+    if (find("harness-uses").open) void refreshUses();
     const diff = find("definition-diff");
     diff.hidden = current === previous;
     if (!diff.hidden) diff.textContent = `현재 버전 ${selected.version}\n${current}\n\n선택한 버전 ${historical.version}\n${previous}`;
@@ -112,6 +113,26 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
         const item = document.createElement("li");
         item.textContent = row.name + " v" + row.version + " · 노드 " + row.node + " · " +
           (row.loop ? row.loopName + " v" + row.loopVersion + " → " : "") + "하네스 v" + row.harnessVersion;
+        const targetVersion = Number(find("definition-version").value);
+        if (targetVersion && targetVersion !== row.harnessVersion) {
+          const apply = document.createElement("button");
+          apply.type = "button";
+          apply.textContent = "v" + targetVersion + " 적용";
+          apply.addEventListener("click", report(async () => {
+            const loop = row.loop ? " 연결된 Loop의 새 버전도 함께 저장합니다." : "";
+            if (!window.confirm(row.name + " v" + row.version + "의 " + row.node + " 노드에서 하네스 v" +
+              row.harnessVersion + " → v" + targetVersion + "을 적용하고 새 Workflow 버전을 저장할까요?" + loop)) return;
+            apply.disabled = true;
+            try {
+              const result = await request("harness/apply", {}, { project: owner, workflow: row.workflow,
+                version: row.version, node: row.node, harness: id, harnessVersion: targetVersion });
+              find("status").textContent = "Workflow v" + result.workflow.version + " 저장됨" +
+                (result.loop ? " · Loop v" + result.loop.version + " 저장됨" : "");
+              await refreshUses();
+            } finally { apply.disabled = false; }
+          }));
+          item.append(" ", apply);
+        }
         list.append(item);
       }
     } catch (error) {

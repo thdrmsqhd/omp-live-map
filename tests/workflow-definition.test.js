@@ -80,17 +80,31 @@ test("a V2 database migrates in place and workflows preserve immutable reference
     } });
     const loopGraph = { ...input, name: "Loop workflow",
       nodes: [node("s", "start"), node("w", "loop", { definition: loop.id, instruction: "Try" }), node("z", "end")] };
-    workflows.save({ project: "one", payload: loopGraph });
+    const savedLoop = workflows.save({ project: "one", payload: loopGraph });
     const refs = workflows.harnessUses("one", savedHarness.id);
     assert.equal(refs.length, 2);
     assert.equal(refs.find((ref) => ref.loop)?.loopVersion, 1);
     assert.throws(() => workflows.save({ project: "one", id: saved.id, version: 1, payload: input }), /changed/);
+    const upgraded = definitions.saveDefinition({ project: "one", kind: "harness", id: savedHarness.id, version: 2,
+      payload: { ...harness, result: { path: "review.json", shape: "array", fields: ["file"] } } });
+    const change = { project: "one", node: "w", harness: savedHarness.id, harnessVersion: upgraded.version };
+    const direct = workflows.relinkHarness({ ...change, workflow: saved.id, version: 2 });
+    assert.equal(direct.workflow.version, 3);
+    assert.equal(direct.workflow.payload.nodes[1].version, 3);
+    assert.equal(direct.workflow.payload.nodes[1].outputs[0].path, "review.json");
+    assert.equal(workflows.get("one", saved.id, 2).payload.nodes[1].version, 2);
+    assert.throws(() => workflows.relinkHarness({ ...change, workflow: saved.id, version: 2 }), /changed/);
+    const indirect = workflows.relinkHarness({ ...change, workflow: savedLoop.id, version: 1 });
+    assert.equal(indirect.loop.version, 2);
+    assert.equal(definitions.dependency(indirect.loop).version, 3);
+    assert.equal(definitions.dependency(loop).version, 2);
+    assert.equal(workflows.get("one", savedLoop.id, 1).payload.nodes[1].version, 1);
     assert.throws(() => definitions.remove(savedHarness.id), /referenced/);
     db.close();
     db = openDatabase(file);
     const reloaded = workflowCatalog(db, catalog(db));
     assert.equal(reloaded.get("one", saved.id, 1).payload.nodes[1].version, 1);
-    assert.equal(reloaded.get("one", saved.id).version, 2);
+    assert.equal(reloaded.get("one", saved.id).version, 3);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
   } finally {
     db?.close();

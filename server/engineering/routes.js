@@ -183,6 +183,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflow-delivery/staging") result = await staging.dispatch(string(input.id, "run"), input.environment);
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
+        if (endpoint === "harness/apply") result = workflows.relinkHarness(input);
         if (endpoint === "harness/preview") result = await previewHarness(definitions, runner, input);
         if (endpoint === "harness/trial") result = await trials.start(string(input.project, "project"), input);
         if (endpoint === "harness/trial/cancel") result = trials.cancel(string(input.project, "project"), input.id);
