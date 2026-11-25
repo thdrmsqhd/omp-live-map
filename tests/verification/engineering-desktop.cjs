@@ -12,7 +12,7 @@ const { test } = require("node:test");
 const { chromium } = require("playwright");
 const executable = require("electron");
 
-test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, async () => {
+test("product desktop opens its isolated Engineering UI", { timeout: 85000 }, async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-desktop-"));
   const legacy = path.join(directory, "v2-fixture");
   await fs.mkdir(legacy);
@@ -132,6 +132,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
     await page.waitForFunction(() => document.querySelector("#workflow-run-list").selectedOptions[0]?.textContent === "CI development task · succeeded");
     await page.getByRole("button", { name: "실행", exact: true }).click();
     assert.equal(await page.getByRole("heading", { name: "Loop 실행" }).isVisible(), true);
+    await verifyHarnessEditor(page, repository);
     const unauthenticated = await fetch(origin + "/api/engineering/projects");
     assert.equal(unauthenticated.status, 403);
     const foreignOrigin = await fetch(origin + "/api/graph", { headers: { origin: "http://127.0.0.1:7800" } });
@@ -154,3 +155,69 @@ test("product desktop opens its isolated Engineering UI", { timeout: 45000 }, as
     await fs.rm(directory, { recursive: true, force: true, maxRetries: 3 });
   }
 });
+
+
+async function verifyHarnessEditor(page, repository) {
+  await fs.writeFile(path.join(repository, "review-rules.md"), "CI review rules.");
+  execFileSync("git", ["add", "review-rules.md"], { cwd: repository });
+  execFileSync("git", ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
+    "commit", "-m", "Review fixture"], { cwd: repository });
+
+  await page.getByRole("button", { name: "설계", exact: true }).click();
+  await page.locator("#kind").selectOption("harness");
+  await page.locator("#harness-template").selectOption("reviewer");
+  await page.locator("#harness-template-use").click();
+  await page.locator('[name=harnessName]').fill("CI reviewer");
+  await page.locator('[name=harnessModel]').selectOption({ label: "test profile" });
+  await page.locator('[name=sourceFiles]').fill("review-rules.md");
+  await page.locator("#harness-preview-open").click();
+  await page.getByText(/CI review rules\./).waitFor();
+  await page.getByText(/현재 실행할 수 없습니다/).waitFor();
+  await page.locator("#definition-form").getByRole("button", { name: "버전 저장" }).click();
+  await page.locator("#definition option").filter({ hasText: "CI reviewer" }).waitFor({ state: "attached" });
+  const harnessId = await page.locator("#definition").inputValue();
+
+  await page.locator("#workflow-nav").click();
+  await page.locator("#workflow-list").selectOption("");
+  await page.locator("#workflow-name").fill("CI review workflow");
+  await page.locator("#workflow-type").selectOption("agent");
+  await page.locator("#workflow-add").click();
+  const agent = page.locator(".workflow-node").filter({ hasText: "Agent" });
+  const nodeId = await agent.getAttribute("data-node");
+  await page.locator("[name=harnessDefinition]").selectOption(harnessId);
+  await page.locator("[name=harnessVersion]").selectOption("1");
+  await page.locator("[name=harnessInstruction]").fill("Review the change.");
+  await page.locator("#workflow-node-form").getByRole("button", { name: "노드 적용" }).click();
+  for (const [from, to] of [["start", nodeId], [nodeId, "end"]]) {
+    await page.locator("#workflow-from").selectOption(from);
+    await page.locator("#workflow-to").selectOption(to);
+    await page.locator("#workflow-connect").click();
+  }
+  await page.locator("#workflow-save").click();
+  await page.getByText("버전 1 저장됨", { exact: true }).waitFor();
+  const workflow = await page.locator("#workflow-list").inputValue();
+  const project = await page.locator("#project").inputValue();
+
+  await agent.click();
+  await page.locator("#workflow-harness-edit").click();
+  await page.locator("#harness-fields").waitFor();
+  await page.locator("[name=instructions]").fill("Review changed test cases as well.");
+  await page.locator("#definition-form").getByRole("button", { name: "버전 저장" }).click();
+  await page.locator("#definition-version option[value='2']").waitFor({ state: "attached" });
+  await page.locator("#harness-uses summary").click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "v2 적용" }).click();
+  await page.getByText("Workflow v2 저장됨", { exact: true }).waitFor();
+  for (const version of [1, 2]) {
+    const result = await page.evaluate((params) => window.engineeringDesktop.request("workflow", params),
+      { project, id: workflow, version });
+    assert.equal(result.ok, true);
+    assert.equal(result.value.payload.nodes.find(({ id }) => id === nodeId).version, version);
+  }
+  await page.locator("#harness-template").selectOption("writer");
+  await page.locator("#harness-template-use").click();
+  await page.locator("[name=harnessName]").fill("CI documentation");
+  await page.locator('[name=harnessModel]').selectOption({ label: "test profile" });
+  await page.locator("#definition-form").getByRole("button", { name: "버전 저장" }).click();
+  await page.locator("#definition option").filter({ hasText: "CI documentation" }).waitFor({ state: "attached" });
+}
