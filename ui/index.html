@@ -57,7 +57,7 @@
       <h2 id="workflow-launch-title">새 Workflow 실행</h2>
       <label>프로젝트 <select name="project" required></select></label>
       <label>Workflow <select name="source" required></select></label>
-      <label>실행 이름 <input name="title" required maxlength="240"></label>
+      <label>실행 이름 <input name="title" maxlength="240" placeholder="미입력 시 작업 목표 사용"></label>
       <label>작업 목표 <textarea name="goal" required maxlength="8000" rows="3"></textarea></label>
       <label>완료 조건 <textarea name="acceptance" required maxlength="3500" rows="3"></textarea></label>
       <details id="workflow-launch-settings">
@@ -98,7 +98,7 @@
           <button id="wf-map-close" aria-label="Workflow 닫기">닫기</button>
         </div>
         <div class="wf-actions">
-          <button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-edit">Workflow 편집</button><a id="wf-map-engineering">Engineering</a>
+          <button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-new">이 Workflow로 새 실행</button><button id="wf-map-edit">Workflow 편집</button><a id="wf-map-engineering">Engineering</a>
         </div>
         <p id="wf-map-status" role="status"></p>
         <div id="wf-map-details"></div>

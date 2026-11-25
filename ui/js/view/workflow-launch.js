@@ -37,7 +37,7 @@ function bindMapWorkflowLaunch() {
     }
     submit.disabled = pending || !project.value || !source.value || missing.length > 0;
   }
-  async function loadProject() {
+  async function loadProject(preferredWorkflow) {
     const value = project.value, revision = ++generation;
     submit.disabled = true;
     status.textContent = "";
@@ -58,13 +58,14 @@ function bindMapWorkflowLaunch() {
       workflows.label = "저장된 Workflow";
       workflows.append(...saved.map((item) => option({ ...item, id: "saved:" + item.id })));
       source.append(templates, workflows);
-      if (saved.length) source.value = "saved:" + saved[0].id;
+      if (typeof preferredWorkflow === "string" && saved.some(({ id }) => id === preferredWorkflow)) source.value = "saved:" + preferredWorkflow;
+      else if (saved.length) source.value = "saved:" + saved[0].id;
       else if (presets.some(({ id }) => id === "bugfix")) source.value = "preset:bugfix";
       refreshControls();
     } catch (error) { if (revision === generation) status.textContent = error.message; }
   }
   button.hidden = false;
-  button.onclick = async () => {
+  async function open(preferredProject, preferredWorkflow) {
     dialog.showModal();
     submit.disabled = true;
     status.textContent = "프로젝트와 템플릿을 불러오는 중입니다.";
@@ -72,13 +73,15 @@ function bindMapWorkflowLaunch() {
       const [projects, templates] = await Promise.all(["projects", "workflows/presets"].map((endpoint) => mapWorkflowRequest(endpoint)));
       presets = templates;
       project.replaceChildren(...projects.filter(({ archived }) => !archived).map(option));
+      if (preferredProject && [...project.options].some(({ value }) => value === preferredProject)) project.value = preferredProject;
       if (!project.value) { status.textContent = "Engineering에서 프로젝트를 등록해 주세요."; return; }
-      await loadProject();
+      await loadProject(preferredWorkflow);
     } catch (error) { status.textContent = error.message; }
-  };
+  }
+  button.onclick = () => void open();
   $("workflow-launch-close").onclick = () => { if (!pending) dialog.close(); };
   dialog.addEventListener("cancel", (event) => { if (pending) event.preventDefault(); });
-  project.onchange = loadProject;
+  project.onchange = () => void loadProject();
   for (const control of [source, ...roles.map((role) => form.elements[role])]) control.onchange = () => {
     status.textContent = "";
     refreshControls();
@@ -87,7 +90,8 @@ function bindMapWorkflowLaunch() {
     event.preventDefault();
     if (pending) return;
     const fields = new FormData(form);
-    const input = { project: project.value, title: fields.get("title"), goal: fields.get("goal"),
+    const goal = fields.get("goal");
+    const input = { project: project.value, title: fields.get("title").trim() || goal.trim().split(/\r?\n/)[0].slice(0, 240), goal,
       acceptance: fields.get("acceptance"), timeoutMs: Number(fields.get("minutes")) * 60000, budgetCents: Number(fields.get("budget")) };
     const preset = usePreset();
     if (preset) {
@@ -116,5 +120,6 @@ function bindMapWorkflowLaunch() {
     } catch (error) { status.textContent = error.message; }
     finally { pending = false; refreshControls(); }
   };
+  return open;
 }
-if (window.engineeringDesktop) bindMapWorkflowLaunch();
+const openMapWorkflowLaunch = window.engineeringDesktop ? bindMapWorkflowLaunch() : null;

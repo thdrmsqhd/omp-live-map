@@ -2,7 +2,7 @@ name: V3 Windows verification
 
 on:
   push:
-    branches: ['v2/phase-0-baseline', 'v2/phase-1-3', 'v3/phase-4-6', 'v4/ui-ux-improvements', 'v5/claude-harness', 'v6/chat-ux', 'v7/performance', 'v8/incremental-performance', 'feature/harness-editor', 'main']
+    branches: ['v2/phase-0-baseline', 'v2/phase-1-3', 'v3/phase-4-6', 'v4/ui-ux-improvements', 'v5/claude-harness', 'v6/chat-ux', 'v7/performance', 'v8/incremental-performance', 'feature/harness-editor', 'feature/workflow-canvas', 'main']
     paths-ignore:
       - 'docs/**'
       - '.github/workflows/v2-windows-isolation.yml'

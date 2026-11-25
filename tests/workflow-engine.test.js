@@ -219,3 +219,48 @@ test("workflow rework archives the failed verification and returns evidence to t
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("verification-only retry uses the previous Loop worktree without calling its agent", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-verify-only-"));
+  const db = openDatabase(path.join(directory, "engineering.sqlite"));
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Fixture", "main");
+    const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
+    const runs = workflowRuns(db, definitions, workflows);
+    const model = definitions.saveDefinition({ project: "one", kind: "model", payload: { name: "M", provider: "test", model: "fake" } });
+    const harness = definitions.saveDefinition({ project: "one", kind: "harness",
+      payload: { name: "Developer", role: "developer", adapter: "claude", model: model.id } });
+    const loop = definitions.saveDefinition({ project: "one", kind: "loop", payload: {
+      name: "Modbus", harness: harness.id, attempts: 1, timeoutMs: 2000, budgetCents: 20, checks: [{ command: "check", args: [] }],
+    } });
+    const graph = workflows.save({ project: "one", payload: { name: "Verify reconnect", nodes: [
+      { id: "start", type: "start", label: "Start" },
+      { id: "loop", type: "loop", label: "Implement and verify", definition: loop.id, instruction: "Reconnect" },
+      { id: "end", type: "end", label: "End" },
+    ], edges: [{ from: "start", to: "loop" }, { from: "loop", to: "end" }] } });
+    let calls = 0, checks = 0, worktrees = 0;
+    const engine = workflowEngine(runs, workflows, definitions, {
+      requireAdapter() { return { async run() { calls++; return { costCents: 1 }; } }; },
+      async verify(checksToRun, cwd) {
+        assert.equal(cwd, directory);
+        return checksToRun.map(({ command }) => ({ command, passed: ++checks === 2 }));
+      },
+    }, { async create() { worktrees++; return directory; } });
+    const run = engine.start({ project: "one", workflow: graph.id, version: 1, title: "Test Loop", timeoutMs: 6000, budgetCents: 30 }, "verify-only");
+    const settle = async () => {
+      for (let i = 0; i < 150 && ["queued","running"].includes(runs.get(run.id).status); i++) await delay(10);
+    };
+    await settle();
+    assert.equal(runs.get(run.id).status, "failed");
+    engine.retry(run.id, "loop", { mode: "verify" });
+    await settle();
+    assert.equal(runs.get(run.id).status, "succeeded");
+    assert.equal(runs.nodes(run.id).find(({ node }) => node === "loop").outcome.verificationOnly, true);
+    assert.equal(calls, 1);
+    assert.equal(checks, 2);
+    assert.equal(worktrees, 1);
+  } finally {
+    db.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

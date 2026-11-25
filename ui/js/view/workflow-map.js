@@ -12,7 +12,7 @@ const wfPoint = (node) => {
   if (!wfMap.edit && wfMap.positions[node.id]) return wfMap.positions[node.id];
   return { x: wfMap.origin.x + node.x, y: wfMap.origin.y + node.y };
 };
-const workflowMapBoxes = () => wfNodes().map((node) => ({ ...wfPoint(node), ...wfSize }));
+const workflowMapBoxes = () => mapMode === "map" ? wfNodes().map((node) => ({ ...wfPoint(node), ...wfSize })) : [];
 
 function wfText(tag, value) {
   const item = document.createElement(tag);
@@ -174,6 +174,9 @@ async function refreshMapWorkflow() {
 
 $("wf-map-close").onclick = wfClose;
 $("wf-map-fit").onclick = wfFit;
+$("wf-map-new").onclick = () => {
+  if (wfMap.run && (!wfMap.edit || wfLeaveEditing())) void openMapWorkflowLaunch(wfMap.run.run.project, wfMap.run.run.workflow);
+};
 if (window.engineeringDesktop) {
   $("overview").addEventListener("click", (event) => {
     const button = event.target.closest("[data-map-workflow]");

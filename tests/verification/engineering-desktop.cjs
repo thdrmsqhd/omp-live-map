@@ -12,7 +12,7 @@ const { test } = require("node:test");
 const { chromium } = require("playwright");
 const executable = require("electron");
 
-test("product desktop opens its isolated Engineering UI", { timeout: 85000 }, async () => {
+test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-desktop-"));
   const legacy = path.join(directory, "v2-fixture");
   await fs.mkdir(legacy);
@@ -133,6 +133,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 85000 }, as
     await page.getByRole("button", { name: "실행", exact: true }).click();
     assert.equal(await page.getByRole("heading", { name: "Loop 실행" }).isVisible(), true);
     await verifyHarnessEditor(page, repository);
+    await verifyWorkflowCanvas(page, origin);
     const unauthenticated = await fetch(origin + "/api/engineering/projects");
     assert.equal(unauthenticated.status, 403);
     const foreignOrigin = await fetch(origin + "/api/graph", { headers: { origin: "http://127.0.0.1:7800" } });
@@ -220,4 +221,44 @@ async function verifyHarnessEditor(page, repository) {
   await page.locator('[name=harnessModel]').selectOption({ label: "test profile" });
   await page.locator("#definition-form").getByRole("button", { name: "버전 저장" }).click();
   await page.locator("#definition option").filter({ hasText: "CI documentation" }).waitFor({ state: "attached" });
+}
+
+async function verifyWorkflowCanvas(page, origin) {
+  await page.goto(origin);
+  await page.locator('#viewModes button[data-mode="overview"]').click();
+  const open = page.locator("#workflow-new-run");
+  await open.click();
+  const launch = page.locator("#workflow-launch-form");
+  await launch.locator('[name="project"]').selectOption({ label: "desktop fixture" });
+  await launch.locator('[name="source"]').selectOption({ label: "CI workflow · v1" });
+  await launch.locator('[name="goal"]').fill("Launch from the original Live Map");
+  await launch.locator('[name="acceptance"]').fill("The graph completes and the original positions remain draggable.");
+  await launch.getByRole("button", { name: "실행 시작" }).click();
+  await page.getByRole("heading", { name: "Launch from the original Live Map" }).waitFor();
+  const inspector = page.locator("#workflow-inspector");
+  await inspector.locator("#wf-map-status").filter({ hasText: /^완료$/ }).waitFor();
+  const node = page.locator('.wf-node[data-workflow-node="start"]');
+  await node.click();
+  await inspector.getByRole("heading", { name: "Start · 완료" }).waitFor();
+  await page.waitForFunction(() => document.querySelector("#workflow-map-nodes").childElementCount === 2);
+  const before = await node.evaluate((element) => element.style.left);
+  const bounds = await node.boundingBox();
+  assert.ok(bounds);
+  await page.mouse.move(bounds.x + 18, bounds.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 57, bounds.y + 30, { steps: 4 });
+  await page.mouse.up();
+  assert.notEqual(await node.evaluate((element) => element.style.left), before);
+
+  await inspector.getByRole("button", { name: "Workflow 편집" }).click();
+  await page.locator("#wf-map-edit-controls").waitFor();
+  await page.locator("#wf-edit-name").fill("CI workflow canvas version");
+  await page.locator("#wf-edit-validate").click();
+  await page.getByText(/검사 통과/).waitFor();
+  await page.locator("#wf-edit-save").click();
+  await page.getByText(/Workflow v2 저장됨/).waitFor();
+  assert.match(await inspector.locator("#wf-map-version").textContent(), /v1/);
+  await inspector.getByRole("button", { name: "이 Workflow로 새 실행" }).click();
+  await launch.locator('[name="source"] option:checked').filter({ hasText: "CI workflow canvas version · v2" }).waitFor({ state: "attached" });
+  await launch.getByRole("button", { name: "닫기", exact: true }).click();
 }
