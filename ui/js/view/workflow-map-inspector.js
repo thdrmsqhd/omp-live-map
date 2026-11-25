@@ -38,14 +38,13 @@ let wfEvidenceSignature;
 function paintWorkflowEvidence(node, execution, history) {
   const frame = $("wf-map-details");
   const run = wfMap.run.run;
-  const signature = JSON.stringify([run.id, run.status, run.workspace, node, execution, history]);
+  const signature = JSON.stringify([run.id, run.status, run.workspace, node, execution, history, wfMap.run.interventions?.[node?.id]]);
   if (signature === wfEvidenceSignature) return;
   wfEvidenceSignature = signature;
   frame.replaceChildren();
   if (!node) return;
   frame.append(wfText("h3", node.label + " · " + wfLabel(execution?.status)));
-  const outcome = execution?.outcome;
-  if (!outcome) return;
+  const outcome = execution?.outcome ?? {};
   if (run.workspace) frame.append(workflowEvidencePreview("작업 공간 변경분", "workflow-review", { id: run.id }));
   for (const { path, sha256 } of outcome.artifacts ?? []) {
     const section = workflowEvidencePreview("산출물 " + path, "workflow-artifact", { id: run.id, node: node.id, path });
@@ -99,15 +98,24 @@ function wfActionButton(label, action) {
 }
 
 async function wfPerform(button, endpoint, extra) {
+  if (wfMap.opening || wfMap.intervening) return;
+  wfMap.intervening = true;
   const generation = ++wfMap.generation, id = wfMap.run.run.id;
   button.disabled = true;
   try {
     await mapWorkflowRequest(endpoint, {}, { id, ...extra });
+    void refreshWorkflowQueue();
     const detail = await mapWorkflowRequest("workflow-run", { id });
     if (wfMap.generation === generation) wfAccept(detail, false);
   } catch (error) {
-    if (wfMap.generation === generation) $("wf-map-intervention-status").textContent = error.message;
-  } finally { button.disabled = false; }
+    if (wfMap.generation === generation) {
+      const status = $("wf-map-intervention-status") ?? $("wf-map-status");
+      status.textContent = error.message;
+    }
+  } finally {
+    wfMap.intervening = false;
+    button.disabled = false;
+  }
 }
 
 function paintWorkflowInterventions(frame, node, execution, run) {

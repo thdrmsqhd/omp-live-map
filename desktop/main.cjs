@@ -19,12 +19,12 @@ const endpoints = new Set([
   "workflows", "workflows/launch", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
-  "workflow-approvals", "workflow-dashboard", "workflow-review", "workflow-artifact",
+  "workflow-approvals", "workflow-live-map", "workflow-dashboard", "workflow-review", "workflow-artifact",
   "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
 ]);
 
-const liveMapReads = new Set(["projects", "tasks", "workflow-approvals", "workflow-runs", "workflow-run",
+const liveMapReads = new Set(["projects", "tasks", "workflow-approvals", "workflow-live-map", "workflow-runs", "workflow-run",
   "workflows", "workflow", "definitions", "definitions/version", "workflows/presets", "runtime", "workflow-review", "workflow-artifact"]);
 const liveMapWrites = new Set(["workflows/launch", "workflows/save-canvas", "workflows/plan", "workflow-runs/retry", "workflow-runs/approval", "workflow-runs/action"]);
 

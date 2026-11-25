@@ -11,6 +11,7 @@ const { catalog } = require("../server/engineering/catalog");
 const { workflowCatalog } = require("../server/engineering/workflow-catalog");
 const { workflowRuns } = require("../server/engineering/workflow-runs");
 const { workflowEngine } = require("../server/engineering/workflow-engine");
+const { workflowObservability } = require("../server/engineering/workflow-observability");
 
 test("a workflow executes the selected branch, persists approval and never replays an uncertain node", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-run-"));
@@ -19,6 +20,7 @@ test("a workflow executes the selected branch, persists approval and never repla
     db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Fixture", "main");
     const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
     const runs = workflowRuns(db, definitions, workflows);
+    const liveMap = workflowObservability(db, runs, directory).liveMapRuns;
     const observed = [];
     const runner = { async verify(checks, workspace) {
       const [{ command }] = checks;
@@ -46,6 +48,9 @@ test("a workflow executes the selected branch, persists approval and never repla
       assert.equal(runs.get(id).status, status);
     };
     await waitFor(run.id, "waiting_approval");
+    assert.deepEqual(liveMap(), {
+      total: 1, attention: [{ id: run.id, title: "try", status: "waiting_approval", project: "Fixture", node: "a" }], recent: [],
+    });
     assert.deepEqual(observed, ["first-check", "make-report"]);
     assert.equal(runs.nodes(run.id).find(({ node }) => node === "a").outcome.prompt, "Review fallback");
     await assert.rejects(engine.decide(run.id, "a", "rejected", ""), /approval reason/);
@@ -55,6 +60,9 @@ test("a workflow executes the selected branch, persists approval and never repla
     fs.writeFileSync(path.join(directory, "report.txt"), "reviewed content");
     await engine.decide(run.id, "a", "approved", "reviewed");
     await waitFor(run.id, "succeeded");
+    assert.deepEqual(JSON.parse(JSON.stringify(liveMap())), {
+      total: 0, attention: [], recent: [{ id: run.id, title: "try", status: "succeeded", project: "Fixture" }],
+    });
     assert.deepEqual(observed, ["first-check", "make-report", "after-approval"]);
     await assert.rejects(engine.decide(run.id, "a", "approved", "duplicate"), /not pending/);
 
@@ -64,6 +72,9 @@ test("a workflow executes the selected branch, persists approval and never repla
     runs.recover();
     assert.equal(runs.get(interrupted.id).status, "interrupted");
     assert.equal(runs.nodes(interrupted.id)[0].status, "interrupted");
+    assert.equal(liveMap().attention[0].node, "first-check");
+    db.prepare("UPDATE project SET archived=1 WHERE id=?").run("one");
+    assert.deepEqual(liveMap(), { total: 0, attention: [], recent: [] });
     assert.throws(() => engine.action(interrupted.id, "resume"), /uncertain/);
     assert.deepEqual(observed, ["first-check", "make-report", "after-approval"]);
   } finally {

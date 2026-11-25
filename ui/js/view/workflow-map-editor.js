@@ -134,6 +134,7 @@ function wfAddStage(type) {
 }
 
 async function wfOpenEditor() {
+  if (wfMap.opening) return;
   if (!wfMap.run || wfMap.edit) return;
   const opened = wfMap.run.run, generation = wfMap.generation;
   const button = $("wf-map-edit");
@@ -147,6 +148,11 @@ async function wfOpenEditor() {
     if (generation !== wfMap.generation || wfMap.run?.run.id !== opened.id) return;
     const draft = { record, payload: structuredClone(record.payload), definitions, workflows, loops: {},
       previousNode: wfMap.selected, fieldsDirty: false, saving: false };
+    const defaults = wfDefaultPositions(draft.payload.nodes);
+    for (const node of draft.payload.nodes) {
+      const position = defaults.get(node.id);
+      if (position && position.x <= 10000) Object.assign(node, position);
+    }
     draft.initial = wfDraftSignature(draft);
     wfMap.edit = draft;
     wfMap.selected = draft.payload.nodes.some(({ id }) => id === wfMap.selected) ? wfMap.selected : draft.payload.nodes[0]?.id;

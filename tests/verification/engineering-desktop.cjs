@@ -225,7 +225,8 @@ async function verifyHarnessEditor(page, repository) {
 
 async function verifyWorkflowCanvas(page, origin) {
   await page.goto(origin);
-  await page.locator('#viewModes button[data-mode="overview"]').click();
+  await page.locator('#viewModes button[data-mode="map"]').click();
+  const viewBefore = await page.evaluate(() => ({ x: view.x, y: view.y, k: view.k }));
   const open = page.locator("#workflow-new-run");
   await open.click();
   const launch = page.locator("#workflow-launch-form");
@@ -248,7 +249,16 @@ async function verifyWorkflowCanvas(page, origin) {
   await page.mouse.down();
   await page.mouse.move(bounds.x + 57, bounds.y + 30, { steps: 4 });
   await page.mouse.up();
-  assert.notEqual(await node.evaluate((element) => element.style.left), before);
+  const dragged = await node.evaluate((element) => element.style.left);
+  assert.notEqual(dragged, before);
+
+  await page.locator("#wf-map-close").click();
+  await page.waitForFunction((previous) => ["x", "y", "k"].every((key) => Math.abs(view[key] - previous[key]) < 0.001), viewBefore);
+  await page.locator("#workflow-queue-toggle").click();
+  await page.locator("#workflow-queue").getByRole("button", { name: /Launch from the original Live Map/ }).click();
+  await inspector.locator("#wf-map-title").filter({ hasText: "Launch from the original Live Map" }).waitFor();
+  assert.equal(await node.evaluate((element) => element.style.left), dragged);
+  assert.equal(await page.locator("#workflow-queue-toggle").getAttribute("aria-expanded"), "false");
 
   await inspector.getByRole("button", { name: "Workflow 편집" }).click();
   await page.locator("#wf-map-edit-controls").waitFor();

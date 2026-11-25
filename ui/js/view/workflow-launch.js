@@ -66,21 +66,29 @@ function bindMapWorkflowLaunch() {
   }
   button.hidden = false;
   async function open(preferredProject, preferredWorkflow) {
+    if (dialog.open) return;
     dialog.showModal();
+    const revision = ++generation;
+    project.replaceChildren();
+    source.replaceChildren();
     submit.disabled = true;
     status.textContent = "프로젝트와 템플릿을 불러오는 중입니다.";
     try {
       const [projects, templates] = await Promise.all(["projects", "workflows/presets"].map((endpoint) => mapWorkflowRequest(endpoint)));
+      if (revision !== generation) return;
       presets = templates;
       project.replaceChildren(...projects.filter(({ archived }) => !archived).map(option));
       if (preferredProject && [...project.options].some(({ value }) => value === preferredProject)) project.value = preferredProject;
       if (!project.value) { status.textContent = "Engineering에서 프로젝트를 등록해 주세요."; return; }
       await loadProject(preferredWorkflow);
-    } catch (error) { status.textContent = error.message; }
+    } catch (error) { if (revision === generation) status.textContent = error.message; }
   }
-  button.onclick = () => void open();
+  button.onclick = () => {
+    if (!wfMap.edit || wfLeaveEditing()) void open();
+  };
   $("workflow-launch-close").onclick = () => { if (!pending) dialog.close(); };
   dialog.addEventListener("cancel", (event) => { if (pending) event.preventDefault(); });
+  dialog.addEventListener("close", () => { generation++; });
   project.onchange = () => void loadProject();
   for (const control of [source, ...roles.map((role) => form.elements[role])]) control.onchange = () => {
     status.textContent = "";
@@ -115,6 +123,7 @@ function bindMapWorkflowLaunch() {
       const run = await mapWorkflowRequest("workflows/launch", {}, { ...input, key: requestKey.key });
       requestKey = undefined;
       dialog.close();
+      if (typeof refreshWorkflowQueue === "function") void refreshWorkflowQueue();
       if (typeof openMapWorkflow === "function") void openMapWorkflow(run.id);
       else location.href = "/engineering.html?" + new URLSearchParams({ project: run.project, view: "workflow", run: run.id });
     } catch (error) { status.textContent = error.message; }
