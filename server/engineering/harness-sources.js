@@ -34,7 +34,7 @@ async function gitSource(root, commit, file, signal) {
   }
 }
 
-async function resolveSources(harness, project, workspace, inputs = [], signal) {
+async function resolveSources(harness, project, workspace, inputs = [], signal, { trial = false } = {}) {
   const files = harness.assets?.files ?? [];
   const named = harness.assets?.inputs ?? [];
   const root = workspace ?? project.root;
@@ -42,7 +42,7 @@ async function resolveSources(harness, project, workspace, inputs = [], signal) 
   const commit = files.length ? await git(root, ["rev-parse", "--verify", revision + "^{commit}"]) : null;
   const sources = [];
   for (const file of files) sources.push(await gitSource(root, commit, file, signal));
-  if (workspace) for (const name of named) {
+  if (workspace && !trial) for (const name of named) {
     const input = inputs.find(({ input }) => input === name);
     if (!input) throw problem(409, "Harness workflow input was not provided: " + name);
     const value = await artifactText(workspace, input, maxBytes, signal);

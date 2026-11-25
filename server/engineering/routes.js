@@ -19,6 +19,7 @@ const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
 const { worktrees } = require("./worktree");
+const { harnessTrials } = require("./harness-trials");
 const { previewHarness } = require("./harness-preview");
 const { integer, string } = require("./definitions");
 const { problem } = require("./state");
@@ -67,8 +68,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const delivery = workflowDelivery(db, flowRuns, definitions, workspaceRoot);
       runs.recover();
       flowRuns.recover();
-      services = { definitions, workflows, runs, flowRuns, tasks,
-        budget: projectBudget(db),
+      const budget = projectBudget(db);
+      services = { definitions, workflows, runs, flowRuns, tasks, budget, trials: harnessTrials(definitions, runner, workspace, budget),
         stages: sdlcStages(db, definitions, workflows),
         observability: workflowObservability(db, flowRuns, workspaceRoot),
         delivery, staging: workflowStaging(db, delivery),
@@ -84,7 +85,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
@@ -118,6 +119,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = templates.export(query("project"), query("id"), integer(Number(query("version")), "workflow version", 1, Number.MAX_SAFE_INTEGER));
         }
         if (endpoint === "definitions") result = definitions.definitions(query("project"));
+        if (endpoint === "harness/trial") result = trials.inspect(query("project"), query("id"));
         if (endpoint === "definitions/version") {
           result = definitions.versionOf(query("id"), integer(Number(query("version")), "version", 1, Number.MAX_SAFE_INTEGER));
         }
@@ -181,6 +183,9 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
         if (endpoint === "harness/preview") result = await previewHarness(definitions, runner, input);
+        if (endpoint === "harness/trial") result = await trials.start(string(input.project, "project"), input);
+        if (endpoint === "harness/trial/cancel") result = trials.cancel(string(input.project, "project"), input.id);
+        if (endpoint === "harness/trial/retry") result = trials.retry(string(input.project, "project"), input.id, input.side);
         if (endpoint === "definitions/remove") {
           definitions.remove(string(input.id, "definition"));
           result = { removed: true };

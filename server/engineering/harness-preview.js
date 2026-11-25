@@ -5,7 +5,7 @@ const { promptSections } = require("./adapters");
 const { resolveSources, withSources, sourceReferences } = require("./harness-sources");
 const { problem } = require("./state");
 
-async function previewHarness(catalog, runner, input) {
+function resolveHarness(catalog, input) {
   const project = catalog.project(string(input.project, "project"));
   const record = input.id ? catalog.versionOf(string(input.id, "harness id"),
     integer(input.version, "harness version", 1, Number.MAX_SAFE_INTEGER)) : null;
@@ -18,6 +18,11 @@ async function previewHarness(catalog, runner, input) {
     throw problem(400, "The model does not belong to the project");
   }
 
+  return { project, record, harness, model };
+}
+
+async function previewHarness(catalog, runner, input) {
+  const { project, record, harness, model } = resolveHarness(catalog, input);
   const sources = await resolveSources(harness, project);
   let policy = null;
   let blockedReason = null;
@@ -45,4 +50,4 @@ async function previewHarness(catalog, runner, input) {
   };
 }
 
-module.exports = { previewHarness };
+module.exports = { previewHarness, resolveHarness };

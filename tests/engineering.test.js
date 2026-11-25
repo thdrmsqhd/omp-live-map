@@ -241,3 +241,45 @@ test("harness result validation detects missing JSON fields and accepts an empty
   assert.equal((await verifyResult(contract, directory)).passed, true);
   assert.throws(() => resultContract({ ...contract, path: "../review.json" }), /relative paths/);
 });
+
+test("harness comparison shares one commit and inputs, with isolated worktrees and budget", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-harness-trial-"));
+  const { db, definitions, harness, project } = await fixture(t, directory);
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const { projectBudget } = require("../server/engineering/project-budget");
+  const { harnessTrials } = require("../server/engineering/harness-trials");
+  const budget = projectBudget(db);
+  budget.save(project.id, { cap: 12, days: 1 });
+  const work = worktrees(path.join(directory, "worktrees"));
+  const actual = [];
+  const runner = {
+    requireAdapter() {
+      return { async run(context) {
+        actual.push({ cwd: context.cwd, instruction: context.instruction, sources: context.harness.resolvedSources,
+          commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: context.cwd, encoding: "utf8" }).trim() });
+        return { sessionId: "fixture", costCents: 1, output: "done" };
+      } };
+    },
+  };
+  const compare = harnessTrials(definitions, runner, work, budget);
+  const draft = { ...harness.payload, instructions: "Updated", assets: { inputs: ["report"] } };
+  const body = { key: "comparison", baseline: { id: harness.id, version: 1 }, payload: draft,
+    instruction: "Review changes", materials: { report: "Tests passed" }, budgetCents: 6, timeoutMs: 4000 };
+  const first = await compare.start(project.id, body);
+  assert.equal((await compare.start(project.id, body)).id, first.id);
+  assert.equal(budget.get(project.id).committed, 12);
+  const deadline = Date.now() + 4000;
+  while (compare.inspect(project.id, first.id).status === "running" && Date.now() < deadline) await delay(20);
+  const end = compare.inspect(project.id, first.id);
+  assert.equal(end.status, "finished");
+  assert.equal(end.results.baseline.status, "succeeded");
+  assert.equal(end.results.draft.status, "succeeded");
+  assert.equal(actual.length, 2);
+  assert.equal(actual[0].commit, end.commit);
+  assert.equal(actual[1].commit, end.commit);
+  assert.notEqual(actual[0].cwd, actual[1].cwd);
+  assert.equal(actual[0].instruction, actual[1].instruction);
+  assert.equal(actual[1].sources[0].text, "Tests passed");
+  assert.equal(budget.get(project.id).committed, 2);
+  await assert.rejects(compare.start(project.id, { ...body, key: "over-budget" }), /budget would be exceeded/);
+});
