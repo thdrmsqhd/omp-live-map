@@ -38,7 +38,7 @@ function syncChatLog(node, st) {
   prunePreviews(st, msgs);
   st.log = st.log.filter((e) => {
     const hit = msgs.find((m) => !used.has(m) && m.role === e.role && (m.ts || 0) >= e.since - 1500
-      && (m.role === "user" || chatText(m.text)));
+      && (e.id&&m.id?e.id===m.id:String(m.text||"").trim()===String(e.text||"").trim()));
     if (!hit) return true;
     used.add(hit);
     // 기록 메시지가 images 를 실었으면 blob 미리보기는 필요 없다. 아니면 ts 로 넘겨 계속 그린다.
@@ -60,7 +60,7 @@ function syncChatLog(node, st) {
 // 흘러나오던 답변을 대화에 확정한다. 추가 지시가 끼어들면 그 앞까지가 한 덩어리다.
 function commitStream(st, fallback) {
   const final = (st.stream || fallback || "").trim();
-  if (final) st.log.push({ role: "assistant", text: final.slice(-1500), ts: Date.now(), since: st.since || 0 });
+  if (final) st.log.push({ role: "assistant", text: final.slice(0,1000000), ts: Date.now(), since: st.since || 0 });
   st.stream = "";
 }
 
@@ -229,12 +229,12 @@ function handleChatEvent(c) {
   } else if (c.kind === "delta") {
     // 추가 지시 전송이 실패해 busy 가 풀렸어도 돌던 턴의 글이 오면 다시 도는 중으로 본다.
     st.busy = true;
-    st.stream += c.text;
+    st.stream = (st.stream + String(c.text||"")).slice(0,1000000);
   } else if (c.kind === "done") {
     commitStream(st, c.text);
     st.busy = false;
     queuePromptDone(c.node,!c.cancelled&&!c.code);
-    if(typeof refreshClaudeQueue==="function"&&capsOf(nodeById(c.node)).id==="claude")setTimeout(()=>void refreshClaudeQueue(c.node),500);
+    if(typeof refreshClaudeQueue==="function"&&nodeById(c.node)&&capsOf(nodeById(c.node)).id==="claude")setTimeout(()=>void refreshClaudeQueue(c.node),500);
     if (c.cancelled) { st.error = "응답 생성을 취소했습니다"; st.retry = "send"; }
     else if (c.code) {
       const n = nodeById(c.node);
@@ -248,7 +248,7 @@ function handleChatEvent(c) {
     for (const e of st.log.slice(0, -8)) if (e.previews) revokePreviews(e.previews);
     st.log = st.log.slice(-8);
   }
-  if (openIds.has(c.node)) paintChat(c.node);
+  if (openIds.has(c.node)) liveTouch(c.node);
 }
 
 // 툴 칩을 누르면 대화를 그 툴을 쓴 턴으로 거른다. 같은 칩을 다시 누르면 푼다.

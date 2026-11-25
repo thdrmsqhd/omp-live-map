@@ -2,6 +2,9 @@
 
 const CHAT_SHOW = 24, CHAT_PAGE = 40;
 const CHAT_SELECTION_PENDING = new Set();
+function chatViewPrefs(id){const p=readJSON("omp-map-chat-view:"+id,{});return {font:Math.max(12,Math.min(18,Number(p?.font)||14))};}
+function patchChatRows(host,html){const t=document.createElement("template");t.innerHTML=html;const old=new Map([...host.children].filter(x=>x.dataset.chatKey).map(x=>[x.dataset.chatKey,x]));let cursor=host.firstElementChild;for(const fresh of [...t.content.children]){let node=fresh;const prev=old.get(fresh.dataset.chatKey);if(prev){old.delete(fresh.dataset.chatKey);if(prev.__source===fresh.outerHTML||prev.outerHTML===fresh.outerHTML)node=prev;else if(fresh.dataset.chatKey==="stream"){const tx=prev.querySelector(".tx"),next=fresh.querySelector(".tx");if(tx&&next){tx.innerHTML=next.innerHTML;node=prev;}}}node.__source=fresh.outerHTML;if(node!==cursor)host.insertBefore(node,cursor);cursor=node.nextElementSibling;}while(cursor){const next=cursor.nextElementSibling;cursor.remove();cursor=next;}for(const pre of host.querySelectorAll(".cmsg pre")){if(pre.parentElement.classList.contains("chat-code"))continue;const wrap=document.createElement("div");wrap.className="chat-code";const bar=document.createElement("header");const lang=document.createElement("span");lang.textContent=pre.querySelector("code")?.dataset.lang||"code";const btn=document.createElement("button");btn.dataset.codeCopy="1";btn.textContent="코드 복사";bar.append(lang,btn);pre.before(wrap);wrap.append(bar,pre);}}
+
 
 // 세션 기록의 대화 + 아직 기록에 안 올라온 로컬 표시분. 툴 칩으로 거른 상태면 그 툴을 쓴 턴만.
 function chatMsgs(node, st) {
@@ -28,7 +31,7 @@ function chatBodyHTML(text) {
 }
 
 // 시각 문구(ago)는 매 초 바뀌므로 마크업에 넣지 않고 hover 때 채운다.
-function chatListHTML(st, shown, tool, act) {
+function chatListHTML(st, shown, tool, act, agent="에이전트") {
   const html = shown.map((m, i) => {
     if (m.role === "result") return agentResultHTML(st, m);
     const body = chatText(m.text);
@@ -40,11 +43,11 @@ function chatListHTML(st, shown, tool, act) {
     const imgs = m.role === "user" ? chatImagesHTML(m, m.previews || chatPreviews(st, ts)) : "";
     // 이미지를 실은 턴의 "(이미지 첨부)" 자리 표시 글은 같은 그림이 이미 있어 숨긴다.
     const text = imgs && /^\(이미지 첨부\)$/.test(label) ? "" : label;
-    return `<div class="cmsg ${m.role === "user" ? "u" : "a"}"${!toolOnly && names ? ` title="사용 도구: ${esc(names)}"` : ""}>
-      <header class="cmsg-head"><span class="who">${m.role === "user" ? "나" : toolOnly ? "도구 실행" : "에이전트"}</span><span class="cact">${cts}${toolOnly ? "" : `<button class="ccopy" data-copy="${i}" aria-label="메시지 복사">복사</button>`}</span></header><div class="tx${toolOnly ? " dim" : ""}">${imgs}${m.role === "user" || toolOnly ? chatBodyHTML(text) : mdHTML(label, true)}${agentCallsHTML(st, m)}</div></div>`;
+    return `<div data-chat-key="${esc(String(m.id||m.uuid||[m.role,m.ts||m.since||0,i].join(":")))}" class="cmsg ${m.role === "user" ? "u" : "a"}"${!toolOnly && names ? ` title="사용 도구: ${esc(names)}"` : ""}>
+      <header class="cmsg-head"><span class="who">${m.role === "user" ? "나" : toolOnly ? "도구 실행" : esc(agent)}</span><span class="cact">${cts}${toolOnly ? "" : `${m.role==="user"?`<button data-chat-reuse="${i}" title="입력창에서 다시 사용">재사용</button>`:""}<button class="ccopy" data-copy="${i}" aria-label="메시지 복사">복사</button>`}</span></header><div class="tx${toolOnly ? " dim" : ""}">${imgs}${m.role === "user" || toolOnly ? chatBodyHTML(text) : mdHTML(label, true)}${agentCallsHTML(st, m)}</div></div>`;
   }).join("");
   // 도는 중인 활동에 답변 글이 있으면 같은 글을 말풍선으로 또 그리지 않는다.
-  const stream = st.stream && !act.includes('class="lvitem text"') ? `<div class="cmsg a streaming"><header class="cmsg-head"><span class="who">에이전트</span><span class="stream-label">응답 생성 중</span></header><div class="tx">${mdHTML(st.stream, true)}</div></div>` : "";
+  const stream = st.stream ? `<div class="cmsg a streaming" data-chat-key="stream"><header class="cmsg-head"><span class="who">${esc(agent)}</span><span class="stream-label">응답 생성 중</span></header><div class="tx">${mdHTML(st.stream, true)}</div></div>` : "";
   // 기록 메시지 → 마지막 턴 활동 → 흘러나오는 답변 순서.
   if (html || act || stream) return html + act + stream;
   return `<div class="cmsg"><div class="tx dim">${st.search ? "검색 결과 없음" : tool ? "최근 기록에 이 툴을 쓴 턴이 없습니다" : "대화를 시작하세요"}</div></div>`;
@@ -61,13 +64,15 @@ function chatBlock(n) {
   const caps = capsOf(n);
   const page = chatMsgs(n, st);
   const { all, shown, tool } = page;
+  const agent=harnessLabel(n);const prefs=chatViewPrefs(n.id);
   const ro = typeof dockReadOnly === "function" && dockReadOnly(n.id);
   return `<div class="chat${ro ? " ro" : ""}">
     ${ro ? '<div class="rodock">메인 카드에 연결된 서브에이전트 — 대화는 읽기 전용입니다</div>' : ""}
     <div class="cfilter"${tool ? "" : " hidden"}><span>${esc(tool)} 사용 턴만 표시 중</span><button data-unfilter="1">해제</button></div>
-    <div class="chat-searchbar"><input type="search" class="chat-search" aria-label="대화 검색" placeholder="대화 내용 검색" value="${esc(st.search||"")}"><button data-chat-search-clear="1" title="검색 초기화">초기화</button></div>
-    <div class="chat-history-nav"><button class="cmore" data-more="1"${page.start>0?"":" disabled"}>${esc(chatMoreText(page))}</button><span class="chat-page-label">${esc(chatPageLabel(page))}</span><button data-newer="1"${page.offset?"":" disabled"}>다음</button><button data-latest="1"${page.offset?"":" disabled"}>최신</button></div>
-    <div class="cmsgs">${chatListHTML(st, shown, tool, page.offset||st.search||tool?"":chatActivityHTML(n.id, st))}</div>
+    <div class="chat-headbar"><strong>세션 대화</strong><span class="chat-status" role="status"></span><span class="chat-head-spacer"></span><button data-chat-search-toggle="1" aria-label="대화 검색" aria-expanded="${!!st.searchOpen}">검색</button><button data-chat-focus="1" aria-pressed="false">집중</button><button data-chat-export="1">내보내기</button><button data-chat-font="1" title="글자 크기 변경">Aa</button></div>
+    <div class="chat-searchbar"${st.searchOpen||st.search?"":" hidden"}><input type="search" class="chat-search" aria-label="대화 검색" placeholder="대화 내용 검색" value="${esc(st.search||"")}"><button data-chat-search-clear="1" title="검색 초기화">초기화</button></div>
+    <div class="chat-history-nav"${page.offset||st.searchOpen?"":" hidden"}><button class="cmore" data-more="1"${page.start>0?"":" disabled"}>${esc(chatMoreText(page))}</button><span class="chat-page-label">${esc(chatPageLabel(page))}</span><button data-newer="1"${page.offset?"":" disabled"}>다음</button><button data-latest="1"${page.offset?"":" disabled"}>최신</button></div>
+    <div class="cmsgs" style="--chat-font:${prefs.font}px">${chatListHTML(st, shown, tool, page.offset||st.search||tool?"":chatActivityHTML(n.id, st),agent)}</div>
     <button class="chat-jump" data-chat-jump="1" hidden>↓ 최신 응답 보기</button>
     <div class="casks"></div>
     <div class="cworking" role="status" aria-live="polite"${st.busy || actItems(n.id).running ? "" : " hidden"}><span class="cworking-dot" aria-hidden="true"></span>응답 생성·작업 중</div>
@@ -115,7 +120,11 @@ function paintChat(id) {
   box.querySelector("[data-latest]").disabled = !page.offset;
   box.querySelector(".chat-page-label").textContent = chatPageLabel(page);
   const list = box.querySelector(".cmsgs");
-  const html = chatListHTML(st, shown, tool, page.offset||st.search||tool?"":chatActivityHTML(id, st));
+  const html = chatListHTML(st, shown, tool, page.offset||st.search||tool?"":chatActivityHTML(id, st),harnessLabel(node));
+  box.querySelector(".chat-searchbar").hidden=!(st.searchOpen||st.search);
+  box.querySelector(".chat-history-nav").hidden=!(page.offset||st.searchOpen);
+  const status=box.querySelector(".chat-status");status.textContent=askPending(id)?"승인·응답 대기":st.sending?"전송 중":st.busy||actItems(id).running?"작업 중":"대기";
+  box.querySelector("[data-chat-search-toggle]").setAttribute("aria-expanded",String(!!st.searchOpen));
   const selection = getSelection();
   const selecting = selection && !selection.isCollapsed && list.contains(selection.anchorNode);
   if (list.__html !== html && selecting) CHAT_SELECTION_PENDING.add(id);
@@ -125,9 +134,11 @@ function paintChat(id) {
     // 맨 아래를 보고 있었으면 새 메시지를 따라가고, 위로 올려 둔 위치는 지킨다.
     const wasBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
     const top = list.scrollTop;
+    const anchor=[...list.children].find(x=>x.offsetTop+x.offsetHeight>top&&x.dataset.chatKey);const anchorKey=anchor?.dataset.chatKey,delta=anchor?anchor.offsetTop-top:0;
     list.__html = html;
-    list.innerHTML = html;
-    list.scrollTop = wasBottom ? list.scrollHeight : top;
+    patchChatRows(list,html);
+    const next=anchorKey&&[...list.children].find(x=>x.dataset.chatKey===anchorKey);
+    list.scrollTop = wasBottom ? list.scrollHeight : next?next.offsetTop-delta:top;
   }
   const jump=box.querySelector(".chat-jump");jump.hidden=!page.offset&&list.scrollTop+list.clientHeight>=list.scrollHeight-24;
   const send=box.querySelector("[data-send]");send.textContent=st.busy?"추가 지시 ↑":"보내기 ↑";
@@ -182,7 +193,13 @@ function mountChat(blk, n) {
     if (chatInlineClick(e, st, id)) return;
     const b = e.target.closest("button");
     if (!b) return;
-    if (b.dataset.chatAttach) box.querySelector(".chat-file").click();
+    if(b.dataset.chatSearchToggle){st.searchOpen=!st.searchOpen;if(!st.searchOpen){st.search="";search.value="";st.historyOffset=0;}paintChat(id);if(st.searchOpen)search.focus();}
+    else if(b.dataset.chatFocus){const on=box.classList.toggle("chat-focused");b.setAttribute("aria-pressed",String(on));if(on)box.querySelector(".cin").focus();}
+    else if(b.dataset.chatFont){const prefs=chatViewPrefs(id);prefs.font=prefs.font>=18?12:prefs.font+2;writeJSON("omp-map-chat-view:"+id,prefs);box.querySelector(".cmsgs").style.setProperty("--chat-font",prefs.font+"px");}
+    else if(b.dataset.chatExport){const text=chatMsgs(nodeById(id),st).all.map(m=>"## "+(m.role==="user"?"나":harnessLabel(nodeById(id)))+"\n\n"+(m.text||"")).join("\n\n");const url=URL.createObjectURL(new Blob([text],{type:"text/markdown;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="conversation.md";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+    else if(b.dataset.chatReuse!==undefined){const m=st.renderedMessages?.[+b.dataset.chatReuse];if(m&&(!st.draft||confirm("현재 초안을 교체할까요?")))promptInsert(box,st,m.text,true);}
+    else if(b.dataset.codeCopy!==undefined){copyText(b.closest(".chat-code")?.querySelector("code")?.textContent||"",b);}
+    else if(b.dataset.chatAttach) box.querySelector(".chat-file").click();
     else if (b.dataset.chatSearchClear) {search.value="";st.search="";st.historyOffset=0;paintChat(id);}
     else if (b.dataset.chatJump) {st.historyOffset=0;st.search="";search.value="";if(CHAT_TOOL.has(id))CHAT_TOOL.delete(id);paintChat(id);const l=box.querySelector(".cmsgs");l.scrollTop=l.scrollHeight;box.querySelector(".chat-jump").hidden=true;}
     else if (b.dataset.send) submitPrompt(id);
@@ -217,6 +234,7 @@ function mountChat(blk, n) {
   st.renderedMessages = chatMsgs(n,st).shown;
   list.scrollTop = list.scrollHeight;
   list.addEventListener("scroll",()=>{box.querySelector(".chat-jump").hidden=!st.historyOffset&&list.scrollTop+list.clientHeight>=list.scrollHeight-24;},{passive:true});
+  box.addEventListener("keydown",e=>{if(e.key==="Escape"&&box.classList.contains("chat-focused")){e.stopPropagation();box.classList.remove("chat-focused");box.querySelector("[data-chat-focus]").setAttribute("aria-pressed","false");}});
   box.querySelector("[data-send]").disabled=!!st.sending||(!ta.value.trim()&&!st.files.length);
   mountChatModel(box, id);
   paintChatModel(box, n, st);

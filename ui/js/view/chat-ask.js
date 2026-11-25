@@ -15,7 +15,7 @@ function askOptHTML(r, o, oi, qi) {
   return `<label class="cask-o${on ? " on" : ""}">
     <input type="${multi ? "checkbox" : "radio"}" name="ask-${esc(r.id)}-${qi ?? "s"}"${on ? " checked" : ""} ${attr}>
     <span class="cask-l">${esc(o.label)}</span>${rec}
-    ${qi == null && o.desc ? `<span class="cask-d">${esc(o.desc)}</span>` : ""}</label>`;
+    ${(o.desc||o.description)?`<span class="cask-d">${esc(o.desc||o.description)}</span>`:""}</label>`;
 }
 
 function askQuestionHTML(r, q, qi) {
@@ -45,7 +45,7 @@ function askBodyHTML(r) {
   }
   if (r.method === "confirm") {
     return `<div class="cask-q"><div class="cask-qu">${esc(r.message || r.title)}</div>
-      <div class="cask-f"><button class="go" data-ask-confirm="1">확인</button><button data-ask-confirm="0">취소</button></div></div>`;
+      <div class="cask-f"><button class="go" data-ask-confirm="1">승인</button><button data-ask-confirm="0">거부</button></div></div>`;
   }
   if (r.method === "editor") {
     return `<div class="cask-q"><div class="cask-qu">${esc(r.title)}</div>

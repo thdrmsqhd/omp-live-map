@@ -23,7 +23,7 @@ function liveItemHTML(it) {
   const out = !lines.length ? ""
     : `<pre class="lvout${more ? " more" : ""}${it.open ? " open" : ""}" data-lvout="${esc(it.seq)}"${more ? ` title="${it.open ? `눌러서 끝 ${LIVE_TAIL}줄만 보기` : `전체 ${lines.length}줄 · 눌러서 모두 보기`}"` : ""}>${esc(shown.join("\n"))}</pre>`;
   return `<div class="lvitem tool${it.error ? " fail" : ""}">
-    <div class="lvh">${it.done ? "" : '<span class="dot live" title="실행 중"></span>'}<span class="lvk">${esc(it.name)}</span>${it.error ? '<span class="lvbad">실패</span>' : ""}<span class="lva" title="${esc(args)}">${esc(cut(args, 160))}</span></div>
+    <div class="lvh">${it.done ? "" : '<span class="dot live" title="실행 중"></span>'}<span class="lvk">${esc(it.name)}</span>${it.error ? '<span class="lvbad">실패</span>' : it.done ? '<span class="lvok">완료</span>':""}${it.startedAt?`<span class="lvtime">${((it.endedAt||Date.now())-it.startedAt)/1000<1?"<1초":(((it.endedAt||Date.now())-it.startedAt)/1000).toFixed(1)+"초"}</span>`:""}<span class="lva" title="${esc(args)}">${esc(cut(args, 160))}</span></div>
     ${out}
   </div>`;
 }
@@ -46,7 +46,7 @@ function actRange(list) {
 function actItems(nodeId) {
   const { items, running } = actRange(liveItems(nodeId));
   return {
-    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || it.kind === "notify" || (running && it.kind === "text"))
+    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || it.kind === "notify")
       && (it.kind !== "sub" || !HIDE_DONE_SUBS || !it.status || LIVE_RUNNING.test(it.status))),
     running,
   };
@@ -63,7 +63,7 @@ function chatActivityHTML(nodeId, st) {
   const { items, running } = actItems(nodeId);
   if (!items.length) return "";
   const list = items.map(liveItemHTML).join("");
-  if (running) return `<div class="lvact">${list}</div>`;
+  if(running){const active=items.filter(x=>x.kind==="tool"&&!x.done||x.kind==="sub"&&LIVE_RUNNING.test(x.status||""));const failed=items.filter(x=>x.error);const completed=items.filter(x=>!active.includes(x)&&!failed.includes(x));return `<div class="lvact">${active.map(liveItemHTML).join("")}${failed.map(liveItemHTML).join("")}${completed.length?`<details class="chat-activity-done"><summary>이전 활동 ${completed.length}건</summary>${completed.map(liveItemHTML).join("")}</details>`:""}</div>`;}
   const seq = items[items.length - 1].seq;
   if (st.actTurn !== seq) { st.actTurn = seq; st.actOpen = false; }
   const open = !!st.actOpen;

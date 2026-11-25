@@ -76,7 +76,8 @@ function handleLiveEvent(ev) {
     if (last && last.kind === ev.kind) last.text = (last.text + add).slice(-LIVE_TEXT_MAX);
     else livePush(list, { kind: ev.kind, text: add.slice(-LIVE_TEXT_MAX) });
   } else if (ev.kind === "tool") {
-    const item = { kind: "tool", id: ev.id, name: String(ev.name ?? ""), args: String(ev.args ?? ""), out: "", done: false, error: false };
+    const existing=tool();if(existing){if(ev.args)existing.args=String(ev.args);liveTouch(ev.node);return;}
+    const item = { startedAt:Number(ev.ts)||Date.now(),kind: "tool", id: ev.id, name: String(ev.name ?? ""), args: String(ev.args ?? ""), out: "", done: false, error: false };
     const end = list.findLastIndex((x) => x.kind === "turn_end");
     // 기록에서 읽힌 툴 시작은 확장의 turn_end 보다 늦게 도착할 수 있다(yield 로 끝나는 서브는 항상). 턴이 끝나기 전에 시작한 툴이면 끝난 턴 쪽에 끼워 "진행 중"으로 되살리지 않는다.
     if (end >= 0 && Number(ev.ts) > 0 && Number(ev.ts) <= list[end].ts) { item.done = true; item.seq = ++liveSeq; list.splice(end, 0, item); }
@@ -95,7 +96,7 @@ function handleLiveEvent(ev) {
   } else if (ev.kind === "tool_end") {
     const t = tool();
     if (!t) return;
-    t.done = true;
+    t.done = true;t.endedAt=Number(ev.ts)||Date.now();
     t.error = !!ev.error;
   } else if (ev.kind === "sub") {
     livePush(list, { kind: "sub", name: String(ev.name ?? ""), status: String(ev.status ?? "") });

@@ -1,0 +1,3 @@
+# V6 chat UX
+
+First implementation: compact search and controls, settings disclosure, chat focus, per-card text size, Markdown export, prompt reuse protection, code block copying, incremental keyed DOM reconciliation, bounded full streaming text, stricter snapshot matching, coalesced updates, tool dedupe and timing, approval labels, debounced file references. Remaining: durable cross-turn tool history, protocol-level message IDs/replay, true virtualization, full syntax highlighting, bookmarks, multi-session streaming load, server queue push updates and remaining requirements. No speculative token estimates.

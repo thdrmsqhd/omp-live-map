@@ -25,7 +25,7 @@ function submitPrompt(id){
 }
 async function drainPromptQueue(id,explicit=false){
   const s=chatState(id),q=promptQueue(id),n=nodeById(id);
-  if(!n||!q.length||s.queueRunning||s.queuePaused||!promptConnected()||askPending(id)||s.sending||s.busy||(!explicit&&actItems(id).running)||s.compacting||s.clearing)return;
+  if(!n||!q.length||s.queueRunning||s.queuePaused||!promptConnected()||askPending(id)||s.sending||s.busy||actItems(id).running||s.compacting||s.clearing)return;
   const entry=q[0];s.queueRunning=true;
   // Never replace a user's unsent draft or current attachment list.
   const draft=s.draft,files=s.files;

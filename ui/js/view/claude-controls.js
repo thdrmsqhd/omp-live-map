@@ -9,9 +9,9 @@ async function enqueueClaudePrompt(id){
  const r=await ccPost("/api/claude/queue",{node:id,action:"enqueue",text,files:attachPayload(files)});
  s.sending=false;if(r.ok){if(s.draft===text)s.draft="";if(s.files===files){clearAttachments(files);s.files=[];}rememberPrompt(id,text);persistPromptDraft(id,s);s.ccQueue=r;}else s.error=r.out||"예약 실패";paintChat(id);
 }
-function claudeControlHTML(n){return capsOf(n).id==="claude"?'<button data-cc-action="settings">Claude 설정</button><div class="cc-panel" hidden></div><div class="cc-queue" hidden></div>':"";}
+function claudeControlHTML(n){return capsOf(n).id==="claude"?'<button data-cc-action="settings">Claude 설정</button><div class="cc-panel" hidden></div><details class="cc-queue-wrap" hidden><summary>서버 예약 지시</summary><div class="cc-queue"></div></details>':"";}
 function paintClaudeControls(box,n,s){
- if(capsOf(n).id!=="claude")return;const q=box.querySelector(".cc-queue");if(!q)return;const v=s.ccQueue;q.hidden=!v?.items?.length&&!v?.paused;
+ if(capsOf(n).id!=="claude")return;const q=box.querySelector(".cc-queue");if(!q)return;const v=s.ccQueue;const wrap=q.closest(".cc-queue-wrap");wrap.hidden=!v?.items?.length&&!v?.paused;wrap.querySelector("summary").textContent="서버 예약 "+(v?.items?.length||0)+"건"+(v?.paused?" · 일시정지":"");
  const html=v?`<header>서버 예약 ${v.items.length}건 · ${v.paused?"일시정지":"실행 가능"} <button data-cc-action="pause">정지</button><button data-cc-action="resume">재개</button><button data-cc-action="refresh">갱신</button></header>${esc(v.error||"")}`+v.items.map(x=>`<div class="prompt-queue-row"><span title="${esc(x.text)}">${esc(cut(x.text,100))}</span>${["edit","up","down","delete"].map(a=>`<button data-cc-action="${a}" data-cc-id="${esc(x.id)}">${{edit:"수정",up:"↑",down:"↓",delete:"삭제"}[a]}</button>`).join("")}</div>`).join(""):"";
  if(q.__html!==html){q.__html=html;q.innerHTML=html;}
 }
