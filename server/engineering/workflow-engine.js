@@ -37,10 +37,10 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       store.finish(id, node, status, result);
       operating.delete(node);
     }
-    async function executeExternal(node, location, remaining) {
+    async function executeExternal(node, location, remaining, references) {
       const task = store.taskInstruction(id);
       const input = task && node.instruction ? { ...node, instruction: node.instruction + "\n\nDevelopment task:\n" + task } : node;
-      let result = await runNode(input, run.project, location, Math.max(0, remaining), signal);
+      let result = await runNode(input, run.project, location, Math.max(0, remaining), signal, references);
       if (result.status === "succeeded" && node.outputs.length) {
         try { result.artifacts = await collectOutputs(location, node, signal); } catch (error) {
           result = { ...result, status: "failed", interrupted: true, error: redact(error.message) };
@@ -80,13 +80,14 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
         let outcomes;
         if (batch.length > 1) {
           await ensureWorkspace();
-          for (const branch of batch) await verifyInputs(workspace, branch, results, signal);
+          const references = new Map();
+          for (const branch of batch) references.set(branch.id, await verifyInputs(workspace, branch, results, signal));
           for (const branch of batch) begin(branch);
           const agents = batch.filter(({ type }) => type !== "command").length;
           const share = Math.floor(Math.max(0, remaining) / Math.max(1, agents));
           outcomes = await runParallel({ project: catalog.project(run.project), workspace, worktrees, nodes: batch, signal,
             priorArtifacts: [...results.values()].flatMap(({ artifacts }) => artifacts?.map(({ path }) => path) ?? []),
-            execute: (item, location) => executeExternal(item, location, item.type === "command" ? 0 : share) });
+            execute: (item, location) => executeExternal(item, location, item.type === "command" ? 0 : share, references.get(item.id)) });
         } else {
           const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
           signal.throwIfAborted();
@@ -96,7 +97,7 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
           if (node.type === "condition") result.port = scheduler.conditionPort(node, results);
           if (external(node)) {
             await ensureWorkspace();
-            result = await executeExternal(node, workspace, remaining);
+            result = await executeExternal(node, workspace, remaining, artifacts);
           }
           outcomes = [{ node, result }];
         }

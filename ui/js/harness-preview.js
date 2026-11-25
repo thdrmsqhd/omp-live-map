@@ -21,7 +21,7 @@ export function bindHarnessPreview({ find, request, payload, project, saved }) {
     openSaved.disabled = !project() || !saved();
   }
 
-  function render({ profile, model, prompt, policy, ready, blockedReason }) {
+  function render({ profile, model, prompt, policy, ready, blockedReason, sources, workflowInputs }) {
     const settings = [
       ["대상", profile.version ? profile.name + " v" + profile.version : profile.name + " · 초안"],
       ["실행기", profile.adapter === "claude" ? "Claude Code" : "OMP"],
@@ -33,12 +33,14 @@ export function bindHarnessPreview({ find, request, payload, project, saved }) {
       settings.push(["런타임에서 강제하는 범위", "작업 폴더 내 쓰기 허용 · 네트워크 격리"]);
       settings.push(["사용 도구", policy.tools.join(", ")]);
     }
+    for (const source of sources) settings.push(["저장소 자료", source.path + " · " + source.commit.slice(0, 12) + " · SHA-256 " + source.sha256]);
+    if (workflowInputs.length) settings.push(["Workflow에서 연결할 입력", workflowInputs.join(", ")]);
     settings.push(["MCP·Hooks", "초안 저장 · 실행 미지원"]);
     find("harness-preview-settings").replaceChildren(...settings.flatMap(([label, value]) => [
       element("dt", label), element("dd", value),
     ]));
-    find("harness-preview-prompt").replaceChildren(...prompt.map(({ name, text }) => {
-      const line = element("li", sections[name] ?? name);
+    find("harness-preview-prompt").replaceChildren(...prompt.map(({ name, path, text }) => {
+      const line = element("li", path ?? sections[name] ?? name);
       line.append(element("pre", text));
       return line;
     }));

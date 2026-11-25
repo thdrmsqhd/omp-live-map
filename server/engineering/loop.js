@@ -1,5 +1,6 @@
 "use strict";
 
+const { resolveSources, withSources, sourceReferences } = require("./harness-sources");
 const { problem, redact } = require("./state");
 
 function loopEngine(store, catalog, runner, worktrees) {
@@ -26,6 +27,7 @@ function loopEngine(store, catalog, runner, worktrees) {
       store.change(id, "running");
       const workspace = run.workspace ?? await worktrees.create(catalog.project(run.project), run);
       store.workspace(id, workspace);
+      const project = catalog.project(run.project);
       const history = store.attempts(id);
       let feedback = history.at(-1)?.outcome?.checks ?? [];
       let used = history.reduce((cost, attempt) => cost + (attempt.outcome?.costCents ?? 0), 0);
@@ -35,8 +37,9 @@ function loopEngine(store, catalog, runner, worktrees) {
         if (used >= loop.budgetCents && loop.budgetCents > 0) return store.change(id, "limit_exceeded");
         const number = store.startAttempt(id);
         try {
+          const sources = await resolveSources(harness, project, workspace, [], signal);
           const output = await agent.run({
-            cwd: workspace, instruction: run.instruction, harness, model,
+            cwd: workspace, instruction: run.instruction, harness: withSources(harness, sources), model,
             feedback, signal, budgetCents: loop.budgetCents - used,
           });
           signal.throwIfAborted();
@@ -49,7 +52,7 @@ function loopEngine(store, catalog, runner, worktrees) {
           const passed = !overBudget && results.every((result) => result.passed);
           store.finishAttempt(id, number, passed ? "passed" : "rejected", {
             checks: results, costCents: output.costCents, costBasis: output.costBasis ?? "reported", sessionId: output.sessionId ?? null,
-            model: model.model, agent: harness.adapter,
+            model: model.model, agent: harness.adapter, sources: sourceReferences(sources),
           });
           if (overBudget) return store.change(id, "limit_exceeded");
           if (passed) return store.change(id, "succeeded");

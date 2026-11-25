@@ -1,3 +1,5 @@
+const lines = (value) => value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
 const templates = {
   developer: ["개발자", "요구사항에 맞춰 코드를 변경하고 관련 테스트를 수행한 뒤 수정 사항과 검증 결과를 요약합니다."],
   reviewer: ["코드 리뷰어", "변경 사항의 회귀 가능성을 검토합니다. 각 발견 사항에 파일, 줄 번호, 근거, 재현 조건을 기록합니다."],
@@ -78,6 +80,8 @@ export function bindHarnessEditor({ find, options, newProfile }) {
       assets: {
         ...original.assets,
         agents: data.get("agents"),
+        files: lines(data.get("sourceFiles")),
+        inputs: lines(data.get("sourceInputs")),
         skills: data.getAll("skillName").map((name, index) => ({ name, markdown: markdown[index] })),
         mcp: jsonDraft("mcp", "MCP"),
         hooks: jsonDraft("hooks", "Hooks"),
@@ -99,6 +103,8 @@ export function bindHarnessEditor({ find, options, newProfile }) {
     get("adapter").value = value.adapter ?? "claude";
     get("instructions").value = value.instructions ?? "";
     get("agents").value = value.assets?.agents ?? "";
+    get("sourceFiles").value = value.assets?.files?.join("\n") ?? "";
+    get("sourceInputs").value = value.assets?.inputs?.join("\n") ?? "";
     get("mcp").value = JSON.stringify(value.assets?.mcp ?? {}, null, 2);
     get("hooks").value = JSON.stringify(value.assets?.hooks ?? {}, null, 2);
     options(get("harnessModel"), models, "모델 선택", value.model ?? "");

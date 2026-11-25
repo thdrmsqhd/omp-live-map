@@ -14,7 +14,7 @@ function sameFile(before, after) {
     before.mtimeNs === after.mtimeNs && before.ctimeNs === after.ctimeNs;
 }
 
-async function artifactDigest(workspace, relative, signal) {
+async function readArtifact(workspace, relative, signal, maxBytes, consume) {
   if (!workspace) throw problem(409, "No workflow workspace for artifact");
   const parts = artifactPath(relative).split("/");
   const root = await fs.realpath(workspace);
@@ -31,8 +31,8 @@ async function artifactDigest(workspace, relative, signal) {
   const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   try {
     const info = await handle.stat({ bigint: true });
-    if (!info.isFile() || info.nlink !== 1n || info.size > BigInt(limit)) {
-      throw problem(409, "Workflow artifact must be a regular file of at most 32 MiB");
+    if (!info.isFile() || info.nlink !== 1n || info.size > BigInt(maxBytes)) {
+      throw problem(409, "Workflow artifact is not a regular file or exceeds the size limit");
     }
     const verified = await fs.lstat(file, { bigint: true });
     if (!sameFile(info, verified) || await fs.realpath(file) !== resolved) {
@@ -46,8 +46,10 @@ async function artifactDigest(workspace, relative, signal) {
       const { bytesRead } = await handle.read(buffer, 0, buffer.length);
       if (!bytesRead) break;
       length += bytesRead;
-      if (length > limit) throw problem(409, "Workflow artifact grew past 32 MiB");
-      hash.update(buffer.subarray(0, bytesRead));
+      if (length > maxBytes) throw problem(409, "Workflow artifact grew past the size limit");
+      const chunk = buffer.subarray(0, bytesRead);
+      hash.update(chunk);
+      consume?.(chunk);
     }
     if (BigInt(length) !== info.size || !sameFile(info, await handle.stat({ bigint: true }))) {
       throw problem(409, "Workflow artifact changed while being read");
@@ -56,6 +58,17 @@ async function artifactDigest(workspace, relative, signal) {
   } finally {
     await handle.close();
   }
+}
+
+function artifactDigest(workspace, relative, signal) {
+  return readArtifact(workspace, relative, signal, limit);
+}
+
+async function artifactText(workspace, reference, maxBytes, signal) {
+  const chunks = [];
+  const result = await readArtifact(workspace, reference.path, signal, maxBytes, (chunk) => chunks.push(Buffer.from(chunk)));
+  if (reference.sha256 !== result.sha256) throw problem(409, "Workflow artifact changed: " + reference.path);
+  return { ...result, bytes: Buffer.concat(chunks) };
 }
 
 async function validateArtifacts(workspace, artifacts, signal) {
@@ -96,4 +109,4 @@ async function collectOutputs(workspace, node, signal) {
   return artifacts;
 }
 
-module.exports = { artifactDigest, validateArtifacts, verifyInputs, collectOutputs };
+module.exports = { artifactDigest, artifactText, validateArtifacts, verifyInputs, collectOutputs };

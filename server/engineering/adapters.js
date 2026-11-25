@@ -14,6 +14,9 @@ function promptSections(harness, instruction = "", feedback = []) {
     { name: "role", text: harness.role },
     { name: "instructions", text: harness.instructions },
     { name: "assets", text: promptAssets(harness.assets) },
+    ...(harness.resolvedSources ?? []).map(({ path, input, text }) => ({
+      name: "source", path, text: (input ? "Workflow input " + input + " (" + path + ")" : "Repository file " + path) + ":\n" + text,
+    })),
     { name: "task", text: instruction },
     { name: "feedback", text: feedback.length ? "Previous verification results:\n" + JSON.stringify(feedback) : "" },
   ].filter(({ text }) => text);

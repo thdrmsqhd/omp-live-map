@@ -68,6 +68,11 @@
           <label>작업 지시 <textarea name="instructions" rows="4" maxlength="12000"></textarea></label>
           <label>프로젝트 규칙 (AGENTS.md) <textarea name="agents" rows="4" maxlength="10000"></textarea></label>
           <fieldset>
+            <legend>읽을 자료</legend>
+            <label>저장소 파일 경로 (줄마다 하나)<textarea name="sourceFiles" rows="3" placeholder="docs/review-rules.md"></textarea></label>
+            <label>Workflow 입력 이름 (줄마다 하나)<textarea name="sourceInputs" rows="3" placeholder="test_results"></textarea></label>
+          </fieldset>
+          <fieldset>
             <legend>스킬</legend>
             <div id="harness-skills"></div>
             <button id="harness-add-skill" type="button">스킬 추가</button>

@@ -70,11 +70,11 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
     assert.deepEqual(definitions.versionOf(harness.id, 1).payload.assets.skills, []);
     assert.equal(definitions.dependency(saved).payload.model, "fake-2");
     const isolated = secureRunner();
-    const previous = previewHarness(definitions, isolated, { project: project.id, id: harness.id, version: 1 });
+    const previous = await previewHarness(definitions, isolated, { project: project.id, id: harness.id, version: 1 });
     assert.equal(previous.model.id, "fake-1");
     assert.equal(previous.ready, false);
     assert.match(previous.blockedReason, /verified isolation/);
-    const draft = previewHarness(definitions, isolated, { project: project.id, payload: saved.payload });
+    const draft = await previewHarness(definitions, isolated, { project: project.id, payload: saved.payload });
     assert.equal(draft.model.id, "fake-2");
     assert.deepEqual(draft.prompt.map(({ name }) => name), ["role", "assets"]);
     assert.match(draft.prompt[1].text, /Run phased tests/);
@@ -196,4 +196,35 @@ test("active Loop cancels without another attempt and budget blocks verification
   } finally {
     t.after(() => fs.rm(directory, { recursive: true, force: true, maxRetries: 3 }));
   }
+});
+
+test("harness source preview pins tracked content and checks workflow artifacts", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-harness-sources-"));
+  const { definitions, harness, project, root } = await fixture(t, directory);
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const { resolveSources } = require("../server/engineering/harness-sources");
+  const { artifactDigest } = require("../server/engineering/workflow-artifact");
+  const tracked = path.join(root, "rules.md");
+  await fs.writeFile(tracked, "Tracked review rules.\n");
+  execFileSync("git", ["add", "rules.md"], { cwd: root });
+  execFileSync("git", ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-m", "rules"], { cwd: root });
+  await fs.writeFile(tracked, "Working directory edits.");
+  const payload = { ...harness.payload, assets: { files: ["rules.md"], inputs: ["report"] } };
+  const preview = await previewHarness(definitions, secureRunner(), { project: project.id, payload });
+  assert.match(preview.prompt.at(-1).text, /Tracked review rules/);
+  assert.equal(preview.sources[0].path, "rules.md");
+  assert.match(preview.sources[0].sha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(preview.workflowInputs, ["report"]);
+  await assert.rejects(previewHarness(definitions, secureRunner(), {
+    project: project.id, payload: { ...payload, assets: { files: ["../rules.md"] } },
+  }), /repository-relative/);
+  await assert.rejects(previewHarness(definitions, secureRunner(), {
+    project: project.id, payload: { ...payload, assets: { files: ["missing.txt"] } },
+  }), /not a tracked regular file/);
+  await fs.writeFile(path.join(root, "test.txt"), "Passed tests.");
+  const report = { input: "report", ...await artifactDigest(root, "test.txt") };
+  const resolved = await resolveSources(payload, project, root, [report]);
+  assert.equal(resolved[1].text, "Passed tests.");
+  await fs.writeFile(path.join(root, "test.txt"), "Changed tests.");
+  await assert.rejects(resolveSources(payload, project, root, [report]), /artifact changed/);
 });
