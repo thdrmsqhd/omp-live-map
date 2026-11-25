@@ -93,7 +93,8 @@ test("existing map opens a session card, restores panel state and renders update
       assert.equal(await page.locator(".node.big.active-card .chat-search").isVisible(),false);
       await page.locator(".node.big.active-card [data-chat-search-toggle]").click();
       await page.locator(".node.big.active-card .chat-search").fill("no matching fixture");
-      assert.equal(await page.locator(".node.big.active-card .cmsgs").innerText(),"검색 결과 없음");
+      await page.waitForFunction(()=>document.querySelector(".node.big.active-card .cmsgs")?.textContent.trim()==="검색 결과 없음",null,filter);
+      assert.equal(await page.locator(".node.big.active-card .cmsgs").textContent(),"검색 결과 없음");
       await page.locator(".node.big.active-card [data-chat-search-clear]").click();
       const load=await page.evaluate(async()=>{const ids=DATA.sessions.map(s=>s.nodes[0].id);const t=performance.now();for(const id of ids){handleChatEvent({node:id,kind:"req",text:"load fixture",turnId:"load-"+id});for(let i=0;i<100;i++)handleChatEvent({node:id,kind:"delta",text:"한글 streaming data ".repeat(40)});}await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const lengths=ids.map(id=>chatState(id).stream.length);for(const id of ids){handleChatEvent({node:id,kind:"done",turnId:"load-"+id});}return {ms:performance.now()-t,lengths};});assert.equal(load.lengths.length,10);assert.ok(load.lengths.every(n=>n>50000));console.log("10 concurrent fixture streams:",load.ms.toFixed(1),"ms");
       await page.locator('[data-mode="overview"]').click();
