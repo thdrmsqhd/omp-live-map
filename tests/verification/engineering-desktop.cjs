@@ -211,7 +211,7 @@ async function verifyHarnessEditor(page, repository) {
   await agent.locator(".workflow-node-title").click();
   await page.locator("#workflow-harness-edit").click();
   await page.locator("#harness-fields").waitFor();
-  await page.locator("[name=instructions]").fill("Review changed test cases as well.");
+  await page.locator('#definition-form [name="instructions"]').fill("Review changed test cases as well.");
   await page.locator("#definition-save").click();
   await page.locator("#definition-version option[value='2']").waitFor({ state: "attached" });
   await page.locator("#harness-uses summary").click();
