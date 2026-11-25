@@ -20,7 +20,7 @@ export function bindHarnessEditor({ find, options, newProfile }) {
 
   const get = (key) => form.elements.namedItem(key);
   const values = () => new FormData(form);
-  const fingerprint = () => JSON.stringify([...values()].filter(([key]) => !["payload", "kind"].includes(key)));
+  const fingerprint = () => JSON.stringify([...values()].filter(([key]) => key !== "kind"));
   const dirty = () => !fields.disabled && initial !== fingerprint();
 
   function changed() {
@@ -95,8 +95,6 @@ export function bindHarnessEditor({ find, options, newProfile }) {
 
   function show(value, availableModels, visible, copy = false) {
     fields.hidden = fields.disabled = !visible;
-    find("definition-json").hidden = visible;
-    get("payload").disabled = visible;
     if (!visible) return;
     models = availableModels;
     find("definition-model-hint").hidden = models.length > 0;

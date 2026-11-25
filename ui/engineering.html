@@ -14,9 +14,11 @@
   <header>
     <strong>OMP Live Map</strong>
     <nav aria-label="워크스페이스">
-      <button id="design-nav" aria-pressed="false">설계</button>
-      <button id="workflow-nav" aria-pressed="true">Workflow</button>
-      <button id="session-harnesses-nav" aria-pressed="false">세션 하네스</button>
+      <button id="setup-nav" aria-pressed="true">기초 생성</button>
+      <button id="session-harnesses-nav" aria-pressed="false">1. 프로필</button>
+      <button id="design-nav" aria-pressed="false">2. 하네스</button>
+      <button id="loop-nav" aria-pressed="false">3. 루프</button>
+      <button id="workflow-nav" aria-pressed="false">Workflow</button>
       <button id="sdlc-nav" aria-pressed="false">개발 Task</button>
       <button id="execution-nav" aria-pressed="false">실행</button>
       <a href="/">관측</a>
@@ -25,8 +27,8 @@
   <main>
     <p id="status" role="status"></p>
     <div id="engineering-context" class="engineering-context">
-      <label class="engineering-project">작업 프로젝트 <select id="project"></select></label>
-      <details class="engineering-settings">
+      <label class="engineering-project">작업 프로젝트 <select id="project"><option value="">프로젝트 선택</option></select></label>
+      <details id="project-settings" class="engineering-settings">
         <summary>프로젝트 설정</summary>
         <form id="project-form">
           <label>이름 <input name="name" required></label>
@@ -53,25 +55,67 @@
         </form>
       </details>
     </div>
+    <section id="setup" aria-labelledby="setup-title">
+      <h2 id="setup-title">기초 생성</h2>
+      <div class="setup-cards">
+        <article>
+          <h3>프로필</h3>
+          <p>실행기와 모델을 골라 새 세션이나 Workflow 노드에서 사용할 에이전트를 만듭니다.</p>
+          <button id="setup-new-profile" type="button">새 프로필 만들기</button>
+        </article>
+        <article>
+          <h3>하네스</h3>
+          <p>개인·팀·프로젝트 중 저장 범위를 고르고, 역할과 작업 규칙을 만듭니다.</p>
+          <button id="setup-new-harness" type="button">새 하네스 만들기</button>
+        </article>
+        <article>
+          <h3>루프</h3>
+          <p>저장된 하네스에 재시도 횟수와 검증 명령을 붙여 여러 작업에서 재사용합니다.</p>
+          <button id="setup-new-loop" type="button">새 루프 만들기</button>
+        </article>
+      </div>
+      <div class="setup-starter">
+        <h3>개인 기본 구성</h3>
+        <p>설계·리뷰·개발 하네스와 테스트 루프를 한 번에 만들어 내 작업에서 재사용합니다.</p>
+        <div class="workflow-controls">
+          <button id="setup-defaults" class="workflow-primary" type="button" disabled>기본 하네스·루프 만들기</button>
+        </div>
+        <p id="setup-starter-status" class="setup-hint" role="status" hidden></p>
+      </div>
+    </section>
     <section id="design" hidden>
-      <h2>하네스 편집</h2>
-      <div class="definition-scopes" role="group" aria-label="저장 범위">
-        <button type="button" data-definition-scope="personal" aria-pressed="true"><strong>개인</strong><span>이 앱의 모든 프로젝트</span></button>
-        <button type="button" data-definition-scope="team" aria-pressed="false"><strong>팀</strong><span>같은 팀으로 등록된 프로젝트</span></button>
-        <button type="button" data-definition-scope="project" aria-pressed="false"><strong>프로젝트</strong><span>선택한 프로젝트 한 곳</span></button>
+      <h2 id="definition-heading">Workflow 하네스</h2>
+      <p id="definition-guide" class="setup-hint"></p>
+      <div id="definition-scope-controls">
+        <h3>저장 범위</h3>
+        <div class="definition-scopes" role="group" aria-label="저장 범위">
+          <button type="button" data-definition-scope="personal" aria-pressed="true"><strong>개인</strong><span>내 앱의 모든 프로젝트에서 사용</span></button>
+          <button type="button" data-definition-scope="team" aria-pressed="false"><strong>팀</strong><span>이 앱에서 같은 팀으로 등록한 프로젝트에서 사용</span></button>
+          <button type="button" data-definition-scope="project" aria-pressed="false"><strong>프로젝트</strong><span>선택한 프로젝트에서만 사용</span></button>
+        </div>
       </div>
       <div class="definition-owner">
         <label id="definition-team-field" hidden>저장할 팀 <select id="definition-team"></select></label>
+        <details id="definition-team-settings" hidden>
+          <summary>새 팀 등록</summary>
+          <form id="definition-team-form" class="workflow-controls">
+            <label>팀 이름 <input name="name" maxlength="240" required></label>
+            <button>팀 등록</button>
+          </form>
+        </details>
         <p id="definition-owner" aria-live="polite"></p>
       </div>
       <form id="definition-form">
         <fieldset id="definition-content" disabled hidden>
-        <label>편집 대상 <select id="kind" name="kind">
+        <select id="kind" name="kind" hidden>
           <option value="harness">하네스</option><option value="model">모델</option><option value="loop">Loop</option>
-        </select></label>
+        </select>
         <div class="workflow-controls">
-          <label>프로필 <select id="definition"></select></label>
+          <label><span id="definition-list-label">하네스</span><select id="definition"></select></label>
           <label>저장 버전 <select id="definition-version"></select></label>
+          <button id="definition-new" type="button">새 하네스</button>
+          <button id="definition-model-open" type="button">이 범위의 모델 관리</button>
+          <button id="definition-harness-open" type="button" hidden>하네스로 돌아가기</button>
         </div>
         <fieldset id="harness-fields" hidden disabled>
           <legend>에이전트 작업 방식</legend>
@@ -86,7 +130,7 @@
           <label>프로필 이름 <input name="harnessName" required maxlength="240"></label>
           <label>실행기 <select name="adapter"><option value="claude">Claude Code</option><option value="omp">OMP</option></select></label>
           <label>모델 <select name="harnessModel" required aria-describedby="definition-model-hint"></select></label>
-          <p id="definition-model-hint" hidden>이 범위에 저장된 모델이 없습니다. 편집 대상을 ‘모델’로 바꿔 먼저 등록하세요.</p>
+          <p id="definition-model-hint" hidden>이 범위에 저장된 모델이 없습니다. ‘이 범위의 모델 관리’에서 추가하세요.</p>
           <label>역할 <input name="role" required maxlength="240"></label>
           <label>작업 지시 <textarea name="instructions" rows="4" maxlength="12000"></textarea></label>
           <label>프로젝트 규칙 (AGENTS.md) <textarea name="agents" rows="4" maxlength="10000"></textarea></label>
@@ -147,15 +191,34 @@
             <details id="trial-changes" hidden><summary>설정 변경 내역</summary><dl></dl></details>
           </details>
         </fieldset>
+        <fieldset id="definition-model-fields" hidden disabled>
+          <legend>모델 설정</legend>
+          <label>저장 이름 <input name="modelName" maxlength="240" required></label>
+          <label>모델 <select name="catalogModel" required></select></label>
+          <label>추론 수준 (OMP) <input name="reasoning" maxlength="240"></label>
+        </fieldset>
+        <fieldset id="definition-loop-fields" hidden disabled>
+          <legend>루프 설정</legend>
+          <label>이름 <input name="loopName" maxlength="240" required></label>
+          <label>연결할 하네스 <select name="loopHarness" required aria-describedby="definition-loop-hint"></select></label>
+          <p id="definition-loop-hint" class="setup-hint" hidden>이 저장 범위에서 사용할 하네스가 없습니다. 하네스를 먼저 만드세요.</p>
+          <button id="definition-loop-harness" type="button" hidden>하네스 만들기</button>
+          <div class="workflow-controls">
+            <label>최대 시도 횟수 <input name="attempts" type="number" min="1" max="8" required></label>
+            <label>제한 시간(초) <input name="seconds" type="number" min="0.1" max="3600" step="0.001" required></label>
+            <label>예산(센트) <input name="budgetCents" type="number" min="0" max="100000" required></label>
+          </div>
+          <div id="definition-loop-checks"></div>
+          <button id="definition-loop-add-check" type="button">검증 명령 추가</button>
+        </fieldset>
         <pre id="definition-diff" aria-label="현재 버전과의 변경 내역" hidden></pre>
-        <label id="definition-json">정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
         <div class="workflow-controls"><button id="definition-save">버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
         </fieldset>
       </form>
     </section>
-    <section id="workflow">
+    <section id="workflow" hidden>
       <div class="workflow-controls workflow-toolbar">
-        <label>Workflow <select id="workflow-list"></select></label>
+        <label>Workflow <select id="workflow-list"><option value="">새 Workflow</option></select></label>
         <label>이름 <input id="workflow-name" maxlength="240"></label>
         <button id="workflow-open-profiles" type="button">에이전트 프로필</button>
         <button id="workflow-plan" type="button">실행 계획 확인</button>
@@ -171,8 +234,10 @@
             <label>설계 / 문서 하네스 <select name="author"></select></label>
             <label>리뷰 하네스 <select name="reviewer"></select></label>
             <label>개발 Loop <select name="loop"></select></label>
-            <button>템플릿으로 생성</button>
+            <button id="workflow-preset-defaults" type="button" disabled>기본 하네스·Loop 추가</button>
+            <button name="create" disabled>템플릿으로 생성</button>
           </form>
+          <p id="workflow-preset-hint" role="status"></p>
         </details>
         <details><summary>템플릿 가져오기·내보내기</summary>
           <div class="workflow-controls">
@@ -296,22 +361,22 @@
       </dialog>
     </section>
     <section id="session-harnesses" class="session-harnesses" hidden>
-      <h2>세션 하네스</h2>
+      <h2>에이전트 프로필</h2>
       <div id="session-harness-host">
         <div id="session-harness-editor">
-          <p>저장한 프로필은 작업 폴더에 관계없이 새 세션에서 선택할 수 있습니다.</p>
+          <p>실행기, 모델, 역할을 저장해 새 세션이나 Workflow의 프로필 노드에서 사용합니다.</p>
           <form id="session-harness-form">
-            <label>저장된 하네스 <select id="session-harness-list"></select></label>
+            <label>저장된 프로필 <select id="session-harness-list"></select></label>
             <label>이름 <input name="name" placeholder="코드 리뷰어" maxlength="120" required></label>
             <label>실행기
               <select name="adapter"><option value="omp">OMP</option><option value="claude">Claude Code</option></select>
             </label>
-            <label id="session-harness-provider">OMP 모델 제공자 <input name="provider" maxlength="80" placeholder="모델 지정 시 입력"></label>
-            <label>모델 <input name="model" maxlength="160" placeholder="Workflow에서 사용할 모델 ID"></label>
+            <label>모델 <select name="model" aria-describedby="session-harness-model-hint"></select></label>
+            <p id="session-harness-model-hint" class="setup-hint" hidden></p>
             <label>역할 <input name="role" maxlength="240"></label>
             <label>작업 지시 <textarea name="instructions" rows="6" maxlength="12000"></textarea></label>
             <div class="workflow-controls">
-              <button class="workflow-primary">하네스 저장</button>
+              <button class="workflow-primary">프로필 저장</button>
               <button id="session-harness-remove" type="button" disabled>삭제</button>
             </div>
             <p id="session-harness-status" role="status"></p>

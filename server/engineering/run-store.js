@@ -38,7 +38,7 @@ function runStore(db, catalog) {
       }
       const owner = catalog.project(request.project);
       const loop = catalog.versionOf(request.definition);
-      if (owner.archived || loop.project !== owner.id || loop.kind !== "loop") throw problem(400, "Active project and its loop are required");
+      if (owner.archived || loop.kind !== "loop" || !catalog.availableTo(loop, owner.id)) throw problem(400, "Active project and an available loop are required");
       quota.check(owner.id, loop.payload.budgetCents);
       const task = randomUUID(), id = randomUUID(), now = Date.now();
       db.prepare("INSERT INTO task VALUES (?,?,?,?)").run(task, owner.id, request.title, request.instruction);

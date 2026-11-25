@@ -1,9 +1,10 @@
 // 대화 도중 모델 바꾸기: omp rpc 의 get_available_models·get_state·set_model 을 감싼다. 모듈 상태는 없다.
 "use strict";
 
-const { acquire } = require("./sessions");
+const { acquire, managedOmpSession } = require("./sessions");
 const harness = require("./harness");
 const claudeModel = require("./harness/claude-model");
+const { models: engineeringModels } = require("./engineering/anthropic");
 
 const errText = (e) => String((e && e.message) || e);
 const slim = (m) => (m ? { provider: m.provider || "", id: m.id || "", name: m.name || m.id || "" } : null);
@@ -42,4 +43,20 @@ async function setModel(node, provider, id) {
   }
 }
 
-module.exports = { listModels, setModel };
+async function modelOptions(includeOmp) {
+  const engineering = [...engineeringModels].map((id) => ({ provider: "anthropic", id, name: id }));
+  const claude = [...engineering, ...claudeModel.ALIASES.filter(({ id }) => !engineeringModels.has(id))];
+  const session = includeOmp && managedOmpSession();
+  let omp = [];
+  if (session) {
+    try {
+      const result = await session.rpc.send({ type: "get_available_models" }, { timeoutMs: 3000 });
+      if (result.success && Array.isArray(result.data?.models)) {
+        omp = result.data.models.map(slim).filter((model) => model?.provider && model.id);
+      }
+    } catch { /* the managed session may have closed */ }
+  }
+  return { engineering, claude, omp };
+}
+
+module.exports = { listModels, setModel, modelOptions };

@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
-const version = 11;
+const version = 12;
 const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
 const graphSchema = fs.readFileSync(path.join(__dirname, "schema-v2.sql"), "utf8");
 const runSchema = fs.readFileSync(path.join(__dirname, "schema-v3.sql"), "utf8");
@@ -16,6 +16,7 @@ const deliverySchema = fs.readFileSync(path.join(__dirname, "schema-v8.sql"), "u
 const budgetSchema = fs.readFileSync(path.join(__dirname, "schema-v9.sql"), "utf8");
 const stagingSchema = fs.readFileSync(path.join(__dirname, "schema-v10.sql"), "utf8");
 const scopeSchema = fs.readFileSync(path.join(__dirname, "schema-v11.sql"), "utf8");
+const reusableSchema = fs.readFileSync(path.join(__dirname, "schema-v12.sql"), "utf8");
 
 function transaction(db, fn) {
   db.exec("BEGIN IMMEDIATE");
@@ -37,7 +38,7 @@ function openDatabase(file) {
     db.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA journal_mode=WAL");
     const current = db.prepare("PRAGMA user_version").get().user_version;
     // Rebuild the parent definition table without cascading into pinned versions.
-    if (current < 11) db.exec("PRAGMA foreign_keys=OFF");
+    if (current < 12) db.exec("PRAGMA foreign_keys=OFF");
     transaction(db, () => {
       const current = db.prepare("PRAGMA user_version").get().user_version;
       if (current > version) throw new Error("Unsupported engineering database version");
@@ -51,10 +52,11 @@ function openDatabase(file) {
       if (current < 8) db.exec(deliverySchema);
       if (current < 9) db.exec(budgetSchema);
       if (current < 10) db.exec(stagingSchema);
-      if (current < 11) {
-        db.exec(scopeSchema);
+      if (current < 11) db.exec(scopeSchema);
+      if (current < 12) {
+        db.exec(reusableSchema);
         if (db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Invalid scoped definition migration");
-        db.exec("PRAGMA user_version=11");
+        db.exec("PRAGMA user_version=12");
       }
     });
     db.exec("PRAGMA foreign_keys=ON");

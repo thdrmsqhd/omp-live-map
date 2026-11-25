@@ -18,6 +18,7 @@ const endpoints = new Set([
   "projects", "projects/archive", "teams", "definitions", "definitions/remove", "definitions/version", "harness/preview", "harness/uses", "harness/apply",
   "harness/trial", "harness/trial/cancel", "harness/trial/retry",
   "workflows", "workflows/launch", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
+  "workflows/presets/defaults",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
   "workflow-approvals", "workflow-live-map", "workflow-dashboard", "workflow-review", "workflow-artifact",

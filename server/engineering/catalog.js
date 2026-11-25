@@ -49,10 +49,12 @@ function catalog(db) {
     if (row.scope === "project") return row.project === projectId;
     return row.scope === "team" && row.team === project(projectId).team;
   }
+  function availableToOwner(row, owner) {
+    return owner.scope === "project" ? availableTo(row, owner.project) : row.scope === "personal" || sameOwner(row, owner);
+  }
   function writeDefinition(body) {
     const owner = definitionOwner(body.scope ?? "project", body.project, body.team);
     if (owner.project && project(owner.project).archived) throw problem(409, "Project is archived");
-    if (body.kind === "loop" && owner.scope !== "project") throw problem(400, "Loops require a project");
     const parsed = definition(body.kind, body.payload);
     const old = body.id ? versionOf(string(body.id, "id")) : null;
     if (old && (!sameOwner(old, owner) || old.kind !== body.kind)) throw problem(400, "Definition owner and kind are immutable");
@@ -66,7 +68,7 @@ function catalog(db) {
       : integer(body.referenceVersion, "reference version", 1, Number.MAX_SAFE_INTEGER);
     const ref = target ? versionOf(target, refVersion) : null;
     if (ref && (body.kind === "harness" ? ref.kind !== "model" || !sameOwner(ref, owner)
-      : ref.kind !== "harness" || !availableTo(ref, owner.project))) {
+      : ref.kind !== "harness" || !availableToOwner(ref, owner))) {
       throw problem(400, "Definition reference has an incompatible scope or kind");
     }
     const duplicate = db.prepare("SELECT id FROM definition WHERE scope=? AND project IS ? AND team IS ? AND kind=? AND name=?")
@@ -131,6 +133,11 @@ function catalog(db) {
     saveDefinition: (body) => transaction(db, () => writeDefinition(body)),
     projects: () => db.prepare("SELECT p.*, t.team FROM project p LEFT JOIN project_team t ON t.project=p.id ORDER BY p.name").all(),
     teams: () => db.prepare("SELECT name FROM harness_team ORDER BY name").all().map(({ name }) => name),
+    saveTeam(name) {
+      const team = string(name, "team");
+      db.prepare("INSERT OR IGNORE INTO harness_team VALUES (?)").run(team);
+      return team;
+    },
     definitions(id, scope, team) {
       if (scope) {
         const owner = definitionOwner(scope, id, team);

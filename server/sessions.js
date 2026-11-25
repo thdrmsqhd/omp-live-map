@@ -204,4 +204,8 @@ function list() {
   ];
 }
 
-module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has, adopt, busyOf };
+function managedOmpSession() {
+  return [...sessions.values()].find((session) => !session.closing);
+}
+
+module.exports = { newSession, stopSession, prompt, cancel, list, acquire, has, adopt, busyOf, managedOmpSession };

@@ -1,17 +1,41 @@
-export function bindTemplateButtons({ el, request, report, definitions, current, projectId, imported }) {
+export function bindTemplateButtons({ el, request, report, definitions, current, projectId, isArchived, addWorkflowDefaults, imported }) {
   const presetForm = el("preset-form");
+  const defaults = el("preset-defaults");
+  const hint = el("preset-hint");
+  const fields = ["author", "reviewer", "loop"];
+  const selectedPreset = () => presets.find(({ id }) => id === presetForm.elements.preset.value);
   let presets = [];
+  let adding = false;
+  let preferred = {};
+
+  function updatePresetActions() {
+    const chosen = selectedPreset();
+    const missing = fields.filter((field) => chosen?.[field] && !presetForm.elements[field].value);
+    const sameHarness = chosen?.author && chosen?.reviewer && !missing.length &&
+      presetForm.elements.author.value === presetForm.elements.reviewer.value;
+    const editable = Boolean(projectId()) && !isArchived();
+    defaults.disabled = !editable || !chosen || adding;
+    presetForm.elements.create.disabled = !editable || !chosen || adding || missing.length > 0 || Boolean(sameHarness);
+    hint.textContent = !projectId() ? "위에서 작업 프로젝트를 선택하세요. 프로젝트가 없으면 ‘프로젝트 설정’에서 등록할 수 있습니다."
+      : isArchived() ? "보관된 프로젝트에는 Workflow를 추가할 수 없습니다."
+      : adding ? "개인 기본 설정을 만드는 중입니다."
+      : sameHarness ? "설계와 리뷰에는 서로 다른 하네스를 선택하세요."
+      : missing.length ? "필요한 하네스와 루프를 선택하세요. 목록이 비어 있으면 ‘기본 하네스·Loop 추가’를 눌러 준비할 수 있습니다." : "";
+  }
 
   function showPreset() {
-    const selected = presets.find(({ id }) => id === presetForm.elements.preset.value);
-    for (const field of ["author", "reviewer", "loop"]) {
+    const selected = selectedPreset();
+    for (const field of fields) {
       const select = presetForm.elements[field], current = select.value;
       const options = definitions().filter(({ kind }) => kind === (field === "loop" ? "loop" : "harness"));
-      select.replaceChildren(new Option("선택", ""), ...options.map((entry) => new Option(engineeringDefinitionLabel(entry), entry.id)));
-      if (options.some(({ id }) => id === current)) select.value = current;
+      const placeholder = !selected?.[field] ? "사용 안 함" : options.length ? "선택" : "등록된 항목 없음";
+      select.replaceChildren(new Option(placeholder, ""), ...options.map((entry) => new Option(engineeringDefinitionLabel(entry), entry.id)));
+      const previous = current || (selected?.[field] ? preferred[field] : "");
+      if (options.some(({ id }) => id === previous)) select.value = previous;
       select.required = Boolean(selected?.[field]);
-      select.disabled = !selected?.[field];
+      select.disabled = !selected?.[field] || !projectId() || isArchived();
     }
+    updatePresetActions();
   }
   presetForm.closest("details").addEventListener("toggle", report(async (event) => {
     if (!event.target.open) return;
@@ -22,7 +46,22 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     showPreset();
   }));
   presetForm.elements.preset.onchange = showPreset;
+  for (const field of fields) presetForm.elements[field].onchange = updatePresetActions;
+  defaults.onclick = report(async () => {
+    const project = projectId();
+    adding = true;
+    updatePresetActions();
+    try {
+      await addWorkflowDefaults(project);
+      if (project !== projectId()) return;
+      el("status").textContent = "개인 기본 하네스와 루프를 사용할 수 있습니다.";
+    } finally {
+      adding = false;
+      updatePresetActions();
+    }
+  });
   presetForm.addEventListener("submit", report(async (event) => {
+    if (presetForm.elements.create.disabled) return;
     const { preset, name, author, reviewer, loop } = Object.fromEntries(new FormData(event.currentTarget));
     if (!projectId()) throw new Error("프로젝트를 선택해 주세요.");
     const record = await request("workflows/presets", {}, { project: projectId(), preset, name, refs: { author, reviewer, loop } });
@@ -54,5 +93,11 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     el("import-name").value = "";
     await imported(record);
   }));
-  return { refresh: showPreset };
+  return { refresh: showPreset, useDefaults(refs) {
+    preferred = refs;
+    showPreset();
+  }, clear() {
+    preferred = {};
+    for (const field of fields) presetForm.elements[field].value = "";
+  } };
 }
