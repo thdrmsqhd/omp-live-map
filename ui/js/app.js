@@ -31,7 +31,7 @@ async function boot() {
   const touch = () => { touched = true; };
   $("stage").addEventListener("pointerdown", touch, { once: true });
   $("stage").addEventListener("wheel", touch, { once: true, passive: true });
-  setGraph(await firstGraph());
+  let graphBase=await firstGraph();setGraph(graphBase);
   setConnected(true);
   renderMap(true, true);
   Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(!touched, true));
@@ -44,13 +44,14 @@ async function boot() {
     if (data.live) handleLiveEvent(data.live);
     else if(data.queue){const q=data.queue;chatState(q.node).ccQueue=q;liveTouch(q.node);return;} else if (data.chat) handleChatEvent(data.chat);
     else if (data.ask) handleAskEvent(data.ask);
-    else apply(data);
+    else if(data.graphDelta){const d=data.graphDelta,m=new Map(graphBase.sessions.map(s=>[s.key,s]));for(const k of d.remove)m.delete(k);for(const s of d.upsert)m.set(s.key,s);graphBase={...d.meta,sessions:d.order.map(k=>m.get(k)).filter(Boolean)};apply(graphBase);}
+    else {graphBase=data;apply(data);}
   };
 
   function adaptive(fn,ms){let running=false;const tick=async()=>{if(running||document.hidden)return;running=true;try{await fn();}catch{}finally{running=false;}};setInterval(tick,ms);document.addEventListener("visibilitychange",()=>{if(!document.hidden)void tick();});}
   adaptive(loadInfra, 10000);
   adaptive(loadSys, 5000);
-  setInterval(() => { if (LOCALS.length) loadLocalRes(); }, 5000);
+  adaptive(()=>{if(LOCALS.length)return loadLocalRes();},10000);
   adaptive(async()=>{for(const id of openIds)if(cardContentVisible(id))await loadBg(id);},2000);
   loadBgAll();
   adaptive(loadBgAll, 5000);

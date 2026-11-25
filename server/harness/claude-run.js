@@ -213,7 +213,7 @@ function newSession(cwd, text, images) {
   const id = crypto.randomUUID();
   const file = claude.fileFor(dir, id);
   cwds.set(norm(file), dir);
-  return startTurn(file, text, images);
+  const r=startTurn(file,text,images);if(r.retryable){const q=queue.enqueue(file,text,images);return {...q,node:file,queued:true};}return r;
 }
 
 // 하네스 전환 뒤 카드 id 로도 같은 작업 폴더·도는 턴을 쓰게 한다(resume 은 cwd 로 프로젝트를 찾는다).

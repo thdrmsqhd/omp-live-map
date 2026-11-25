@@ -112,6 +112,7 @@ else app.whenReady().then(async () => {
     }
   });
   await window.loadURL(origin);
+  const perfTimer=setInterval(()=>{if(child?.connected&&!shutdown){const metrics=app.getAppMetrics().map(m=>({pid:m.pid,type:m.type,cpu:m.cpu?.percentCPUUsage,memory:m.memory}));child.send({type:"desktop-performance",metrics},()=>{});}},5000);perfTimer.unref();window.once("closed",()=>clearInterval(perfTimer));
 }).catch((error) => {
   const log = path.join(app.getPath("userData"), "startup-error.log");
   let details = `\n\n단계: ${stage}`;

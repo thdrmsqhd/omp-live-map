@@ -96,7 +96,11 @@ test("existing map opens a session card, restores panel state and renders update
       await page.waitForFunction(()=>document.querySelector(".node.big.active-card .cmsgs")?.textContent.trim()==="검색 결과 없음",null,filter);
       assert.equal(await page.locator(".node.big.active-card .cmsgs").textContent(),"검색 결과 없음");
       await page.locator(".node.big.active-card [data-chat-search-clear]").click();
-      const load=await page.evaluate(async()=>{const ids=DATA.sessions.map(s=>s.nodes[0].id);const t=performance.now();for(const id of ids){handleChatEvent({node:id,kind:"req",text:"load fixture",turnId:"load-"+id});for(let i=0;i<100;i++)handleChatEvent({node:id,kind:"delta",text:"한글 streaming data ".repeat(40)});}await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const lengths=ids.map(id=>chatState(id).stream.length);for(const id of ids){handleChatEvent({node:id,kind:"done",turnId:"load-"+id});}return {ms:performance.now()-t,lengths};});assert.equal(load.lengths.length,10);assert.ok(load.lengths.every(n=>n>50000));console.log("10 concurrent fixture streams:",load.ms.toFixed(1),"ms");
+      for(const count of [1,4,8,16]){
+        const load=await page.evaluate(async count=>{const ids=Array.from({length:count},(_,i)=>"perf-fixture-"+i);const t=performance.now();for(const id of ids){handleChatEvent({node:id,kind:"req",text:"load fixture",turnId:"load-"+id});for(let i=0;i<100;i++)handleChatEvent({node:id,kind:"delta",text:"한글 streaming data ".repeat(40)});}await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const lengths=ids.map(id=>chatState(id).stream.length);for(const id of ids){handleChatEvent({node:id,kind:"done",turnId:"load-"+id});CHAT.delete(id);}return {ms:performance.now()-t,lengths};},count);
+        assert.equal(load.lengths.length,count);assert.ok(load.lengths.every(n=>n>50000));console.log(count+" concurrent fixture streams:",load.ms.toFixed(1),"ms");
+      }
+      const perf=await page.evaluate(()=>fetch("/api/performance").then(r=>r.json()));assert.ok(perf.current.memory.rss>0);console.log("Backend RSS bytes:",perf.current.memory.rss,"heap:",perf.current.memory.heapUsed);
       await page.locator('[data-mode="overview"]').click();
       await page.waitForSelector("#overview .mon-card",filter);
       assert.equal(await page.locator("#overview .mon-card").count(),10);

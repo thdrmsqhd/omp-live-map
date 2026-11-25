@@ -7,6 +7,7 @@ function enableDesktopShutdown(server) {
   process.on("message", (message) => {
     if (stopping || message?.type !== "desktop-shutdown") return;
     stopping = true;
+    require("./sse").flushActivity();
     server.close();
     server.closeAllConnections();
     const sessions = require("./sessions");

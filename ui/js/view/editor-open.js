@@ -101,6 +101,8 @@ function edSuspend(id) {
   clearTimeout(s.diagTimer); s.diagSeq++;
   s.focus = false;
   s.editor.setModel(null); s.editor.dispose(); s.editor = null;
+  // Preserve dirty files and undo history; only release unreferenced clean models.
+  for(const [file,f] of ED_FILES)if(!f.dirty&&!f.refs.size){f.model.dispose();ED_FILES.delete(file);}
 }
 async function edResume(s) {
   if (!s.active || s.editor || s.resuming) return;

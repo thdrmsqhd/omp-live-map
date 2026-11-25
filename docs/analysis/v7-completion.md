@@ -1,0 +1,3 @@
+# V7 implementation status
+
+Phase 0–6 first pass: Node and Electron telemetry, resource pressure admission, retryable queues, idle process release, PID indexing, adaptive polling, bounded caches, SSE backpressure and session-level deltas, asynchronous scheduled activity writes, 1/4/8/16 fixture stream benchmark. Existing dirty Monaco models preserved. Limitations: graph delta is session-granular; full chat virtualization, native sampler, SQLite migration, sustained 30min/2h/8h and real authenticated CLI tests remain unverified or unimplemented. Benchmark uses synthetic browser events, not real concurrent agents. No measured savings claim.

@@ -35,7 +35,7 @@ const ROUTES = {
   ...require("./routes-context"),
   ...require("./routes-editor"),
   ...localfs.routes,
-  "GET /api/performance": (req,res)=>json(res,{...require("./performance").read(),sse:require("./sse").metrics(),sessions:require("./sessions").list().map(({node,pid,busy,state,harness})=>({node,pid,busy,state,harness,resources:require("./proc").resFor(node)}))}),
+  "GET /api/performance": (req,res)=>json(res,{...require("./performance").read(),sse:require("./sse").metrics(),desktop:require("./performance").desktopMetrics(),sessions:require("./sessions").list().map(({node,pid,busy,state,harness})=>({node,pid,busy,state,harness,resources:require("./proc").resFor(node)}))}),
   "* /api/graph": (req, res) => json(res, snapshot()),
   "* /api/events": (req, res) => {
     res.writeHead(200, {
@@ -45,7 +45,7 @@ const ROUTES = {
     });
     const data = snapshot();
     res.write(`data: ${JSON.stringify(data)}\n\n`);
-    if(req.headers["last-event-id"]&&replay(res,req.headers["last-event-id"])){addClient(res);req.on("close",()=>removeClient(res));return;}
+    if(req.headers["last-event-id"]&&replay(res,req.headers["last-event-id"])){addClient(res,data);req.on("close",()=>removeClient(res));return;}
     // 이미 지나간 출력도 붙자마자 보이게 한다(맵 rpc 세션의 툴 출력).
     for (const s of data.sessions) {
       for (const n of s.nodes) {
@@ -66,7 +66,7 @@ const ROUTES = {
         if (!j.done && j.toolCallId) res.write(`data: ${JSON.stringify({ live: { node: j.file, kind: "tool_job", id: j.toolCallId, job: j.id } })}\n\n`);
       }
     }
-    addClient(res);
+    addClient(res,data);
     req.on("close", () => removeClient(res));
   },
 };

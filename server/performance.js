@@ -6,4 +6,5 @@ function policy(free=os.freemem(),total=os.totalmem()){const ratio=free/Math.max
 function sample(){const now=Date.now(),elapsed=Math.max(1,now-lastAt),next=process.cpuUsage(),u=performance.eventLoopUtilization(last),m=process.memoryUsage();const value={at:now,pid:process.pid,memory:m,cpuPct:((next.user-cpu.user+next.system-cpu.system)/1000/elapsed)*100,loopP95Ms:delay.percentile(95)/1e6,loopUtilization:u.utilization,host:policy()};lastAt=now;cpu=next;last=performance.eventLoopUtilization();delay.reset();samples.push(value);if(samples.length>240)samples.shift();return value;}
 const timer=setInterval(sample,5000);timer.unref();
 function read(){return {current:samples.at(-1)||sample(),samples:samples.slice()};}
-module.exports={policy,sample,read};
+let desktop=null;process.on("message",m=>{if(m?.type==="desktop-performance"&&Array.isArray(m.metrics))desktop={at:Date.now(),processes:m.metrics.slice(0,100)};});
+module.exports={policy,sample,read,desktopMetrics:()=>desktop};
