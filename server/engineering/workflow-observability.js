@@ -54,6 +54,21 @@ function workflowObservability(db, runs, workspaceRoot) {
       WHERE w.project=? AND r.status='waiting_approval' AND n.status='waiting_approval'
       ORDER BY n.updated,n.node`).all(project).map(({ outcome, ...row }) => ({ ...row, ...JSON.parse(outcome ?? "null") }));
   }
+  function liveMapRuns() {
+    const activeRuns = `FROM workflow_run r JOIN workflow w ON w.id=r.workflow
+      JOIN project p ON p.id=w.project WHERE p.archived=0`;
+    const attention = db.prepare(`SELECT r.id,r.title,r.status,p.name AS project,
+      (SELECT n.node FROM workflow_node n WHERE n.run=r.id AND n.status=r.status
+        ORDER BY n.updated DESC,n.node LIMIT 1) AS node, COUNT(*) OVER () AS total
+      ${activeRuns} AND r.status IN ('waiting_approval','failed','interrupted')
+      ORDER BY CASE r.status WHEN 'waiting_approval' THEN 0 WHEN 'failed' THEN 1 ELSE 2 END,
+        r.created DESC,r.id LIMIT 100`).all();
+    const recent = db.prepare(`SELECT r.id,r.title,r.status,p.name AS project ${activeRuns}
+      AND r.status NOT IN ('waiting_approval','failed','interrupted')
+      ORDER BY CASE WHEN r.status IN ('running','queued') THEN 0 ELSE 1 END,
+        r.created DESC,r.id LIMIT 20`).all();
+    return { total: attention[0]?.total ?? 0, attention: attention.map(({ total, ...item }) => item), recent };
+  }
   function dashboard(project, days = 30) {
     const cutoff = Date.now() - days * 86400000;
     const states = db.prepare(`SELECT r.status,COUNT(*) AS count FROM workflow_run r
@@ -81,7 +96,7 @@ function workflowObservability(db, runs, workspaceRoot) {
       .all(project, cutoff, project, cutoff);
     return { states, measures, usage };
   }
-  return { approvals, artifact, dashboard, review, timeline };
+  return { approvals, artifact, dashboard, liveMapRuns, review, timeline };
 }
 
 module.exports = { workflowObservability };

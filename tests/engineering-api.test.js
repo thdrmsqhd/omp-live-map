@@ -28,6 +28,10 @@ test("engineering API requires its desktop token and preserves the original grap
         assert.equal(response.status, 403, endpoint);
       }
       const headers = { "x-omp-engineering-token": token };
+      assert.equal((await request("/api/engineering/workflow-live-map")).status, 403);
+      const liveMap = await request("/api/engineering/workflow-live-map", { headers });
+      assert.equal(liveMap.status, 200);
+      assert.deepEqual(JSON.parse(liveMap.text), { total: 0, attention: [], recent: [] });
       const response = await request("/api/engineering/capabilities", { headers });
       assert.deepEqual(JSON.parse(response.text), { omp: false, claude: false });
       assert.equal(process.env.OMP_MAP_ENGINEERING_TOKEN, undefined);

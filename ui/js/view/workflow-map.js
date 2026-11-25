@@ -8,9 +8,23 @@ const wfPositionKey = (run) => run.workflow + ":" + run.version;
 const wfLabel = (status) => wfStatus[status] ?? status ?? "대기";
 const wfNodes = () => wfMap.edit?.payload.nodes ?? wfMap.run?.graph.nodes ?? [];
 const wfEdges = () => wfMap.edit?.payload.edges ?? wfMap.run?.graph.edges ?? [];
+function wfDefaultPositions(nodes) {
+  const occupied = new Set(), defaults = new Map();
+  let column = Math.max(0, ...nodes.map(({ x }) => x));
+  for (const node of nodes) {
+    const key = node.x + ":" + node.y;
+    if (occupied.has(key)) {
+      column += wfSize.w + 45;
+      defaults.set(node.id, { x: column, y: node.y });
+    }
+    occupied.add(key);
+  }
+  return defaults;
+}
 const wfPoint = (node) => {
   if (!wfMap.edit && wfMap.positions[node.id]) return wfMap.positions[node.id];
-  return { x: wfMap.origin.x + node.x, y: wfMap.origin.y + node.y };
+  const { x, y } = (wfMap.edit ? null : wfMap.defaults?.get(node.id)) ?? node;
+  return { x: wfMap.origin.x + x, y: wfMap.origin.y + y };
 };
 const workflowMapBoxes = () => mapMode === "map" ? wfNodes().map((node) => ({ ...wfPoint(node), ...wfSize })) : [];
 
@@ -113,6 +127,7 @@ function wfCreateNode(node) {
 function wfClose() {
   if (wfMap.edit && !wfLeaveEditing()) return;
   wfMap.generation++;
+  wfMap.opening = false;
   wfMap.run = null;
   wfEdgeSignature = undefined;
   wfMap.selected = null;
@@ -120,12 +135,15 @@ function wfClose() {
   $("workflow-map-nodes").replaceChildren();
   $("workflow-inspector").hidden = $("workflow-layer").hidden = true;
   writeJSON("omp-workflow-map-run", null);
-  paintMinimap();
+  if (wfMap.previousView && mapMode === "map") animateView(wfMap.previousView);
+  else paintMinimap();
+  wfMap.previousView = null;
 }
 
 function wfAccept(detail, initial, node) {
   if (!detail.graph) throw new Error("선택한 실행에서 Workflow 그래프를 읽을 수 없습니다.");
   if (initial) {
+    wfMap.defaults = wfDefaultPositions(detail.graph.nodes);
     const sameVersion = wfMap.run && wfPositionKey(wfMap.run.run) === wfPositionKey(detail.run);
     if (!sameVersion) {
       const previous = readJSON("omp-workflow-map-positions", {})[wfPositionKey(detail.run)];
@@ -135,7 +153,8 @@ function wfAccept(detail, initial, node) {
     }
     wfMap.buttons.clear();
     $("workflow-map-nodes").replaceChildren();
-    wfMap.selected = node ?? detail.nodes.find(({ status }) => ["failed", "waiting_approval", "running", "interrupted"].includes(status))?.node ??
+    const target = detail.graph.nodes.find(({ id }) => id === node)?.id;
+    wfMap.selected = target ?? detail.nodes.find(({ status }) => ["failed", "waiting_approval", "running", "interrupted"].includes(status))?.node ??
       detail.graph.nodes[0]?.id;
   }
   wfMap.run = detail;
@@ -143,25 +162,31 @@ function wfAccept(detail, initial, node) {
 }
 
 async function openMapWorkflow(id, node) {
-  if (wfMap.edit && !wfLeaveEditing()) return;
+  if (wfMap.edit && !wfLeaveEditing()) return false;
   const token = ++wfMap.generation;
+  wfMap.opening = true;
   wfMap.notice = "";
   $("workflow-inspector").hidden = false;
   $("wf-map-status").textContent = "실행을 불러오는 중입니다.";
   setMapMode("map");
   try {
     const detail = await mapWorkflowRequest("workflow-run", { id });
-    if (token !== wfMap.generation) return;
+    if (token !== wfMap.generation) return false;
+    wfMap.previousView ??= { ...view };
     wfAccept(detail, true, node);
     writeJSON("omp-workflow-map-run", id);
     wfFit();
+    return true;
   } catch (error) {
     if (token === wfMap.generation) $("wf-map-status").textContent = error.message;
+    return false;
+  } finally {
+    if (token === wfMap.generation) wfMap.opening = false;
   }
 }
 
 async function refreshMapWorkflow() {
-  if (!wfMap.run || wfMap.edit || wfMap.loading || mapMode !== "map") return;
+  if (!wfMap.run || wfMap.edit || wfMap.opening || wfMap.loading || wfMap.intervening || mapMode !== "map") return;
   const id = wfMap.run.run.id, token = wfMap.generation;
   wfMap.loading = true;
   try {
@@ -175,7 +200,7 @@ async function refreshMapWorkflow() {
 $("wf-map-close").onclick = wfClose;
 $("wf-map-fit").onclick = wfFit;
 $("wf-map-new").onclick = () => {
-  if (wfMap.run && (!wfMap.edit || wfLeaveEditing())) void openMapWorkflowLaunch(wfMap.run.run.project, wfMap.run.run.workflow);
+  if (wfMap.run && !wfMap.opening && (!wfMap.edit || wfLeaveEditing())) void openMapWorkflowLaunch(wfMap.run.run.project, wfMap.run.run.workflow);
 };
 if (window.engineeringDesktop) {
   $("overview").addEventListener("click", (event) => {

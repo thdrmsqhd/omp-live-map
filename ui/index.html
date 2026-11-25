@@ -29,7 +29,9 @@
 <div id="app">
   <div id="topbar">
     <span class="brand"><b>omp</b> / live map</span>
-    <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">관제</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">Live Map</button></nav>
+    <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">프로젝트</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">Live Map · 관제</button></nav>
+    <button id="workflow-new-run" hidden>＋ 새 실행</button>
+    <button id="workflow-queue-toggle" aria-controls="workflow-queue" aria-expanded="false" hidden>개입 필요</button>
     <button id="new-session-action" title="새 세션">＋ 세션</button>
     <button id="power-save" title="화면 밖 카드의 무거운 블록을 해제합니다">절전</button>
     <div class="filters" id="filters">
@@ -92,9 +94,14 @@
           <div id="workflow-map-nodes" aria-label="Workflow 단계"></div>
         </div>
       </div>
+      <aside id="workflow-queue" data-workflow-controls hidden aria-label="Workflow 실행 목록">
+        <h2>Workflow 실행</h2>
+        <p id="workflow-queue-status" role="status"></p>
+        <div id="workflow-queue-items"></div>
+      </aside>
       <aside id="workflow-inspector" data-workflow-controls hidden aria-label="Workflow 실행 상세">
         <div class="wf-inspector-header">
-          <div><small id="wf-map-version"></small><h2 id="wf-map-title"></h2></div>
+          <div><small id="wf-map-version"></small><h2 id="wf-map-title" tabindex="-1"></h2></div>
           <button id="wf-map-close" aria-label="Workflow 닫기">닫기</button>
         </div>
         <div class="wf-actions">
@@ -127,7 +134,7 @@
     </div>
     <section id="overview" hidden aria-label="프로젝트 관제">
       <div class="overview-toolbar">
-        <h1>프로젝트 관제 <small id="mon-total"></small></h1><button id="workflow-new-run" hidden>새 실행</button><button id="mon-sidebar" aria-pressed="false">세션 목록</button><label class="mon-search"><input id="mon-search" type="search" placeholder="세션·프로젝트 검색" aria-label="관제 검색"></label><button id="mon-settings" aria-expanded="false">설정</button>
+        <h1>프로젝트 관제 <small id="mon-total"></small></h1><button id="mon-sidebar" aria-pressed="false">세션 목록</button><label class="mon-search"><input id="mon-search" type="search" placeholder="세션·프로젝트 검색" aria-label="관제 검색"></label><button id="mon-settings" aria-expanded="false">설정</button>
         <label>표시 밀도 <select id="overview-density"><option value="compact">Compact</option><option value="standard">Standard</option><option value="detailed">Detailed</option></select></label>
         <label>정렬 <select id="overview-sort"><option value="stable">고정 순서</option><option value="attention">주의 우선</option><option value="memory">메모리</option><option value="recent">최근 활동</option><option value="name">이름</option></select></label>
         <div id="mon-settings-panel" hidden><label title="세션에 귀속된 프로세스의 메모리 경고 기준">RAM 경고(MB) <input id="overview-memory" type="number" min="128" max="1048576" step="128"></label>
@@ -238,5 +245,6 @@
   <script src="js/view/workflow-map-inspector.js"></script>
   <script src="js/view/workflow-map-fields.js"></script>
   <script src="js/view/workflow-map-editor.js"></script>
+  <script src="js/view/workflow-queue.js"></script>
 </body>
 </html>
