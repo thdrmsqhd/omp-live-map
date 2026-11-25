@@ -16,7 +16,11 @@ const KILL_MS = 5000; // stdin 을 닫은 뒤 강제 종료까지 기다리는 �
 function killTree(child) {
   const direct = () => { try { child.kill(); } catch {} };
   if (process.platform !== "win32" || !child.pid) return direct();
-  spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }).on("error", direct);
+  try {
+    const killer=spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+    killer.on("error", direct);
+    killer.on("close",code=>{if(code!==0&&child.exitCode===null&&child.signalCode===null)direct();});
+  } catch { direct(); }
 }
 
 // omp 를 띄운다. resume(세션 파일 경로)을 주면 그 세션을 이어 붙인다.

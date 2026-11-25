@@ -29,6 +29,8 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
     claude: path.join(__dirname, "fake-claude", "fake-claude.js"),
   };
   t.mock.method(childProcess, "spawn", (command, args, options) => {
+    // Windows process-tree cleanup is a real OS command, not a harness launch.
+    if(command==="taskkill")return spawn(command,args,options);
     assert.ok(Object.hasOwn(fake, command), `Unexpected command: ${command}`);
     const directory = options.cwd;
     const child = spawn(process.execPath, [fake[command], ...args], {
@@ -57,7 +59,7 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      assert.equal(response.status, 200);
+      assert.equal(response.status, 200, route+": "+response.text);
       const data = JSON.parse(response.text);
       assert.equal(data.ok, true, data.out);
       return data;
@@ -87,6 +89,8 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
       let ask;for(let i=0;i<150;i++){ask=require("../server/ui-requests").asksFor(claude.node)[0];if(ask)break;await delay(20);}assert.equal(ask?.method,"confirm");
       await post("/api/chat/answer",{node:claude.node,id:ask.id,response:{confirmed:true}});await idle();
       await post("/api/session/stop",{node:claude.node});
+      for(let i=0;i<150;i++){if(!(await list()).some(x=>x.node===claude.node))break;await delay(20);}
+      assert.equal((await list()).some(x=>x.node===claude.node),false,"stopped stream removed from registry");
     } finally {
       const remaining = [...children];
       for (const { child } of remaining) child.kill();
