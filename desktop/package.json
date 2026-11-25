@@ -1,6 +1,6 @@
 {
   "name": "omp-live-map-v3-desktop",
-  "version": "8.2.0-preview.1",
+  "version": "8.2.1-preview.1",
   "private": true,
   "main": "main.cjs",
   "scripts": {
