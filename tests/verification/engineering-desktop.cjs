@@ -52,7 +52,9 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
     await page.getByRole("link", { name: "Engineering" }).click({ timeout: 15000 });
     await page.getByRole("heading", { name: "기초 생성" }).waitFor();
-    assert.equal(await page.locator("#setup-defaults").isDisabled(), true);
+    await page.locator("#setup-defaults").click();
+    await page.locator("#setup-starter-status").filter({ hasText: "개인 기본 구성이 준비됐습니다." }).waitFor();
+    await page.getByRole("button", { name: "Workflow", exact: true }).click();
     const origin = new URL(page.url()).origin;
     assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.notEqual(origin, "http://127.0.0.1:7800");
@@ -91,8 +93,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await form.getByRole("button", { name: "등록 또는 수정" }).click();
     const registered = page.locator("#project option").filter({ hasText: "desktop fixture" });
     await registered.waitFor({ state: "attached", timeout: 8000 });
-    await page.locator("#setup-defaults").click();
-    await page.locator("#setup-starter-status").filter({ hasText: "기본 구성이 준비됐습니다." }).waitFor();
+    await page.locator("#setup-nav").click();
     await page.locator("#setup-new-harness").click();
     await page.locator("#definition-model-open").click();
     await page.locator("[name=modelName]").fill("test profile");

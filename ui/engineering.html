@@ -70,18 +70,17 @@
         </article>
         <article>
           <h3>루프</h3>
-          <p>작업 프로젝트를 선택한 뒤 저장된 하네스에 재시도 횟수와 검증 명령을 붙입니다.</p>
+          <p>저장된 하네스에 재시도 횟수와 검증 명령을 붙여 여러 작업에서 재사용합니다.</p>
           <button id="setup-new-loop" type="button">새 루프 만들기</button>
         </article>
       </div>
       <div class="setup-starter">
-        <h3>프로젝트 기본 구성</h3>
-        <p>설계·리뷰·개발 하네스와 테스트 루프를 한 번에 만들어 템플릿에서 바로 고를 수 있습니다.</p>
+        <h3>개인 기본 구성</h3>
+        <p>설계·리뷰·개발 하네스와 테스트 루프를 한 번에 만들어 내 작업에서 재사용합니다.</p>
         <div class="workflow-controls">
-          <button id="setup-project" type="button">프로젝트 등록</button>
           <button id="setup-defaults" class="workflow-primary" type="button" disabled>기본 하네스·루프 만들기</button>
         </div>
-        <p id="setup-starter-status" class="setup-hint" role="status">작업 프로젝트를 선택하세요.</p>
+        <p id="setup-starter-status" class="setup-hint" role="status" hidden></p>
       </div>
     </section>
     <section id="design" hidden>
@@ -97,6 +96,13 @@
       </div>
       <div class="definition-owner">
         <label id="definition-team-field" hidden>저장할 팀 <select id="definition-team"></select></label>
+        <details id="definition-team-settings" hidden>
+          <summary>새 팀 등록</summary>
+          <form id="definition-team-form" class="workflow-controls">
+            <label>팀 이름 <input name="name" maxlength="240" required></label>
+            <button>팀 등록</button>
+          </form>
+        </details>
         <p id="definition-owner" aria-live="polite"></p>
       </div>
       <form id="definition-form">
@@ -195,7 +201,7 @@
           <legend>루프 설정</legend>
           <label>이름 <input name="loopName" maxlength="240" required></label>
           <label>연결할 하네스 <select name="loopHarness" required aria-describedby="definition-loop-hint"></select></label>
-          <p id="definition-loop-hint" class="setup-hint" hidden>현재 프로젝트에서 사용할 하네스가 없습니다. 2단계에서 하네스를 저장하세요.</p>
+          <p id="definition-loop-hint" class="setup-hint" hidden>이 저장 범위에서 사용할 하네스가 없습니다. 하네스를 먼저 만드세요.</p>
           <button id="definition-loop-harness" type="button" hidden>하네스 만들기</button>
           <div class="workflow-controls">
             <label>최대 시도 횟수 <input name="attempts" type="number" min="1" max="8" required></label>

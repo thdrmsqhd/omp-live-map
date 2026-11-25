@@ -5,10 +5,11 @@ const { transaction } = require("./database");
 
 function addPresetDefinitions(db, catalog, project) {
   return transaction(db, () => {
-    const existing = catalog.definitions(project, "project");
-    if (catalog.project(project).archived) throw problem(409, "보관된 프로젝트에는 기본 구성을 추가할 수 없습니다.");
+    const scope = project ? "project" : "personal";
+    const existing = catalog.definitions(project, scope);
+    if (project && catalog.project(project).archived) throw problem(409, "보관된 프로젝트에는 기본 구성을 추가할 수 없습니다.");
     const ensure = (kind, payload) => existing.find((entry) => entry.kind === kind && entry.name === payload.name)
-      ?? catalog.writeDefinition({ project, kind, payload });
+      ?? catalog.writeDefinition({ scope, project, kind, payload });
     const model = ensure("model", { name: "기본 · Claude Sonnet 4.6", provider: "anthropic", model: "claude-sonnet-4-6" });
     const harness = (name, role) => ensure("harness", { name, adapter: "claude", model: model.id, role });
     const author = harness("기본 · 설계 및 문서", "요구사항 분석 및 문서 작성");

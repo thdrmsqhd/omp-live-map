@@ -18,7 +18,7 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     presetForm.elements.create.disabled = !editable || !chosen || adding || missing.length > 0 || Boolean(sameHarness);
     hint.textContent = !projectId() ? "위에서 작업 프로젝트를 선택하세요. 프로젝트가 없으면 ‘프로젝트 설정’에서 등록할 수 있습니다."
       : isArchived() ? "보관된 프로젝트에는 Workflow를 추가할 수 없습니다."
-      : adding ? "이 프로젝트에 기본 설정을 추가하는 중입니다."
+      : adding ? "개인 기본 설정을 만드는 중입니다."
       : sameHarness ? "설계와 리뷰에는 서로 다른 하네스를 선택하세요."
       : missing.length ? "필요한 하네스와 루프를 선택하세요. 목록이 비어 있으면 ‘기본 하네스·Loop 추가’를 눌러 준비할 수 있습니다." : "";
   }
@@ -54,7 +54,7 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     try {
       await addWorkflowDefaults(project);
       if (project !== projectId()) return;
-      el("status").textContent = "이 프로젝트에서 기본 하네스와 루프를 사용할 수 있습니다.";
+      el("status").textContent = "개인 기본 하네스와 루프를 사용할 수 있습니다.";
     } finally {
       adding = false;
       updatePresetActions();

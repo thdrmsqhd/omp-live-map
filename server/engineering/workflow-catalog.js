@@ -125,13 +125,20 @@ function workflowCatalog(db, catalog) {
       }
       let loop = null;
       if (node.type === "loop") {
-        const latest = catalog.versionOf(pinned.id);
-        loop = catalog.writeDefinition({ project, kind: "loop", id: pinned.id, version: latest.version,
-          payload: { ...pinned.payload, name: latest.name }, referenceVersion: next.version });
+        loop = writeLoopOverride(project, pinned, {}, next.version);
+        node.definition = loop.id;
         node.version = loop.version;
       } else node.version = next.version;
       return { workflow: writeWorkflow({ project, id: workflow.id, version: workflow.version, payload: workflow.payload }), loop };
     });
+  }
+
+  function writeLoopOverride(project, pinned, changes, referenceVersion) {
+    const latest = catalog.versionOf(pinned.id);
+    const local = latest.scope === "project";
+    const name = local ? latest.name : latest.name.slice(0, 216) + " · " + randomUUID().slice(0, 8);
+    return catalog.writeDefinition({ project, kind: "loop", ...(local ? { id: latest.id, version: latest.version } : {}),
+      payload: { ...pinned.payload, ...changes, name }, referenceVersion });
   }
 
   function saveCanvas(body) {
@@ -153,13 +160,12 @@ function workflowCatalog(db, catalog) {
         if (previous.payload.attempts === attempts) continue;
         const key = JSON.stringify([previous.id, previous.version, attempts]);
         if (!replacements.has(key)) {
-          const latest = catalog.versionOf(previous.id);
           const harness = catalog.dependency(previous);
-          const replacement = catalog.writeDefinition({ project, id: latest.id, version: latest.version, kind: "loop",
-            payload: { ...previous.payload, name: latest.name, attempts }, referenceVersion: harness.version });
-          replacements.set(key, replacement.version);
+          replacements.set(key, writeLoopOverride(project, previous, { attempts }, harness.version));
         }
-        node.version = replacements.get(key);
+        const replacement = replacements.get(key);
+        node.definition = replacement.id;
+        node.version = replacement.version;
       }
       return writeWorkflow({ ...body, payload: document });
     });

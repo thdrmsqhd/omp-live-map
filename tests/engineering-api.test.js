@@ -57,16 +57,38 @@ test("engineering API requires its desktop token and preserves the original grap
         assert.equal(response.status, expected, response.text);
         return JSON.parse(response.text);
       }
+      const reusable = await send("workflows/presets/defaults", { scope: "personal" });
+      assert.deepEqual(await send("workflows/presets/defaults", { scope: "personal" }), reusable);
+      const personal = await send("definitions?scope=personal");
+      assert.equal(personal.length, 5);
+      assert.equal(personal.find(({ id }) => id === reusable.loop).project, null);
+      const team = await send("teams", { name: "Platform" });
+      assert.equal(team, "Platform");
+      assert.deepEqual(await send("teams"), ["Platform"]);
+      assert.equal((await send("definitions", { scope: "team", team, kind: "loop",
+        payload: { ...personal.find(({ id }) => id === reusable.loop).payload, name: "Team loop" },
+      })).team, team);
       const { id: project } = await send("projects", { name: "Fixture", root });
       const initial = await send("definitions?project=" + project);
-      assert.deepEqual(initial, []);
+      assert.ok(initial.some(({ id }) => id === reusable.loop));
+      assert.ok(initial.every(({ scope }) => scope === "personal"));
+      const shared = await send("workflows/presets", { project, preset: "refactor", name: "Shared setup", refs: reusable });
+      assert.equal(shared.payload.nodes.find(({ type }) => type === "loop").definition, reusable.loop);
       const refs = await send("workflows/presets/defaults", { project });
       assert.notEqual(refs.author, refs.reviewer);
       assert.deepEqual(await send("workflows/presets/defaults", { project }), refs);
-      assert.equal((await send("definitions?project=" + project)).length, 5);
+      assert.equal((await send("definitions?project=" + project)).length, 10);
       const saved = await send("workflows/presets", { project, preset: "refactor", name: "부분수정", refs });
       assert.deepEqual(saved.payload.nodes.filter(({ definition }) => definition).map(({ definition }) => definition),
         [refs.author, refs.loop, refs.reviewer]);
+      const sharedNode = shared.payload.nodes.find(({ type }) => type === "loop");
+      const edited = await send("workflows/save-canvas", { project, id: shared.id, version: shared.version,
+        payload: shared.payload, loops: [{ node: sharedNode.id, attempts: 2 }] });
+      const editedLoop = edited.payload.nodes.find(({ type }) => type === "loop").definition;
+      assert.notEqual(editedLoop, reusable.loop);
+      const available = await send("definitions?project=" + project);
+      assert.equal(available.find(({ id }) => id === reusable.loop).payload.attempts, 3);
+      assert.equal(available.find(({ id }) => id === editedLoop).payload.attempts, 2);
       await send("projects/archive", { id: project });
       await send("workflows/presets/defaults", { project }, 409);
     });

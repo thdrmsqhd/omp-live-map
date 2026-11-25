@@ -166,6 +166,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = runner.status();
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
+        if (endpoint === "teams") result = definitions.saveTeam(input.name);
         if (endpoint === "project-budget") result = budget.save(string(input.project, "project"), input);
         if (endpoint === "tasks") result = tasks.save(input);
         if (endpoint === "sdlc-stages") result = stages.save(input);
@@ -176,7 +177,9 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const payload = buildPreset(input.preset, input.refs ?? {});
           result = workflows.save({ project: input.project, payload: { ...payload, name: input.name || payload.name } });
         }
-        if (endpoint === "workflows/presets/defaults") result = presetDefinitions(string(input.project, "project"));
+        if (endpoint === "workflows/presets/defaults") {
+          result = presetDefinitions(input.scope === "personal" ? null : string(input.project, "project"));
+        }
         if (endpoint === "workflows/import") {
           result = templates.import(string(input.project, "project"), input.template, input.name);
         }
