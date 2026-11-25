@@ -1,5 +1,5 @@
 /* 관제/워크스페이스/맵 셸. 기존 열린 카드 상태 및 좌표는 모드 전환 때 보존한다. */
-let mapMode = readJSON("omp-map-view-mode-v2","map");
+let mapMode = readJSON("omp-map-view-mode-v2", window.engineeringDesktop ? "map" : "overview");
 if (!["map","overview","workspace"].includes(mapMode)) mapMode="map";
 let overviewDensity = readJSON("omp-map-overview-density","standard");
 if (!["compact","standard","detailed"].includes(overviewDensity)) overviewDensity="standard";

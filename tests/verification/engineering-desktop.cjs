@@ -226,7 +226,6 @@ async function verifyHarnessEditor(page, repository) {
 async function verifyWorkflowCanvas(page, origin) {
   await page.goto(origin);
   await page.locator('#viewModes button[data-mode="map"]').click();
-  const viewBefore = await page.evaluate(() => ({ x: view.x, y: view.y, k: view.k }));
   const open = page.locator("#workflow-new-run");
   await open.click();
   const launch = page.locator("#workflow-launch-form");
@@ -236,6 +235,7 @@ async function verifyWorkflowCanvas(page, origin) {
   await launch.locator('[name="acceptance"]').fill("The graph completes and the original positions remain draggable.");
   await launch.getByRole("button", { name: "실행 시작" }).click();
   await page.getByRole("heading", { name: "Launch from the original Live Map" }).waitFor();
+  const viewBefore = await page.evaluate(() => ({ ...wfMap.previousView }));
   const inspector = page.locator("#workflow-inspector");
   await inspector.locator("#wf-map-status").filter({ hasText: /^완료$/ }).waitFor();
   const node = page.locator('.wf-node[data-workflow-node="start"]');

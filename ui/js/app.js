@@ -56,8 +56,9 @@ async function boot() {
   $("stage").addEventListener("wheel", touch, { once: true, passive: true });
   let graphBase=await firstGraph();setGraph(graphBase);
   setConnected(true);
-  renderMap(true, true);
-  Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(!touched, true));
+  const mayFit = () => !touched && !wfMap.opening && !wfMap.run;
+  renderMap(mayFit(), true);
+  Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(mayFit(), true));
 
   function connectEvents() {
     const es = new EventSource("/api/events?graph=2");
