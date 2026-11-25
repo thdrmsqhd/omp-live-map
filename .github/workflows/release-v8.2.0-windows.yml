@@ -1,0 +1,92 @@
+name: OMP Live Map v8.2.0 Windows release
+
+on:
+  push:
+    branches: ['release/v8.2.0-windows']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omp-release-v8.2.0
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    permissions:
+      contents: write
+      actions: read
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: '0ad34a6ec1cf4b37a015d35b7442154e4eee1836'
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Build Windows installer
+        run: |
+          npm --prefix desktop pkg set version=8.2.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop install --package-lock=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop run build:windows -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OMP-Live-Map-8.2.0-Windows-x64
+          path: desktop/dist/OMP-Live-Map-V3-Setup.exe
+          if-no-files-found: error
+      - name: Install on hosted Windows and verify local assets
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
+          $setup = Join-Path $PWD 'desktop/dist/OMP-Live-Map-V3-Setup.exe'
+          $result = Start-Process -FilePath $setup -ArgumentList '/S',"/D=$target" -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
+          $env:OMP_MAP_INSTALLED_EXE = Join-Path $target 'OMP Live Map V3.exe'
+          if (!(Test-Path -LiteralPath $env:OMP_MAP_INSTALLED_EXE)) { throw 'Installed executable not found' }
+          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/verification/engineering-desktop.cjs
+      - name: Verify uninstall retains workspace data
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
+          $data = Join-Path $env:APPDATA 'OMP Live Map V3'
+          $marker = Join-Path $data 'retention-test.txt'
+          New-Item -ItemType Directory -Path $data -Force | Out-Null
+          Set-Content -Path $marker -Value 'preserve'
+          $uninstall = Get-ChildItem -LiteralPath $target -Filter 'Uninstall*.exe' | Select-Object -First 1
+          if (!$uninstall) { throw 'Uninstaller not found' }
+          $result = Start-Process -FilePath $uninstall.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($result.ExitCode -ne 0 -or !(Test-Path -LiteralPath $marker)) { throw 'Uninstall retention check failed' }
+      - name: Publish verified installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'v8.2.0'
+          $sourceCommit = git rev-parse HEAD
+          $mainCommit = gh api "repos/$env:GITHUB_REPOSITORY/branches/main" --jq .commit.sha
+          if ($LASTEXITCODE -ne 0 -or $mainCommit -ne $sourceCommit) {
+            throw 'The verified commit is no longer the head of main'
+          }
+          $verification = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/45572884275/jobs" --jq '.jobs[] | select(.name == "windows") | .conclusion'
+          if ($LASTEXITCODE -ne 0 -or $verification -ne 'success') {
+            throw 'Windows verification on main has not passed'
+          }
+          $asset = 'OMP-Live-Map-8.2.0-Windows-x64-Setup.exe'
+          Copy-Item -LiteralPath 'desktop/dist/OMP-Live-Map-V3-Setup.exe' -Destination $asset
+          $checksum = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath SHA256SUMS.txt -Value "$checksum  $asset" -Encoding ascii
+          @'
+          ## 변경 사항
+          - Live Map에서 관제와 Workflow 실행을 함께 관리합니다.
+          - Engineering에서 에이전트 프로필을 노드로 연결하고, 새 세션에 저장한 하네스를 적용할 수 있습니다.
+          - 하네스 저장 범위를 개인·팀·프로젝트로 선택할 수 있습니다.
+
+          Windows x64 설치 파일과 SHA-256 체크섬을 제공합니다. 설치 파일에는 코드 서명이 적용되어 있지 않습니다.
+          '@ | Set-Content -LiteralPath release-notes.md -Encoding utf8
+          gh release create $tag $asset SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $sourceCommit --title "OMP Live Map $tag" --latest --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
