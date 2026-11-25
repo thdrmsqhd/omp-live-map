@@ -2,7 +2,9 @@
 "use strict";
 
 const path = require("path");
+const fs = require("node:fs");
 const { spawn } = require("child_process");
+const { withPromptFile } = require("./harness/prompt-file");
 
 // 맵이 띄우는 메인 세션에만 붙는 지시(서브에이전트에는 omp 가 넘기지 않는다).
 // 이 플래그는 ~/.omp/agent/APPEND_SYSTEM.md 를 대신하므로, 그 파일을 만들면 이 파일에 합쳐야 한다.
@@ -25,10 +27,13 @@ function killTree(child) {
 
 // omp 를 띄운다. resume(세션 파일 경로)을 주면 그 세션을 이어 붙인다.
 // 반환: { child, send(cmd) → 응답 프레임 Promise, onEvent(fn) 모든 프레임 구독, close() }
-function open({ cwd, resume, launch = spawn, terminate = killTree, mainPrompt = MAIN_PROMPT }) {
-  const args = ["--mode", "rpc-ui", "--append-system-prompt", mainPrompt];
-  if (resume) args.push("-r", resume);
-  const child = launch("omp", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+function open({ cwd, resume, launch = spawn, terminate = killTree, mainPrompt = MAIN_PROMPT, systemPrompt }) {
+  const prompt = systemPrompt ? fs.readFileSync(mainPrompt, "utf8") + "\n\n" + systemPrompt : "";
+  const child = withPromptFile(prompt, (file) => {
+    const args = ["--mode", "rpc-ui", "--append-system-prompt", file || mainPrompt];
+    if (resume) args.push("-r", resume);
+    return launch("omp", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  });
   const pending = new Map(); // 명령 id -> { resolve, reject, timer }
   const listeners = [];
   let seq = 0, buf = "", dead = null, readyOk, readyFail;

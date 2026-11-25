@@ -275,3 +275,58 @@ test("verification-only retry uses the previous Loop worktree without calling it
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("a linked profile supplies the Agent settings without becoming an execution step", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-profile-"));
+  const db = openDatabase(path.join(directory, "engineering.sqlite"));
+  const previousState = process.env.OMP_MAP_STATE;
+  process.env.OMP_MAP_STATE = directory;
+  const { save, remove, close } = require("../server/harness/session-profiles");
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Fixture", "main");
+    const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
+    const runs = workflowRuns(db, definitions, workflows);
+    const profile = save({ name: "Fixture reviewer", adapter: "claude", model: "claude-sonnet-4-6",
+      role: "Reviewer", instructions: "Use the v1 rules." });
+    const nodes = [
+      { id: "start", label: "Start", type: "start" },
+      { id: "profile", label: "Reviewer", type: "profile", profileId: profile.id, profileVersion: profile.version },
+      { id: "agent", label: "Agent", type: "agent", instruction: "Review the changes." },
+      { id: "end", label: "End", type: "end" },
+    ];
+    const edges = [{ from: "start", to: "agent" }, { from: "agent", to: "end" }, { from: "profile", to: "agent", port: "profile" }];
+    const payload = { name: "Review fixture", nodes, edges };
+    assert.throws(() => workflows.plan("one", { ...payload, edges: [...edges, edges[2]] }), /one profile/);
+    assert.throws(() => workflows.plan("one", { ...payload, edges: [...edges.slice(0, 2), { from: "profile", to: "end", port: "profile" }] }), /profile input/);
+    const workflow = workflows.save({ project: "one", payload });
+    const latest = save({ ...profile, instructions: "Use the v2 rules." });
+    remove(latest.id, latest.version);
+    const observed = [];
+    const runner = { requireAdapter(harness, model) {
+      observed.push([harness, model]);
+      return { async run({ instruction }) {
+        assert.equal(instruction, "Review the changes.");
+        return { costCents: 1, sessionId: "fixture-review" };
+      } };
+    } };
+    const engine = workflowEngine(runs, workflows, definitions, runner, { async create() { return directory; } });
+    const run = engine.start({ project: "one", workflow: workflow.id, version: 1, title: "Profile run",
+      timeoutMs: 3000, budgetCents: 50 }, "profile-run");
+    const detail = workflows.executionPlan("one", workflow.payload, workflow.id);
+    assert.deepEqual(detail.order, ["start", "agent", "end"]);
+    assert.equal(detail.display.nodes.some(({ type }) => type === "profile"), true);
+    for (let i = 0; i < 100 && observed.length === 0; i++) await delay(10);
+    for (let i = 0; i < 100 && runs.get(run.id).status === "running"; i++) await delay(10);
+    assert.equal(runs.get(run.id).status, "succeeded", runs.get(run.id).error);
+    assert.equal(runs.nodes(run.id).some(({ node }) => node === "profile"), false);
+    assert.equal(observed[0][0].instructions, "Use the v1 rules.");
+    assert.equal(observed[0][1].model, "claude-sonnet-4-6");
+    assert.equal(runs.nodes(run.id).find(({ node }) => node === "agent").outcome.definitions.harness.version, 1);
+  } finally {
+    close();
+    if (previousState === undefined) delete process.env.OMP_MAP_STATE;
+    else process.env.OMP_MAP_STATE = previousState;
+    db.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

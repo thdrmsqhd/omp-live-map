@@ -7,6 +7,7 @@ const { listModels, setModel } = require("./session-model");
 const { prepare, MAX_BODY: UPLOAD_BODY } = require("./uploads");
 const { answer } = require("./ui-requests");
 const harness = require("./harness");
+const profiles = require("./harness/session-profiles");
 const { switchHarness } = require("./harness/switch");
 const { summaryOf } = require("./summary");
 
@@ -29,10 +30,36 @@ module.exports = {
   "POST /api/claude/project-info":(req,res)=>withJson(req,res,p=>{const n=ccNode(p);if(!n)return json(res,{ok:false,out:"Claude 세션 필요"});const loc=ccRun.locate(n);if(!loc.exists&&!loc.known)return json(res,{ok:false,out:"세션 기록 없음"});return json(res,{ok:true,cwd:loc.cwd,sources:ccInfo.inspect(loc.cwd)});}),
   "GET /api/claude/status": async(req,res)=>json(res,await ccSettings.status()),
   "POST /api/claude/options": (req,res)=>withJson(req,res,async p=>{const node=ccNode(p);if(!node)return json(res,{ok:false,out:"세션 필요"});if(p.options){if(ccRun.isBusy(node))return json(res,{ok:false,out:"실행 중에는 변경할 수 없습니다"});const status=await ccSettings.status();if(p.options.protocol==="stream"&&!status.stream)return json(res,{ok:false,out:"설치 CLI의 양방향 권한 프로토콜 미확인"});if(p.options.effort!=="default"&&!status.effort)return json(res,{ok:false,out:"설치 CLI에서 effort 미확인"});return json(res,ccSettings.set(node,p.options));}json(res,{ok:true,options:ccSettings.get(node),diagnostics:ccRun.diagnostics(node),maxRuns:ccRun.maxRuns});}),
+  "GET /api/session-harnesses": (req, res) => {
+    try { json(res, { ok: true, profiles: profiles.list() }); }
+    catch (error) { json(res, { ok: false, out: error.message }); }
+  },
+  "POST /api/session-harnesses": (req, res) => withJson(req, res, (input) => {
+    try {
+      if (input.remove === true) {
+        profiles.remove(input.id, input.version);
+        return json(res, { ok: true });
+      }
+      return json(res, { ok: true, profile: profiles.save(input) });
+    } catch (error) {
+      return json(res, { ok: false, out: error.message });
+    }
+  }),
   "POST /api/session/new": (req, res) => withJson(req, res, async (p) => {
-    const a = promptOf(p);
-    if (a.error) return json(res, { ok: false, out: a.error });
-    json(res, await newSession(String(p.cwd || ""), a.message, a.images, String(p.harness || "omp")));
+    try {
+      let profile;
+      if (p.profile != null) {
+        const { id, version } = p.profile;
+        if (typeof id !== "string" || !Number.isSafeInteger(version)) throw new Error("하네스 버전을 확인해 주세요.");
+        profile = profiles.get(id, version);
+      }
+      const kind = profile?.adapter ?? String(p.harness || "omp");
+      const a = promptOf({ ...p, harness: kind });
+      if (a.error) return json(res, { ok: false, out: a.error });
+      return json(res, await newSession(String(p.cwd || ""), a.message, a.images, kind, profile));
+    } catch (error) {
+      return json(res, { ok: false, out: error.message });
+    }
   }, UPLOAD_BODY),
   "POST /api/session/stop": (req, res) => withJson(req, res, (p) => json(res, stopSession(String(p.node || "")))),
   "* /api/session/list": (req, res) => json(res, { sessions: list() }),

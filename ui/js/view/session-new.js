@@ -15,7 +15,14 @@ function openNewSession(at) {
   box.id = "newsess";
   box.innerHTML = `<div class="nsbox">
     <div class="nst">새 세션</div>
-    <label>하네스<select class="nshz">
+    <label>세션 하네스<select class="nsprofile">
+      <option value="">기본 실행 설정</option>
+    </select></label>
+    <div class="nsharness-tools">
+      <small class="nsprofile-note" role="status"></small>
+      <a href="/engineering.html?view=session-harnesses">하네스 관리</a>
+    </div>
+    <label>실행기<select class="nshz">
       <option value="omp">omp (기본)</option>
       <option value="claude">Claude Code</option>
     </select></label>
@@ -29,9 +36,34 @@ function openNewSession(at) {
   const ta = box.querySelector(".nstext");
   const err = box.querySelector(".nserr");
   const hz = box.querySelector(".nshz");
+  const profileSelect = box.querySelector(".nsprofile");
+  const profileNote = box.querySelector(".nsprofile-note");
+  let profiles = [];
+  const selectedProfile = () => profiles.find(({ id }) => id === profileSelect.value);
+  const paintProfile = () => {
+    const selected = selectedProfile();
+    hz.disabled = Boolean(selected);
+    hz.value = selected?.adapter ?? (NEW_HARNESS === "claude" ? "claude" : "omp");
+    profileNote.textContent = selected ? [selected.role, selected.model].filter(Boolean).join(" · ") : "";
+  };
+  async function loadProfiles() {
+    try {
+      const response = await fetch("/api/session-harnesses");
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.out);
+      profiles = result.profiles;
+      profileSelect.replaceChildren(new Option("기본 실행 설정", ""),
+        ...profiles.map(({ id, name, adapter, version }) =>
+          new Option(`${name} · ${adapter === "omp" ? "OMP" : "Claude Code"} · v${version}`, id)));
+      paintProfile();
+    } catch (error) {
+      profileNote.textContent = "저장된 하네스를 불러오지 못했습니다. " + error.message;
+    }
+  }
   const go = box.querySelector("button[data-open]");
   hz.value = NEW_HARNESS === "claude" ? "claude" : "omp";
   hz.addEventListener("change", () => saveNewHarness(hz.value));
+  profileSelect.addEventListener("change", paintProfile);
   cwd.value = ENV.localCwd || "";
   installCwdSuggest(box, cwd);
   const files = box.__files = [];
@@ -52,7 +84,10 @@ function openNewSession(at) {
     const pend = addPending(at, cwd.value.trim());
     let out;
     try {
-      const res = await postJSON("/api/session/new", { cwd: cwd.value.trim(), text, files: attachPayload(files), harness: hz.value });
+      const selected = selectedProfile();
+      const profile = selected && { id: selected.id, version: selected.version };
+      const res = await postJSON("/api/session/new", { cwd: cwd.value.trim(), text,
+        files: attachPayload(files), harness: hz.value, profile });
       out = await res.json().catch(() => ({ ok: false, out: "HTTP " + res.status }));
     } catch (e) {
       out = { ok: false, out: e.message };
@@ -91,5 +126,6 @@ function openNewSession(at) {
   // 창 안의 우클릭이 맵 메뉴를 띄우지 않게 한다.
   box.addEventListener("contextmenu", (e) => e.stopPropagation());
   document.body.appendChild(box);
+  void loadProfiles();
   (cwd.value ? ta : cwd).focus();
 }

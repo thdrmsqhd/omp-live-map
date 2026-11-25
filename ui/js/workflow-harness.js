@@ -4,6 +4,9 @@ export function bindWorkflowHarness({ el, form, definitions, choices, editHarnes
   const versions = form.elements.harnessVersion;
   const instruction = form.elements.harnessInstruction;
   const edit = el("harness-edit");
+  const linked = el("linked-profile");
+  const definitionControls = [selector, versions, edit];
+  let profileNode;
 
   function fillVersions(id, chosen) {
     const record = definitions().find((entry) => entry.id === id && entry.kind === "harness");
@@ -18,10 +21,17 @@ export function bindWorkflowHarness({ el, form, definitions, choices, editHarnes
   selector.addEventListener("change", () => fillVersions(selector.value));
   edit.addEventListener("click", () => editHarness(selector.value, Number(versions.value)));
   return {
-    show(node) {
+    show(node, profile) {
       const visible = node?.type === "agent";
       fields.hidden = fields.disabled = !visible;
       if (!visible) return;
+      profileNode = profile;
+      linked.hidden = !profile;
+      linked.textContent = profile ? `연결된 프로필 · ${profile.label} · v${profile.profileVersion}` : "";
+      for (const control of definitionControls) {
+        control.disabled = Boolean(profile);
+        (control.closest("label") ?? control).hidden = Boolean(profile);
+      }
       choices(selector, [["", "하네스 선택"],
         ...definitions().filter(({ kind }) => kind === "harness").map(({ id, name }) => [id, name])]);
       selector.value = node.definition || "";
@@ -30,6 +40,10 @@ export function bindWorkflowHarness({ el, form, definitions, choices, editHarnes
     },
     apply(settings) {
       if (fields.disabled) return settings;
+      if (profileNode) {
+        const { definition, version, ...rest } = settings;
+        return { ...rest, instruction: instruction.value };
+      }
       if (!selector.value || !versions.value) throw new Error("하네스와 버전을 선택해 주세요.");
       return { ...settings, definition: selector.value, version: Number(versions.value), instruction: instruction.value };
     },

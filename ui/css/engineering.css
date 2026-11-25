@@ -1,21 +1,69 @@
-:root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }
-body { margin: 0; }
-header { display: flex; align-items: center; gap: 2rem; padding: .8rem 1.5rem; border-bottom: 1px solid GrayText; }
-nav { display: flex; align-items: center; gap: .8rem; }
-nav button[aria-pressed="true"] { font-weight: 700; }
-main { max-width: 56rem; margin: auto; padding: 0 1.5rem 3rem; }
-section { border-top: 1px solid GrayText; margin: 1.4rem 0; padding-top: .8rem; }
-form { display: grid; gap: .7rem; margin: .6rem 0 1.1rem; }
+:root {
+  color-scheme: dark;
+  font: 14px/1.5 system-ui, "Malgun Gothic", sans-serif;
+  --bg: #13151a;
+  --panel: #1c1f26;
+  --field: #15171d;
+  --border: #383d49;
+  --text: #eeedf3;
+  --muted: #a8adbd;
+  --accent: #baa8ff;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+header { display: flex; align-items: center; flex-wrap: wrap; gap: 1.5rem; padding: .75rem 1.4rem; background: var(--panel); border-bottom: 1px solid var(--border); }
+nav { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; }
+nav a { padding: .35rem .65rem; color: var(--muted); }
+nav button[aria-pressed="true"] { background: #342b4b; border-color: #66518b; color: #e3d7ff; }
+main { max-width: 108rem; margin: auto; padding: 0 1.4rem 2rem; }
+section { margin: 1rem 0; }
+#design, #execution { max-width: 66rem; }
+form { display: grid; gap: .65rem; margin: .65rem 0; }
 form > button, form > div { justify-self: start; }
-label { display: grid; gap: .2rem; }
-input, textarea, select, button { font: inherit; padding: .35em .55em; }
-textarea { font-family: ui-monospace, monospace; resize: vertical; }
-#status { min-height: 1.5em; color: LinkText; }
+label { display: grid; gap: .25rem; min-width: 0; color: var(--muted); }
+input, textarea, select, button { font: inherit; min-width: 0; max-width: 100%; padding: .4rem .65rem; border: 1px solid var(--border); border-radius: .4rem; color: var(--text); background: var(--field); }
+button { cursor: pointer; background: #272b35; }
+button:disabled { opacity: .5; cursor: default; }
+button:not(:disabled):hover, summary:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+textarea, pre { font-family: ui-monospace, Consolas, monospace; }
+textarea { resize: vertical; }
+summary { cursor: pointer; color: var(--text); }
+fieldset { min-width: 0; border: 1px solid var(--border); border-radius: .45rem; }
+fieldset label + label { margin-top: .5rem; }
+#status, #workflow-status, #workflow-launch-status { color: var(--accent); }
+#status:empty, #workflow-status:empty, #workflow-launch-status:empty { display: none; }
+.engineering-context { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; padding: .9rem 0 .2rem; }
+.engineering-project { width: min(100%, 20rem); }
+.engineering-settings { position: relative; }
+.engineering-settings summary { padding: .4rem .65rem; border: 1px solid var(--border); border-radius: .4rem; }
+.engineering-settings[open] {
+  flex-basis: 100%;
+  padding: .75rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+}
+.engineering-settings[open] > summary { padding: 0; border: 0; }
+.engineering-settings form { max-width: 36rem; }
 #actions { display: flex; gap: .5rem; margin: 1em 0; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-
 .harness-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-.harness-comparison[hidden] { display: none; }
-.harness-comparison article { border: 1px solid GrayText; padding: .75rem; }
+.harness-comparison article { border: 1px solid var(--border); padding: .75rem; }
 .harness-comparison pre { max-height: 18rem; overflow: auto; }
 @media (max-width: 620px) { .harness-comparison { grid-template-columns: 1fr; } }
+.session-harnesses { max-width: 42rem; }
+#session-harness-editor > p { color: var(--muted); }
+#session-harness-status { color: var(--accent); margin: 0; }
+#workflow-profile-dialog {
+  width: min(40rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: .65rem;
+  padding: 1rem;
+  box-shadow: 0 10px 48px #0008;
+}
+#workflow-profile-dialog::backdrop { background: #090a10b8; }

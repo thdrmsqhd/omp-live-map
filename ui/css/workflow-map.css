@@ -53,3 +53,8 @@
 #workflow-queue button small { color: #abbecf; }
 #workflow-queue button[data-status=failed] small, #workflow-queue button[data-status=interrupted] small { color: #ffaaa8; }
 #workflow-queue button[data-status=waiting_approval] small { color: #ffd489; }
+
+
+#workflow-map-edges g[data-profile] path { stroke: #baa8ff; stroke-dasharray: 6 4; }
+#workflow-map-edges g[data-profile] text { fill: #d7caff; }
+.wf-node[data-type="profile"] { border-color: #baa8ff; }
