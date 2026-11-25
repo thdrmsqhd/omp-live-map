@@ -59,6 +59,14 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .definition-scopes button[aria-pressed="true"] { border: 2px solid var(--accent); padding: calc(.75rem - 1px); background: color-mix(in srgb, var(--accent) 10%, var(--field)); }
 .definition-scopes span, #definition-model-hint { font-size: .875rem; }
 .setup-hint, #workflow-preset-hint { color: var(--muted); }
+.setup-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .75rem; }
+#setup { max-width: 66rem; }
+.setup-cards article, .setup-starter { padding: .9rem 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--panel); }
+.setup-cards article { display: grid; gap: .6rem; grid-template-rows: auto 1fr auto; justify-items: start; }
+.setup-cards h3, .setup-cards p, .setup-starter h3 { margin: 0; }
+.setup-cards p, .setup-starter p { color: var(--muted); }
+.setup-starter { margin-top: .75rem; }
+.setup-starter [role="status"] { margin-bottom: 0; }
 #workflow-preset-hint:empty { display: none; }
 #definition-loop-checks { display: grid; gap: .55rem; margin: .75rem 0; }
 #definition-loop-checks fieldset button { margin: .45rem .4rem 0 0; }

@@ -85,5 +85,5 @@ export function bindSessionHarnesses(find) {
       status.textContent = "프로필을 삭제했습니다.";
     });
   };
-  return () => perform(load);
+  return (id) => perform(() => load(id));
 }

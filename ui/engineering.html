@@ -14,10 +14,11 @@
   <header>
     <strong>OMP Live Map</strong>
     <nav aria-label="워크스페이스">
+      <button id="setup-nav" aria-pressed="true">기초 생성</button>
       <button id="session-harnesses-nav" aria-pressed="false">1. 프로필</button>
       <button id="design-nav" aria-pressed="false">2. 하네스</button>
       <button id="loop-nav" aria-pressed="false">3. 루프</button>
-      <button id="workflow-nav" aria-pressed="true">Workflow</button>
+      <button id="workflow-nav" aria-pressed="false">Workflow</button>
       <button id="sdlc-nav" aria-pressed="false">개발 Task</button>
       <button id="execution-nav" aria-pressed="false">실행</button>
       <a href="/">관측</a>
@@ -26,8 +27,8 @@
   <main>
     <p id="status" role="status"></p>
     <div id="engineering-context" class="engineering-context">
-      <label class="engineering-project">작업 프로젝트 <select id="project"></select></label>
-      <details class="engineering-settings">
+      <label class="engineering-project">작업 프로젝트 <select id="project"><option value="">프로젝트 선택</option></select></label>
+      <details id="project-settings" class="engineering-settings">
         <summary>프로젝트 설정</summary>
         <form id="project-form">
           <label>이름 <input name="name" required></label>
@@ -54,6 +55,35 @@
         </form>
       </details>
     </div>
+    <section id="setup" aria-labelledby="setup-title">
+      <h2 id="setup-title">기초 생성</h2>
+      <div class="setup-cards">
+        <article>
+          <h3>프로필</h3>
+          <p>실행기와 모델을 골라 새 세션이나 Workflow 노드에서 사용할 에이전트를 만듭니다.</p>
+          <button id="setup-new-profile" type="button">새 프로필 만들기</button>
+        </article>
+        <article>
+          <h3>하네스</h3>
+          <p>개인·팀·프로젝트 중 저장 범위를 고르고, 역할과 작업 규칙을 만듭니다.</p>
+          <button id="setup-new-harness" type="button">새 하네스 만들기</button>
+        </article>
+        <article>
+          <h3>루프</h3>
+          <p>작업 프로젝트를 선택한 뒤 저장된 하네스에 재시도 횟수와 검증 명령을 붙입니다.</p>
+          <button id="setup-new-loop" type="button">새 루프 만들기</button>
+        </article>
+      </div>
+      <div class="setup-starter">
+        <h3>프로젝트 기본 구성</h3>
+        <p>설계·리뷰·개발 하네스와 테스트 루프를 한 번에 만들어 템플릿에서 바로 고를 수 있습니다.</p>
+        <div class="workflow-controls">
+          <button id="setup-project" type="button">프로젝트 등록</button>
+          <button id="setup-defaults" class="workflow-primary" type="button" disabled>기본 하네스·루프 만들기</button>
+        </div>
+        <p id="setup-starter-status" class="setup-hint" role="status">작업 프로젝트를 선택하세요.</p>
+      </div>
+    </section>
     <section id="design" hidden>
       <h2 id="definition-heading">Workflow 하네스</h2>
       <p id="definition-guide" class="setup-hint"></p>
@@ -77,6 +107,7 @@
         <div class="workflow-controls">
           <label><span id="definition-list-label">하네스</span><select id="definition"></select></label>
           <label>저장 버전 <select id="definition-version"></select></label>
+          <button id="definition-new" type="button">새 하네스</button>
           <button id="definition-model-open" type="button">이 범위의 모델 관리</button>
           <button id="definition-harness-open" type="button" hidden>하네스로 돌아가기</button>
         </div>
@@ -165,6 +196,7 @@
           <label>이름 <input name="loopName" maxlength="240" required></label>
           <label>연결할 하네스 <select name="loopHarness" required aria-describedby="definition-loop-hint"></select></label>
           <p id="definition-loop-hint" class="setup-hint" hidden>현재 프로젝트에서 사용할 하네스가 없습니다. 2단계에서 하네스를 저장하세요.</p>
+          <button id="definition-loop-harness" type="button" hidden>하네스 만들기</button>
           <div class="workflow-controls">
             <label>최대 시도 횟수 <input name="attempts" type="number" min="1" max="8" required></label>
             <label>제한 시간(초) <input name="seconds" type="number" min="0.1" max="3600" step="0.001" required></label>
@@ -178,7 +210,7 @@
         </fieldset>
       </form>
     </section>
-    <section id="workflow">
+    <section id="workflow" hidden>
       <div class="workflow-controls workflow-toolbar">
         <label>Workflow <select id="workflow-list"><option value="">새 Workflow</option></select></label>
         <label>이름 <input id="workflow-name" maxlength="240"></label>

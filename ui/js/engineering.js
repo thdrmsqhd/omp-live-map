@@ -25,6 +25,9 @@ let modelOptions = [];
 let currentRunRequest = null;
 let workflow;
 let sdlc;
+const starter = find("setup-defaults");
+const starterStatus = find("setup-starter-status");
+let creatingDefaults = false;
 
 async function request(endpoint, params, payload) {
   if (!window.engineeringDesktop) throw new Error("데스크톱 앱에서 Engineering을 열어 주세요.");
@@ -92,6 +95,8 @@ async function refreshEditor(chosen, refreshAvailable = false) {
     loop: "하네스를 실행하고 검증 명령의 결과에 따라 다시 시도할 수 있습니다. 루프는 작업 프로젝트에 저장됩니다.",
   }[type];
   find("definition-list-label").textContent = { harness: "저장된 하네스", model: "저장된 모델", loop: "저장된 루프" }[type];
+  find("definition-new").textContent = { harness: "새 하네스", model: "새 모델", loop: "새 루프" }[type];
+  find("definition-new").disabled = Boolean(archived);
   find("definition-scope-controls").hidden = type === "loop";
   find("definition-team-field").hidden = type === "loop" || scope !== "team";
   find("definition-model-open").hidden = type !== "harness";
@@ -123,12 +128,21 @@ function showAvailable(records) {
   workflow?.refreshProfiles();
 }
 
+function updateStarter(message) {
+  const selected = projects.find(({ id }) => id === project.value);
+  starter.disabled = !selected || Boolean(selected.archived) || creatingDefaults;
+  starterStatus.textContent = !selected ? "작업 프로젝트를 선택하거나 등록하세요."
+    : selected.archived ? "보관된 프로젝트입니다. 다른 프로젝트를 선택하세요."
+    : message ?? `${selected.name}에 기본 구성을 저장합니다.`;
+}
+
 async function addWorkflowDefaults(projectId) {
   const refs = await request("workflows/presets/defaults", {}, { project: projectId });
   const records = await request("definitions", { project: projectId });
   if (projectId === project.value) {
     scopedDefinitionsStale = owner().scope === "project";
     showAvailable(records);
+    workflow?.useDefaults(projectId, refs);
   }
   return refs;
 }
@@ -151,6 +165,7 @@ async function refreshProjects(chosen, editSelected = false) {
     form.dataset.project = selected?.id ?? "";
   }
   find("archive").disabled = !selected || selected.archived;
+  updateStarter();
   const available = selected ? await request("definitions", { project: selected.id }) : [];
   if (revision !== projectRequest) return;
   showAvailable(available);
@@ -227,7 +242,7 @@ find("actions").addEventListener("click", report(async (event) => {
     await refreshRuns();
   }
 }));
-const views = ["design", "workflow", "session-harnesses", "sdlc", "execution"];
+const views = ["setup", "design", "workflow", "session-harnesses", "sdlc", "execution"];
 const loadSessionHarnesses = bindSessionHarnesses(find);
 const profileDialog = find("workflow-profile-dialog");
 const profileEditor = find("session-harness-editor");
@@ -238,31 +253,58 @@ find("workflow-open-profiles").onclick = () => {
 };
 find("workflow-close-profiles").onclick = () => profileDialog.close();
 profileDialog.addEventListener("close", () => find("session-harness-host").append(profileEditor));
-function showView(view) {
+function showView(view, freshProfile = false) {
   find("engineering-context").hidden = view === "session-harnesses";
   if (view === "session-harnesses") {
     status.textContent = "";
-    void loadSessionHarnesses();
+    void loadSessionHarnesses(freshProfile ? "" : undefined);
   } else if (!window.engineeringDesktop) status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";
   for (const name of views) find(name).hidden = (view === "loop" ? "design" : view) !== name;
   for (const name of [...views, "loop"]) find(name + "-nav").setAttribute("aria-pressed", String(view === name));
 }
-const showDefinitions = (type) => report(async () => {
-  if (kind.value !== type && !editor.mayReplace()) return;
+const showDefinitions = (type, fresh = false) => report(async () => {
+  if ((kind.value !== type || fresh) && !editor.mayReplace()) return;
   const changed = kind.value !== type;
   kind.value = type;
   showView(type === "loop" ? "loop" : "design");
   if (!window.engineeringDesktop) return;
-  if (changed) await refreshEditor("");
+  if (changed || fresh) await refreshEditor("");
   else if (scopedDefinitionsStale && editor.mayReplace()) await refreshEditor();
+  if (fresh && type === "loop" && !project.value) project.focus();
 });
 for (const view of views.filter((name) => name !== "design")) find(view + "-nav").onclick = () => showView(view);
 find("design-nav").onclick = showDefinitions("harness");
 find("loop-nav").onclick = showDefinitions("loop");
 find("definition-model-open").onclick = showDefinitions("model");
 find("definition-harness-open").onclick = showDefinitions("harness");
+find("definition-new").onclick = (event) => showDefinitions(kind.value, true)(event);
+find("definition-loop-harness").onclick = showDefinitions("harness", true);
+find("setup-new-profile").onclick = () => showView("session-harnesses", true);
+find("setup-new-harness").onclick = showDefinitions("harness", true);
+find("setup-new-loop").onclick = showDefinitions("loop", true);
+find("setup-project").onclick = report(async () => {
+  if (!window.engineeringDesktop || !editor.mayReplace(project)) return;
+  const form = find("project-form");
+  form.reset();
+  form.dataset.project = "";
+  find("project-settings").open = true;
+  form.elements.name.focus();
+});
+starter.onclick = report(async () => {
+  const id = project.value;
+  creatingDefaults = true;
+  updateStarter("기본 하네스와 루프를 만드는 중입니다.");
+  let result;
+  try {
+    await addWorkflowDefaults(id);
+    if (id === project.value) result = "기본 구성이 준비됐습니다. 하네스와 루프를 편집하거나 Workflow에서 선택하세요.";
+  } finally {
+    creatingDefaults = false;
+    updateStarter(result);
+  }
+});
 const params = new URLSearchParams(location.search);
-const target = params.get("view");
+const target = params.get("view") ?? "setup";
 if (target === "loop") kind.value = "loop";
 if (views.includes(target) || target === "loop") showView(target);
 

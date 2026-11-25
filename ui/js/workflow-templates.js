@@ -6,6 +6,7 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
   const selectedPreset = () => presets.find(({ id }) => id === presetForm.elements.preset.value);
   let presets = [];
   let adding = false;
+  let preferred = {};
 
   function updatePresetActions() {
     const chosen = selectedPreset();
@@ -29,7 +30,8 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
       const options = definitions().filter(({ kind }) => kind === (field === "loop" ? "loop" : "harness"));
       const placeholder = !selected?.[field] ? "사용 안 함" : options.length ? "선택" : "등록된 항목 없음";
       select.replaceChildren(new Option(placeholder, ""), ...options.map((entry) => new Option(engineeringDefinitionLabel(entry), entry.id)));
-      if (options.some(({ id }) => id === current)) select.value = current;
+      const previous = current || (selected?.[field] ? preferred[field] : "");
+      if (options.some(({ id }) => id === previous)) select.value = previous;
       select.required = Boolean(selected?.[field]);
       select.disabled = !selected?.[field] || !projectId() || isArchived();
     }
@@ -50,13 +52,8 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     adding = true;
     updatePresetActions();
     try {
-      const refs = await addWorkflowDefaults(project);
+      await addWorkflowDefaults(project);
       if (project !== projectId()) return;
-      const selected = selectedPreset();
-      for (const field of fields) {
-        const select = presetForm.elements[field];
-        if (selected?.[field] && !select.value && [...select.options].some(({ value }) => value === refs[field])) select.value = refs[field];
-      }
       el("status").textContent = "이 프로젝트에서 기본 하네스와 루프를 사용할 수 있습니다.";
     } finally {
       adding = false;
@@ -96,7 +93,11 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     el("import-name").value = "";
     await imported(record);
   }));
-  return { refresh: showPreset, clear() {
+  return { refresh: showPreset, useDefaults(refs) {
+    preferred = refs;
+    showPreset();
+  }, clear() {
+    preferred = {};
     for (const field of fields) presetForm.elements[field].value = "";
   } };
 }

@@ -51,6 +51,8 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
     await page.getByRole("link", { name: "Engineering" }).click({ timeout: 15000 });
+    await page.getByRole("heading", { name: "기초 생성" }).waitFor();
+    assert.equal(await page.locator("#setup-defaults").isDisabled(), true);
     const origin = new URL(page.url()).origin;
     assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.notEqual(origin, "http://127.0.0.1:7800");
@@ -89,7 +91,9 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await form.getByRole("button", { name: "등록 또는 수정" }).click();
     const registered = page.locator("#project option").filter({ hasText: "desktop fixture" });
     await registered.waitFor({ state: "attached", timeout: 8000 });
-    await page.locator("#design-nav").click();
+    await page.locator("#setup-defaults").click();
+    await page.locator("#setup-starter-status").filter({ hasText: "기본 구성이 준비됐습니다." }).waitFor();
+    await page.locator("#setup-new-harness").click();
     await page.locator("#definition-model-open").click();
     await page.locator("[name=modelName]").fill("test profile");
     await page.locator("[name=catalogModel]").selectOption({ label: "claude-sonnet-4-6 · anthropic" });
@@ -99,8 +103,6 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await page.getByText("기본 제공 Workflow", { exact: true }).click();
     const preset = page.locator("#workflow-preset-form");
     await preset.locator("[name=preset]").selectOption("refactor");
-    assert.equal(await preset.locator("[name=create]").isDisabled(), true);
-    await page.locator("#workflow-preset-defaults").click();
     await preset.locator("[name=name]").fill("부분수정");
     await preset.locator("[name=create]").click();
     await page.locator("#workflow-list option").filter({ hasText: "부분수정" }).waitFor({ state: "attached" });

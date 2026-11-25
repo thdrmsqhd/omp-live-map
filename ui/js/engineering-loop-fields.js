@@ -69,6 +69,7 @@ export function bindLoopFields(find, options) {
       control("budgetCents").value = payload.budgetCents;
       options(control("loopHarness"), harnesses, "하네스 선택", payload.harness);
       find("definition-loop-hint").hidden = Boolean(harnesses.length);
+      find("definition-loop-harness").hidden = Boolean(harnesses.length);
       checks.replaceChildren();
       payload.checks.forEach(addCheck);
     },
