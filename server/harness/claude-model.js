@@ -10,9 +10,9 @@ const DIR = process.env.OMP_MAP_STATE || path.join(ROOT, "data");
 const FILE = path.join(DIR, "claude-models.json");
 // 별칭(opus 등)은 설치된 Claude Code 버전에 따라 다른 모델로 풀린다(2.1.187 에서 opus → 4.8).
 // 카드에 저장값이 없으면 정식 id 로 5.5 를 고른다.
-const DEFAULT_MODEL = "claude-opus-5-5";
+const DEFAULT_MODEL = process.env.OMP_MAP_CLAUDE_MODEL || "default";
 const ALIASES = [
-  { id: DEFAULT_MODEL, name: "Opus 5.5" },
+  { id: DEFAULT_MODEL, name: "CLI 기본 모델" },
   { id: "sonnet", name: "Sonnet" },
   { id: "opus", name: "Opus" },
   { id: "haiku", name: "Haiku" },

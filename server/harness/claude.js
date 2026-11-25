@@ -64,21 +64,8 @@ function ingestLine(st, raw) {
   }
 }
 
-function readNew(rec) {
-  let size;
-  try { size = fs.statSync(rec.st.file).size; } catch { return; }
-  if (size < rec.offset) { rec.offset = 0; rec.pending = ""; }
-  if (size === rec.offset) return;
-  const bytes = size - rec.offset;
-  const buf = Buffer.allocUnsafe(bytes);
-  const fd = fs.openSync(rec.st.file, "r");
-  try { fs.readSync(fd, buf, 0, bytes, rec.offset); } finally { fs.closeSync(fd); }
-  rec.offset = size;
-  const lines = (rec.pending + buf.toString("utf8")).split("\n");
-  rec.pending = lines.pop() || "";
-  if (rec.pending.length > MAX_PENDING) rec.pending = "";
-  for (const line of lines) if (line.trim()) ingestLine(rec.st, line);
-}
+const {readIncremental,prune}=require("./jsonl-reader");
+function readNew(rec){const file=rec.st.file;readIncremental(rec,()=>newState(file),ingestLine);}
 
 function track(file, cutoff) {
   let stat;
@@ -96,6 +83,7 @@ function track(file, cutoff) {
 // ~/.claude/projects/<슬러그>/*.jsonl 만 읽는다(중첩 폴더의 sidechain 파일은 쓰지 않는다).
 function* scanSteps() {
   const cutoff = Date.now() - Math.max(HOURS, 24) * 3_600_000;
+  prune(files,cutoff);require("./claude-sub").pruneCache(cutoff);
   let dirs;
   try { dirs = fs.readdirSync(CLAUDE_PROJECTS, { withFileTypes: true }); } catch { return; }
   yield;

@@ -13,21 +13,8 @@ function metaOf(file) {
   try { return JSON.parse(fs.readFileSync(file.replace(/\.jsonl$/, ".meta.json"), "utf8")) || {}; } catch { return {}; }
 }
 
-function readNew(rec) {
-  let size;
-  try { size = fs.statSync(rec.st.file).size; } catch { return; }
-  if (size < rec.offset) { rec.offset = 0; rec.pending = ""; }
-  if (size === rec.offset) return;
-  const bytes = size - rec.offset;
-  const buf = Buffer.allocUnsafe(bytes);
-  const fd = fs.openSync(rec.st.file, "r");
-  try { fs.readSync(fd, buf, 0, bytes, rec.offset); } finally { fs.closeSync(fd); }
-  rec.offset = size;
-  const lines = (rec.pending + buf.toString("utf8")).split("\n");
-  rec.pending = lines.pop() || "";
-  if (rec.pending.length > MAX_PENDING) rec.pending = "";
-  for (const line of lines) if (line.trim()) ingestLine(rec.st, line);
-}
+const {readIncremental,prune}=require("./jsonl-reader");
+function readNew(rec,sessionId,mainFile){const file=rec.st.file;readIncremental(rec,()=>makeState(file,sessionId,mainFile),ingestLine);}
 
 function makeState(file, sessionId, mainFile) {
   const st = newState(file);
@@ -54,6 +41,7 @@ function scanDir(dir, sessionId, mainFile, cutoff) {
       rec = { offset: 0, pending: "", st: makeState(file, sessionId, mainFile), metaMtime: 0 };
       cache.set(file, rec);
     }
+    readNew(rec,sessionId,mainFile);
     const st = rec.st;
     st.mainFile = mainFile;
     st.parent = mainFile;
@@ -65,7 +53,7 @@ function scanDir(dir, sessionId, mainFile, cutoff) {
       }
     } catch { /* 메타가 없으면 파일명·기록만 쓴다 */ }
     if (!st.lastTs) st.lastTs = stat.mtimeMs;
-    readNew(rec);
+
     if (!st.title) st.title = (st.firstUser || st.name).slice(0, 120);
     if (!st.agentModel) st.agentModel = st.model;
   }
@@ -81,3 +69,5 @@ function applyMeta(st, m) {
 }
 
 module.exports = { scanDir, states: () => [...cache.values()].map((r) => r.st) };
+
+module.exports.pruneCache=(cutoff)=>prune(cache,cutoff);

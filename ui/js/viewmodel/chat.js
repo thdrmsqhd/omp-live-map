@@ -234,10 +234,11 @@ function handleChatEvent(c) {
     commitStream(st, c.text);
     st.busy = false;
     queuePromptDone(c.node,!c.cancelled&&!c.code);
+    if(typeof refreshClaudeQueue==="function"&&capsOf(nodeById(c.node)).id==="claude")setTimeout(()=>void refreshClaudeQueue(c.node),500);
     if (c.cancelled) { st.error = "응답 생성을 취소했습니다"; st.retry = "send"; }
     else if (c.code) {
       const n = nodeById(c.node);
-      st.error = `${n ? harnessLabel(n) : "에이전트"}가 코드 ${c.code}로 끝났습니다`;
+      st.error = `${n ? harnessLabel(n) : "에이전트"}가 코드 ${c.code}로 끝났습니다`+(c.error?" · "+c.error:"");
     }
   }
   // 기록으로 옮겨간 미리보기를 먼저 넘기고, 화면에 남지 않게 밀려난 항목의 미리보기는 해제한다.

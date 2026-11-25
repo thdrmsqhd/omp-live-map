@@ -1,0 +1,3 @@
+"use strict";
+const {test}=require("node:test"),assert=require("node:assert/strict"),{createQueue}=require("../server/harness/claude-queue");
+test("server queue preserves order, pauses on failure and supports reorder",()=>{let busy=true;const sent=[];const q=createQueue({busy:()=>busy,start:(k,t)=>{sent.push(t);busy=true;return {ok:true};}});q.enqueue("a","first");q.enqueue("a","second");const id=q.view("a").items[1].id;q.change("a","up",id);busy=false;q.done("a",true);assert.deepEqual(sent,["second"]);busy=false;q.done("a",false);assert.equal(q.view("a").paused,true);q.change("a","resume");assert.deepEqual(sent,["second","first"]);});
