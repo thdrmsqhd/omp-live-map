@@ -116,7 +116,13 @@ jobs:
           path: artifacts/graph-performance/*.json
           if-no-files-found: ignore
   installer:
-    if: github.ref_name == 'v3/phase-4-6'
+    needs: windows
+    if: github.ref_name == 'v3/phase-4-6' || github.ref_name == 'main'
+    permissions:
+      contents: write
+    concurrency:
+      group: omp-windows-installer-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
@@ -129,7 +135,7 @@ jobs:
       - name: Build Windows installer
         run: |
           npm --prefix desktop install --package-lock=false
-          npm --prefix desktop run build:windows
+          npm --prefix desktop run build:windows -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
@@ -159,3 +165,22 @@ jobs:
           if (!$uninstall) { throw 'Uninstaller not found' }
           $result = Start-Process -FilePath $uninstall.FullName -ArgumentList '/S' -Wait -PassThru
           if ($result.ExitCode -ne 0 -or !(Test-Path -LiteralPath $marker)) { throw 'Uninstall retention check failed' }
+      - name: Publish verified Windows prerelease from main
+        if: github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = node -p "require('./desktop/package.json').version"
+          if ($version -notmatch '^\d+\.\d+\.\d+-preview\.\d+$') { throw "Unexpected release version" }
+          $tag = "v$version"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists."
+            exit 0
+          }
+          $asset = "OMP-Live-Map-$version-Windows-x64-Setup.exe"
+          Copy-Item -LiteralPath 'desktop/dist/OMP-Live-Map-V3-Setup.exe' -Destination $asset
+          $checksum = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath SHA256SUMS.txt -Value "$checksum  $asset" -Encoding ascii
+          gh release create $tag $asset SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "OMP Live Map $tag" --notes-file docs/release-v8.1.0-preview.1.md --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
