@@ -14,6 +14,7 @@ function submitPrompt(id){
   const s=chatState(id),n=nodeById(id);
   if(!n||dockReadOnly(id)||!promptCanSend(id))return;
   if(s.sendMode==="queue"||(promptBusy(id)&&capsOf(n).id==="claude")){
+    if(capsOf(n).id==="claude"){void enqueueClaudePrompt(id);return;}
     const q=promptQueue(id);if(q.length>=20){s.error="예약 지시는 최대 20개입니다";paintChat(id);return;}
     q.push({id:crypto.randomUUID(),text:s.draft,files:s.files});s.draft="";s.files=[];persistPromptDraft(id,s);paintChat(id);
     // Idle sessions may dispatch only after an explicit queue request.

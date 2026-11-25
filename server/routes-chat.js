@@ -18,9 +18,14 @@ const promptOf = (p) => {
 
 const ccSettings=require("./harness/claude-settings");
 const ccRun=require("./harness/claude-run");
+const ccInfo=require("./harness/claude-project-info");
+const lineage=require("./lineage");
+function ccNode(p){const n=String(p.node||"");return n&&harness.of(lineage.resolve(n))==="claude"?n:null;}
 module.exports = {
+  "POST /api/claude/queue":(req,res)=>withJson(req,res,p=>{const n=ccNode(p);if(!n)return json(res,{ok:false,out:"Claude 세션 필요"});if(p.action==="enqueue"){const a=prepare(String(p.text||"").trim(),p.files,"claude");if(a.error||!a.message)return json(res,{ok:false,out:a.error||"빈 지시"});return json(res,ccRun.enqueue(n,a.message,a.images));}if(p.action==="list")return json(res,{ok:true,...ccRun.queueView(n)});return json(res,ccRun.queueChange(n,p.action,p.id,p.text));},UPLOAD_BODY),
+  "POST /api/claude/project-info":(req,res)=>withJson(req,res,p=>{const n=ccNode(p);if(!n)return json(res,{ok:false,out:"Claude 세션 필요"});const loc=ccRun.locate(n);if(!loc.exists&&!loc.known)return json(res,{ok:false,out:"세션 기록 없음"});return json(res,{ok:true,cwd:loc.cwd,sources:ccInfo.inspect(loc.cwd)});}),
   "GET /api/claude/status": async(req,res)=>json(res,await ccSettings.status()),
-  "POST /api/claude/options": (req,res)=>withJson(req,res,async p=>{const node=String(p.node||"");if(!node)return json(res,{ok:false,out:"세션 필요"});if(p.options){if(ccRun.isBusy(node))return json(res,{ok:false,out:"실행 중에는 변경할 수 없습니다"});const status=await ccSettings.status();if(p.options.effort!=="default"&&!status.effort)return json(res,{ok:false,out:"설치 CLI에서 effort 미확인"});return json(res,ccSettings.set(node,p.options));}json(res,{ok:true,options:ccSettings.get(node),diagnostics:ccRun.diagnostics(node),maxRuns:ccRun.maxRuns});}),
+  "POST /api/claude/options": (req,res)=>withJson(req,res,async p=>{const node=ccNode(p);if(!node)return json(res,{ok:false,out:"세션 필요"});if(p.options){if(ccRun.isBusy(node))return json(res,{ok:false,out:"실행 중에는 변경할 수 없습니다"});const status=await ccSettings.status();if(p.options.effort!=="default"&&!status.effort)return json(res,{ok:false,out:"설치 CLI에서 effort 미확인"});return json(res,ccSettings.set(node,p.options));}json(res,{ok:true,options:ccSettings.get(node),diagnostics:ccRun.diagnostics(node),maxRuns:ccRun.maxRuns});}),
   "POST /api/session/new": (req, res) => withJson(req, res, async (p) => {
     const a = promptOf(p);
     if (a.error) return json(res, { ok: false, out: a.error });

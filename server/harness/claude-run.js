@@ -15,6 +15,7 @@ const claude = require("./claude");
 const model = require("./claude-model");
 const input = require("./claude-input");
 const settings=require("./claude-settings");
+const {createQueue}=require("./claude-queue");
 
 const runs = new Map(); // 낮춘 카드 경로 -> { node, child, busy, cancelled, full, streamed, answer, seen }
 const cwds = new Map(); // 낮춘 카드 경로 -> 작업 폴더(방금 만든 세션은 기록 스캔 전에도 필요)
@@ -126,6 +127,7 @@ function spawnTurn(s, loc, text, images, fresh) {
     finish(s, answer ? 0 : (s.resultCode??(code===null?1:code)));
     removeRun(s);
     if (answer&&!s.cancelled) setTimeout(() => startTurn(s.node, answer, []), 0);
+    else queue.done(s.node,!s.cancelled&&(s.resultCode??code)===0);
   });
   try {
     child.stdin.write(images && images.length ? input.frameOf(text, images, loc.sessionId) : text);
@@ -151,6 +153,8 @@ function startTurn(card, text, images) {
 
 const busyRun = (card) => { const s = runs.get(norm(card)); return s && s.busy ? s : null; };
 
+const queue=createQueue({start:startTurn,busy:card=>runs.has(norm(card))});
+function queueCard(node){return lineage.cardOf(node)||node;}
 function prompt(node, text, images) {
   const card = lineage.cardOf(node) || node;
   if (busyRun(card)) return { ok: false, out: "이미 응답을 생성하고 있습니다" };
@@ -194,7 +198,7 @@ function bind(card, cwd, file) {
 function cancel(node) {
   const s = runs.get(norm(node));
   if (!s || !s.busy) return { ok: false, out: "실행 중인 프롬프트 없음" };
-  s.cancelled = true;s.state="cancelling";s.answer="";
+  s.cancelled = true;s.state="cancelling";s.answer="";queue.change(s.node,"pause");
   if (s.child) killTree(s.child);
   setTimeout(() => { if (s.busy && s.cancelled) finish(s, 130); }, 3000).unref();
   return { ok: true };
@@ -205,7 +209,7 @@ function stop(node) {
   const s = runs.get(key);
   if (!s) return { ok: false, out: "맵이 띄운 세션이 아닙니다" };
   if (s.busy) s.cancelled = true;
-  s.state="stopping";s.answer="";
+  s.state="stopping";s.answer="";queue.change(s.node,"pause");
   if (s.child) killTree(s.child);
   return { ok: true };
 }
@@ -214,4 +218,4 @@ function list() {
   return [...runs.values()].map((s) => ({ node: s.node, file: s.node, harness: "claude", pid: s.child ? s.child.pid : 0, busy: !!s.busy, state:s.state }));
 }
 
-module.exports = { newSession, prompt, cancel, stop, list, bind, isBusy: (card) => runs.has(norm(card)), diagnostics:(card)=>diagnostics.get(norm(card))||null, maxRuns:MAX_RUNS };
+module.exports = { newSession, prompt, cancel, stop, list, bind, isBusy: (card) => runs.has(norm(card)), diagnostics:(card)=>diagnostics.get(norm(card))||null, maxRuns:MAX_RUNS, enqueue:(node,text,images)=>queue.enqueue(queueCard(node),text,images), queueView:node=>queue.view(queueCard(node)), queueChange:(node,action,id,text)=>queue.change(queueCard(node),action,id,text), locate };

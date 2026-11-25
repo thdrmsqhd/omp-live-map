@@ -15,3 +15,5 @@
 .prompt-queue header,.prompt-queue-row{display:flex;align-items:center;gap:4px;padding:4px}
 .prompt-queue-row span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prompt-queue button{font-size:11px;padding:3px 5px}
+
+.cc-panel,.cc-queue{flex-basis:100%;max-height:210px;overflow:auto;border:1px solid #34495e;border-radius:6px;padding:8px;font-size:12px;line-height:1.6;overflow-wrap:anywhere}.cc-panel[hidden],.cc-queue[hidden]{display:none!important}.cc-panel select{margin:4px}.cc-panel pre{white-space:pre-wrap}.cc-panel details{margin:5px 0}.cc-queue header{display:flex;gap:5px;align-items:center}

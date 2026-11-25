@@ -1,9 +1,10 @@
 /* Composer controls, local references and templates; no speculative token estimate. */
 function promptToolbarHTML(n,s){
   return `<div class="prompt-meta"><span class="prompt-state"></span><span class="prompt-context"></span><span class="prompt-cwd" title="${esc(n.cwd||"")}">${esc(n.cwd||"작업 경로 미수집")}</span><button data-prompt-action="expand" title="입력창 확대/복원">⛶</button></div>
-  <div class="prompt-tools"><button data-prompt-action="history">이전 지시</button><button data-prompt-action="templates">템플릿</button><button data-prompt-action="preview">Markdown</button><button data-prompt-action="refs">@ 파일</button><button data-prompt-action="commands">/ 명령</button><button data-prompt-action="tasks"># Task</button><select class="prompt-shortcut" aria-label="전송 단축키"><option value="ctrl">Ctrl+Enter 전송</option><option value="enter">Enter 전송</option></select></div>`;
+  <div class="prompt-tools">${claudeControlHTML(n)}<button data-prompt-action="history">이전 지시</button><button data-prompt-action="templates">템플릿</button><button data-prompt-action="preview">Markdown</button><button data-prompt-action="refs">@ 파일</button><button data-prompt-action="commands">/ 명령</button><button data-prompt-action="tasks"># Task</button><select class="prompt-shortcut" aria-label="전송 단축키"><option value="ctrl">Ctrl+Enter 전송</option><option value="enter">Enter 전송</option></select></div>`;
 }
 function paintPromptComposer(box,n,s){
+  paintClaudeControls(box,n,s);
   const id=n.id,ta=box.querySelector(".cin"),connected=promptConnected(),busy=promptBusy(id),ask=askPending(id);
   box.querySelector(".prompt-state").textContent=!connected?"연결 끊김":ask?"응답 선택 필요":s.sending?"전송 중":busy?"작업 중":"입력 가능";
   const ctx=ctxUsage(n);box.querySelector(".prompt-context").textContent="컨텍스트 "+(ctx?.text||"미수집");
@@ -24,6 +25,7 @@ function promptInsert(box,s,text,replace=false){
   s.draft=ta.value;ta.dispatchEvent(new Event("input",{bubbles:true}));ta.focus();
 }
 function mountPromptComposer(box,n,s){
+  mountClaudeControls(box,n,s);
   const id=n.id,ta=box.querySelector(".cin"),list=box.querySelector(".prompt-suggestions"),mode=box.querySelector(".prompt-mode"),shortcut=box.querySelector(".prompt-shortcut");
   s.shortcut=readJSON("omp-map-prompt-shortcut","ctrl")==="enter"?"enter":"ctrl";shortcut.value=s.shortcut;
   let generation=0,tokenStart=null;
