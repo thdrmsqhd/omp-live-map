@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="css/editor.css">
   <link rel="stylesheet" href="css/explorer.css">
   <link rel="stylesheet" href="css/monitor.css">
+  <link rel="stylesheet" href="css/workflow-map.css">
   <link rel="stylesheet" href="css/card-readability.css">
   <link rel="stylesheet" href="css/chat-ux.css">
   <link rel="stylesheet" href="css/prompt-composer.css">
@@ -51,6 +52,27 @@
       <button id="zfit" title="전체 보기 (0)">fit</button>
     </div>
   </div>
+  <dialog id="workflow-launch" aria-labelledby="workflow-launch-title">
+    <form id="workflow-launch-form">
+      <h2 id="workflow-launch-title">새 Workflow 실행</h2>
+      <label>프로젝트 <select name="project" required></select></label>
+      <label>Workflow <select name="source" required></select></label>
+      <label>실행 이름 <input name="title" maxlength="240" placeholder="미입력 시 작업 목표 사용"></label>
+      <label>작업 목표 <textarea name="goal" required maxlength="8000" rows="3"></textarea></label>
+      <label>완료 조건 <textarea name="acceptance" required maxlength="3500" rows="3"></textarea></label>
+      <details id="workflow-launch-settings">
+        <summary>실행 설정</summary>
+        <label data-role="author">설계·문서 하네스 <select name="author"></select></label>
+        <label data-role="reviewer">리뷰 하네스 <select name="reviewer"></select></label>
+        <label data-role="loop">작업·검증 Loop <select name="loop"></select></label>
+        <label>시간 제한(분) <input name="minutes" type="number" min="1" max="60" value="20" required></label>
+        <label>실행 예산(센트) <input name="budget" type="number" min="1" max="100000" value="300" required></label>
+      </details>
+      <p id="workflow-launch-status" role="status"></p>
+      <a id="workflow-launch-engineering" href="/engineering.html">프로젝트·실행 환경 설정</a>
+      <div class="wf-actions"><button type="submit">실행 시작</button><button type="button" id="workflow-launch-close">닫기</button></div>
+    </form>
+  </dialog>
   <div id="ctxmenu"></div>
   <div id="minimap"><svg id="mmsvg" width="204" height="142"></svg></div>
   <div id="workarea">
@@ -65,11 +87,47 @@
         <svg id="edges"></svg>
         <svg id="guides"></svg>
         <div id="nodes"></div>
+        <div id="workflow-layer" hidden>
+          <svg id="workflow-map-edges" aria-hidden="true"></svg>
+          <div id="workflow-map-nodes" aria-label="Workflow 단계"></div>
+        </div>
       </div>
+      <aside id="workflow-inspector" data-workflow-controls hidden aria-label="Workflow 실행 상세">
+        <div class="wf-inspector-header">
+          <div><small id="wf-map-version"></small><h2 id="wf-map-title"></h2></div>
+          <button id="wf-map-close" aria-label="Workflow 닫기">닫기</button>
+        </div>
+        <div class="wf-actions">
+          <button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-new">이 Workflow로 새 실행</button><button id="wf-map-edit">Workflow 편집</button><a id="wf-map-engineering">Engineering</a>
+        </div>
+        <p id="wf-map-status" role="status"></p>
+        <div id="wf-map-details"></div>
+        <div id="wf-map-edit-controls" hidden>
+          <label>Workflow 이름 <input id="wf-edit-name" maxlength="240"></label>
+          <div class="wf-actions">
+            <button id="wf-edit-validate">그래프 검사</button><button id="wf-edit-save">새 버전 저장</button>
+            <button id="wf-edit-discard">실행으로 돌아가기</button>
+          </div>
+          <p id="wf-edit-status" role="status"></p>
+          <details open>
+            <summary>노드 라이브러리</summary>
+            <div id="wf-edit-palette" class="wf-actions"></div>
+          </details>
+          <div id="wf-edit-fields"></div>
+          <details>
+            <summary>연결 편집</summary>
+            <label>출발 <select id="wf-edit-from"></select></label>
+            <label>경로 <select id="wf-edit-port"></select></label>
+            <label>도착 <select id="wf-edit-to"></select></label>
+            <button id="wf-edit-connect">연결 추가</button>
+            <ul id="wf-edit-edges"></ul>
+          </details>
+        </div>
+      </aside>
     </div>
     <section id="overview" hidden aria-label="프로젝트 관제">
       <div class="overview-toolbar">
-        <h1>프로젝트 관제 <small id="mon-total"></small></h1><button id="mon-sidebar" aria-pressed="false">세션 목록</button><label class="mon-search"><input id="mon-search" type="search" placeholder="세션·프로젝트 검색" aria-label="관제 검색"></label><button id="mon-settings" aria-expanded="false">설정</button>
+        <h1>프로젝트 관제 <small id="mon-total"></small></h1><button id="workflow-new-run" hidden>새 실행</button><button id="mon-sidebar" aria-pressed="false">세션 목록</button><label class="mon-search"><input id="mon-search" type="search" placeholder="세션·프로젝트 검색" aria-label="관제 검색"></label><button id="mon-settings" aria-expanded="false">설정</button>
         <label>표시 밀도 <select id="overview-density"><option value="compact">Compact</option><option value="standard">Standard</option><option value="detailed">Detailed</option></select></label>
         <label>정렬 <select id="overview-sort"><option value="stable">고정 순서</option><option value="attention">주의 우선</option><option value="memory">메모리</option><option value="recent">최근 활동</option><option value="name">이름</option></select></label>
         <div id="mon-settings-panel" hidden><label title="세션에 귀속된 프로세스의 메모리 경고 기준">RAM 경고(MB) <input id="overview-memory" type="number" min="128" max="1048576" step="128"></label>
@@ -175,5 +233,10 @@
   <script src="js/view/monitor-projects.js"></script>
   <script src="js/app.js"></script>
   <script src="js/engineering-link.js"></script>
+  <script src="js/view/workflow-launch.js"></script>
+  <script src="js/view/workflow-map.js"></script>
+  <script src="js/view/workflow-map-inspector.js"></script>
+  <script src="js/view/workflow-map-fields.js"></script>
+  <script src="js/view/workflow-map-editor.js"></script>
 </body>
 </html>

@@ -30,31 +30,37 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
       .run(run, node, status, JSON.stringify(outcome ?? null), Date.now());
     event(db, "workflow.node", { id: run, node, status });
   }
-  function create(input, idempotencyKey) {
+  function create(input, idempotencyKey, launch) {
     const task = input.task ? tasks.get(string(input.task, "task id")) : null;
     if (task) input = { ...input, project: task.project, workflow: task.workflow, version: task.workflow_version, title: task.title };
     const project = string(input.project, "project");
-    const id = string(input.workflow, "workflow");
-    const version = integer(input.version, "workflow version", 1, Number.MAX_SAFE_INTEGER);
+    const existingWorkflow = launch ? null : {
+      id: string(input.workflow, "workflow"),
+      version: integer(input.version, "workflow version", 1, Number.MAX_SAFE_INTEGER),
+    };
     const title = string(input.title, "run title");
     const timeout = integer(input.timeoutMs, "workflow timeout", 100, 3600000);
     const budget = integer(input.budgetCents, "workflow budget", 0, 100000);
     const key = string(idempotencyKey, "idempotency key");
-    const hash = createHash("sha256").update(JSON.stringify([project,id,version,title,timeout,budget,task?.id ?? null,task?.instruction ?? null])).digest("hex");
+    const instruction = task?.instruction ?? (launch ? string(input.instruction, "run instruction", 12000) : null);
+    const identity = launch ? ["quick", project, title, timeout, budget, instruction, launch.source] :
+      [project, existingWorkflow.id, existingWorkflow.version, title, timeout, budget, task?.id ?? null, instruction];
+    const hash = createHash("sha256").update(JSON.stringify(identity)).digest("hex");
     return transaction(db, () => {
       const existing = db.prepare("SELECT id,request_hash FROM workflow_run WHERE idempotency_key=?").get(key);
       if (existing) {
         if (existing.request_hash !== hash) throw problem(409, "Idempotency key was used for a different workflow run");
         return { run: get(existing.id), created: false };
       }
-      workflows.get(project, id, version);
       if (catalog.project(project).archived) throw problem(409, "Project is archived");
       if (task && tasks.get(task.id).status !== "ready") throw problem(409, "Development task must be Ready");
       quota.check(project, budget);
+      const { id, version } = launch ? launch.prepare() : existingWorkflow;
+      workflows.get(project, id, version);
       const run = randomUUID(), now = Date.now();
       db.prepare(`INSERT INTO workflow_run (id,workflow,version,title,status,created,deadline,budget,idempotency_key,request_hash,sdlc_task,sdlc_instruction)
         VALUES (?,?,?,?,'queued',?,?,?,?,?,?,?)`)
-        .run(run, id, version, title, now, now + timeout, budget, key, hash, task?.id ?? null, task?.instruction ?? null);
+        .run(run, id, version, title, now, now + timeout, budget, key, hash, task?.id ?? null, instruction);
       tasks.followRun(run, "queued");
       event(db, "workflow.created", { id: run, project, workflow: id, version });
       return { run: get(run), created: true };
@@ -119,30 +125,40 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
       });
     },
     retries,
-    retry(id, node, descendants) {
+    retryInstruction(id, node) {
+      const row = db.prepare(`SELECT payload FROM event WHERE kind='workflow.retry' AND json_extract(payload,'$.id')=?
+        AND json_extract(payload,'$.node')=? ORDER BY seq DESC LIMIT 1`).get(id, node);
+      return row ? JSON.parse(row.payload) : null;
+    },
+    retry(id, node, descendants, { failed = node, mode = "retry", note = "" } = {}) {
       transaction(db, () => {
         const run = get(id);
         const history = nodes(id);
-        const failed = history.find((item) => item.node === node);
-        if (run.status !== "failed" || failed?.status !== "failed" || failed.outcome?.interrupted ||
-            failed.outcome?.passed !== false || run.deadline <= Date.now()) {
+        const failure = history.find((item) => item.node === failed);
+        if (run.status !== "failed" || failure?.status !== "failed" || failure.outcome?.interrupted ||
+            failure.outcome?.passed !== false || run.deadline <= Date.now()) {
           throw problem(409, "Only a failed node with a known result and time remaining can be retried");
         }
         if (run.sdlc_task && db.prepare("SELECT id FROM workflow_run WHERE sdlc_task=? ORDER BY created DESC,rowid DESC LIMIT 1")
           .get(run.sdlc_task).id !== id) throw problem(409, "The task already has a newer workflow run");
-        if (history.some((item) => descendants.has(item.node) && item.status !== "skipped")) {
-          throw problem(409, "A downstream node already executed; start a new workflow run");
-        }
         const used = [...history, ...retries(id)].reduce((total, item) => total + (item.outcome?.costCents ?? 0), 0);
         quota.check(run.project, Math.max(0, run.budget - used));
-        const count = db.prepare("SELECT COUNT(*) AS n FROM workflow_retry WHERE run=? AND node=?").get(id, node).n;
-        if (count >= 3) throw problem(409, "Workflow node retry limit reached");
-        db.prepare("INSERT INTO workflow_retry VALUES (?,?,?,?,?)").run(id, node, count + 1, JSON.stringify(failed.outcome), Date.now());
+        const count = db.prepare("SELECT COUNT(*) AS n FROM workflow_retry WHERE run=? AND node=?");
+        const archive = db.prepare("INSERT INTO workflow_retry VALUES (?,?,?,?,?)");
+        if (count.get(id, node).n >= 3 || count.get(id, failed).n >= 3) throw problem(409, "Workflow node retry limit reached");
         const remove = db.prepare("DELETE FROM workflow_node WHERE run=? AND node=?");
-        remove.run(id, node);
-        for (const child of descendants) remove.run(id, child);
+        for (const item of history.filter((item) => item.node === node || descendants.has(item.node))) {
+          if (item.status !== "skipped") archive.run(id, item.node, count.get(id, item.node).n + 1, JSON.stringify(item.outcome), Date.now());
+          remove.run(id, item.node);
+        }
+        const lastAttempt = failure.outcome.attempts?.at(-1);
+        const evidence = mode === "rework" ? redact(JSON.stringify({
+          error: failure.outcome.error,
+          checks: (failure.outcome.checks ?? lastAttempt?.checks ?? []).filter((check) => !check.passed),
+          resultErrors: (failure.outcome.result ?? lastAttempt?.result)?.errors,
+        })) : "";
         setStatus(id, ["failed"], "queued");
-        event(db, "workflow.retry", { id, node, attempt: count + 1 });
+        event(db, "workflow.retry", { id, node, failed, mode, note: note ? redact(string(note, "rework note", 2000)) : "", evidence });
       });
     },
     recover() {

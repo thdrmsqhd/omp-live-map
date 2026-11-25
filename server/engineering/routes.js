@@ -12,6 +12,8 @@ const { sdlcTasks } = require("./sdlc-tasks");
 const { sdlcStages } = require("./sdlc-stages");
 const { workflowObservability } = require("./workflow-observability");
 const { workflowDelivery } = require("./workflow-delivery");
+const { retryOptions } = require("./workflow-retry-plan");
+const { quickLaunch } = require("./workflow-launch");
 const { buildPreset, listPresets } = require("./workflow-presets");
 const { projectBudget } = require("./project-budget");
 const { workflowStaging } = require("./workflow-staging");
@@ -19,6 +21,8 @@ const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
 const { worktrees } = require("./worktree");
+const { harnessTrials } = require("./harness-trials");
+const { previewHarness } = require("./harness-preview");
 const { integer, string } = require("./definitions");
 const { problem } = require("./state");
 
@@ -66,8 +70,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const delivery = workflowDelivery(db, flowRuns, definitions, workspaceRoot);
       runs.recover();
       flowRuns.recover();
-      services = { definitions, workflows, runs, flowRuns, tasks,
-        budget: projectBudget(db),
+      const budget = projectBudget(db);
+      services = { definitions, workflows, runs, flowRuns, tasks, budget, trials: harnessTrials(definitions, runner, workspace, budget),
         stages: sdlcStages(db, definitions, workflows),
         observability: workflowObservability(db, flowRuns, workspaceRoot),
         delivery, staging: workflowStaging(db, delivery),
@@ -83,7 +87,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
@@ -96,6 +100,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           integer(Number(url.searchParams.get("days") ?? 30), "metrics period", 1, 90));
         if (endpoint === "project-budget") result = { current: budget.get(query("project")) ?? null };
         if (endpoint === "workflow-review") result = await observability.review(query("id"));
+        if (endpoint === "workflow-artifact") result = await observability.artifact(query("id"), query("node"), query("path"));
         if (endpoint === "workflows") result = workflows.list(query("project"));
         if (endpoint === "workflows/presets") result = listPresets();
         if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
@@ -103,10 +108,13 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const id = query("id");
           const run = flowRuns.get(id);
           const workflow = workflows.get(run.project, run.workflow, run.version);
-          result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id), timeline: observability.timeline(id),
+          const graph = workflows.executionPlan(run.project, workflow.payload, run.workflow).document;
+          const nodes = flowRuns.nodes(id);
+          result = { run, nodes, interventions: run.status === "failed" ? retryOptions(graph, nodes) : {}, retries: flowRuns.retries(id), timeline: observability.timeline(id),
             delivery: delivery.get(id), staging: staging.get(id),
-            labels: Object.fromEntries(workflows.executionPlan(run.project, workflow.payload, run.workflow)
-              .document.nodes.map(({ id, label }) => [id, label])) };
+            labels: Object.fromEntries(graph.nodes.map(({ id, label }) => [id, label])),
+            graph: { name: graph.name, nodes: graph.nodes.map(({ id, label, type, x, y }) => ({ id, label, type, x, y })),
+              edges: graph.edges } };
         }
         if (endpoint === "workflow") {
           const version = url.searchParams.get("version");
@@ -117,6 +125,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = templates.export(query("project"), query("id"), integer(Number(query("version")), "workflow version", 1, Number.MAX_SAFE_INTEGER));
         }
         if (endpoint === "definitions") result = definitions.definitions(query("project"));
+        if (endpoint === "harness/trial") result = trials.inspect(query("project"), query("id"));
+        if (endpoint === "harness/uses") result = workflows.harnessUses(query("project"), query("id"));
         if (endpoint === "definitions/version") {
           result = definitions.versionOf(query("id"), integer(Number(query("version")), "version", 1, Number.MAX_SAFE_INTEGER));
         }
@@ -157,6 +167,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "sdlc-stages") result = stages.save(input);
         if (endpoint === "tasks/move") result = tasks.move(string(input.id, "task"), input.status, input.revision);
         if (endpoint === "workflows") result = workflows.save(input);
+        if (endpoint === "workflows/save-canvas") result = workflows.saveCanvas(input);
         if (endpoint === "workflows/presets") {
           const payload = buildPreset(input.preset, input.refs ?? {});
           result = workflows.save({ project: input.project, payload: { ...payload, name: input.name || payload.name } });
@@ -167,8 +178,13 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflows/plan") result = workflows.executionPlan(string(input.project, "project"), input.payload,
           input.id ? string(input.id, "workflow") : undefined);
         if (endpoint === "workflow-runs") result = flow.start(input, input.key);
+        if (endpoint === "workflows/launch") result = quickLaunch(definitions, workflows, flow, runner, input);
         if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
-        if (endpoint === "workflow-runs/retry") result = flow.retry(string(input.id, "run"), string(input.node, "node"));
+        if (endpoint === "workflow-runs/retry") {
+          const node = string(input.node, "node");
+          result = flow.retry(string(input.id, "run"), node, { mode: input.mode,
+            restart: input.restart ? string(input.restart, "restart node") : node, note: input.note });
+        }
         if (endpoint === "workflow-runs/approval") {
           result = await flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
         }
@@ -179,6 +195,11 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflow-delivery/staging") result = await staging.dispatch(string(input.id, "run"), input.environment);
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
+        if (endpoint === "harness/apply") result = workflows.relinkHarness(input);
+        if (endpoint === "harness/preview") result = await previewHarness(definitions, runner, input);
+        if (endpoint === "harness/trial") result = await trials.start(string(input.project, "project"), input);
+        if (endpoint === "harness/trial/cancel") result = trials.cancel(string(input.project, "project"), input.id);
+        if (endpoint === "harness/trial/retry") result = trials.retry(string(input.project, "project"), input.id, input.side);
         if (endpoint === "definitions/remove") {
           definitions.remove(string(input.id, "definition"));
           result = { removed: true };

@@ -13,3 +13,9 @@ textarea { font-family: ui-monospace, monospace; resize: vertical; }
 #status { min-height: 1.5em; color: LinkText; }
 #actions { display: flex; gap: .5rem; margin: 1em 0; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.harness-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.harness-comparison[hidden] { display: none; }
+.harness-comparison article { border: 1px solid GrayText; padding: .75rem; }
+.harness-comparison pre { max-height: 18rem; overflow: auto; }
+@media (max-width: 620px) { .harness-comparison { grid-template-columns: 1fr; } }

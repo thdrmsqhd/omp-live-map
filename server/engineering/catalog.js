@@ -33,32 +33,32 @@ function catalog(db) {
     if (!row) throw problem(404, "Definition not found");
     return { ...row, payload: JSON.parse(row.payload) };
   };
-  function saveDefinition(body) {
+  function writeDefinition(body) {
     const owner = project(string(body.project, "project"));
     if (owner.archived) throw problem(409, "Project is archived");
     const parsed = definition(body.kind, body.payload);
-    return transaction(db, () => {
-      const old = body.id ? versionOf(string(body.id, "id")) : null;
-      if (old && (old.project !== owner.id || old.kind !== body.kind)) throw problem(400, "Definition owner and kind are immutable");
-      if (old && integer(body.version, "version", 1, Number.MAX_SAFE_INTEGER) !== old.version) {
-        throw problem(409, "Definition changed. Reload it before saving.");
-      }
-      const id = old?.id ?? randomUUID();
-      const next = (old?.version ?? 0) + 1;
-      const target = body.kind === "harness" ? parsed.model : parsed.harness;
-      const ref = target ? versionOf(target) : null;
-      if (ref && (ref.project !== owner.id || ref.kind !== (body.kind === "harness" ? "model" : "harness"))) {
-        throw problem(400, "Definition reference belongs to another project or has the wrong type");
-      }
-      const duplicate = db.prepare("SELECT id FROM definition WHERE project=? AND kind=? AND name=?").get(owner.id, body.kind, parsed.name);
-      if (duplicate && duplicate.id !== id) throw problem(409, "Definition name is already in use");
-      if (old) db.prepare("UPDATE definition SET version=?, name=? WHERE id=?").run(next, parsed.name, id);
-      else db.prepare("INSERT INTO definition VALUES (?,?,?,?,?)").run(id, owner.id, body.kind, parsed.name, next);
-      db.prepare("INSERT INTO definition_version VALUES (?,?,?)").run(id, next, JSON.stringify(parsed));
-      if (ref) db.prepare("INSERT INTO definition_ref VALUES (?,?,?,?)").run(id, next, ref.id, ref.version);
-      event(db, "definition.saved", { id, version: next, kind: body.kind });
-      return versionOf(id, next);
-    });
+    const old = body.id ? versionOf(string(body.id, "id")) : null;
+    if (old && (old.project !== owner.id || old.kind !== body.kind)) throw problem(400, "Definition owner and kind are immutable");
+    if (old && integer(body.version, "version", 1, Number.MAX_SAFE_INTEGER) !== old.version) {
+      throw problem(409, "Definition changed. Reload it before saving.");
+    }
+    const id = old?.id ?? randomUUID();
+    const next = (old?.version ?? 0) + 1;
+    const target = body.kind === "harness" ? parsed.model : parsed.harness;
+    const refVersion = body.referenceVersion === undefined ? undefined
+      : integer(body.referenceVersion, "reference version", 1, Number.MAX_SAFE_INTEGER);
+    const ref = target ? versionOf(target, refVersion) : null;
+    if (ref && (ref.project !== owner.id || ref.kind !== (body.kind === "harness" ? "model" : "harness"))) {
+      throw problem(400, "Definition reference belongs to another project or has the wrong type");
+    }
+    const duplicate = db.prepare("SELECT id FROM definition WHERE project=? AND kind=? AND name=?").get(owner.id, body.kind, parsed.name);
+    if (duplicate && duplicate.id !== id) throw problem(409, "Definition name is already in use");
+    if (old) db.prepare("UPDATE definition SET version=?, name=? WHERE id=?").run(next, parsed.name, id);
+    else db.prepare("INSERT INTO definition VALUES (?,?,?,?,?)").run(id, owner.id, body.kind, parsed.name, next);
+    db.prepare("INSERT INTO definition_version VALUES (?,?,?)").run(id, next, JSON.stringify(parsed));
+    if (ref) db.prepare("INSERT INTO definition_ref VALUES (?,?,?,?)").run(id, next, ref.id, ref.version);
+    event(db, "definition.saved", { id, version: next, kind: body.kind });
+    return versionOf(id, next);
   }
   async function saveProject(body) {
     const name = string(body.name, "name");
@@ -92,7 +92,8 @@ function catalog(db) {
     });
   }
   return {
-    project, saveProject, versionOf, saveDefinition,
+    project, saveProject, versionOf, writeDefinition,
+    saveDefinition: (body) => transaction(db, () => writeDefinition(body)),
     projects: () => db.prepare("SELECT * FROM project ORDER BY name").all(),
     definitions: (id) => db.prepare("SELECT id FROM definition WHERE project=? ORDER BY kind,name").all(id).map((row) => versionOf(row.id)),
     dependency: (row) => {

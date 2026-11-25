@@ -1,5 +1,8 @@
 "use strict";
 
+const { resolveSources, withSources, sourceReferences } = require("./harness-sources");
+const { executionDefinitions } = require("./harness-provenance");
+const { verifyResult } = require("./harness-result");
 const { problem, redact } = require("./state");
 
 function loopEngine(store, catalog, runner, worktrees) {
@@ -9,11 +12,11 @@ function loopEngine(store, catalog, runner, worktrees) {
     const harness = catalog.dependency(loop);
     const model = harness && catalog.dependency(harness);
     if (!model) throw problem(409, "Loop requires a saved harness and model version");
-    return { loop: loop.payload, harness: harness.payload, model: model.payload };
+    return { loop: loop.payload, harness: harness.payload, model: model.payload, definitions: executionDefinitions(harness, model) };
   }
   async function execute(id) {
     const run = store.get(id);
-    const { loop, harness, model } = resolve(run);
+    const { loop, harness, model, definitions } = resolve(run);
     const execution = runner.snapshot?.() ?? runner;
     const agent = execution.requireAdapter(harness, model, loop.checks);
     const stop = new AbortController();
@@ -26,6 +29,7 @@ function loopEngine(store, catalog, runner, worktrees) {
       store.change(id, "running");
       const workspace = run.workspace ?? await worktrees.create(catalog.project(run.project), run);
       store.workspace(id, workspace);
+      const project = catalog.project(run.project);
       const history = store.attempts(id);
       let feedback = history.at(-1)?.outcome?.checks ?? [];
       let used = history.reduce((cost, attempt) => cost + (attempt.outcome?.costCents ?? 0), 0);
@@ -35,9 +39,10 @@ function loopEngine(store, catalog, runner, worktrees) {
         if (used >= loop.budgetCents && loop.budgetCents > 0) return store.change(id, "limit_exceeded");
         const number = store.startAttempt(id);
         try {
+          const sources = await resolveSources(harness, project, workspace, [], signal);
           const output = await agent.run({
-            cwd: workspace, instruction: run.instruction, harness, model,
-            feedback, signal, budgetCents: loop.budgetCents - used,
+            cwd: workspace, instruction: run.instruction, harness: withSources(harness, sources), model,
+            feedback, signal, budgetCents: loop.budgetCents - used, capture: true,
           });
           signal.throwIfAborted();
           if (!Number.isFinite(output.costCents) || output.costCents < 0) {
@@ -46,16 +51,19 @@ function loopEngine(store, catalog, runner, worktrees) {
           used += output.costCents;
           const overBudget = used > loop.budgetCents;
           const results = overBudget ? [] : await execution.verify(loop.checks, workspace, signal);
+          const validation = overBudget ? null : await verifyResult(harness.result, workspace, signal);
+          if (validation) results.push({ command: "harness result", passed: validation.passed, log: validation.errors.join("\n") });
           const passed = !overBudget && results.every((result) => result.passed);
           store.finishAttempt(id, number, passed ? "passed" : "rejected", {
             checks: results, costCents: output.costCents, costBasis: output.costBasis ?? "reported", sessionId: output.sessionId ?? null,
-            model: model.model, agent: harness.adapter,
+            model: model.model, agent: harness.adapter, sources: sourceReferences(sources), definitions, tools: output.tools ?? null,
+            ...(validation ? { result: validation } : {}),
           });
           if (overBudget) return store.change(id, "limit_exceeded");
           if (passed) return store.change(id, "succeeded");
           feedback = results;
         } catch (error) {
-          store.finishAttempt(id, number, signal.aborted ? "cancelled" : "error", { error: redact(error.message) });
+          store.finishAttempt(id, number, signal.aborted ? "cancelled" : "error", { error: redact(error.message), definitions });
           if (stop.signal.aborted) return store.change(id, "cancelled");
           return store.change(id, signal.aborted ? "limit_exceeded" : "failed");
         }

@@ -2,18 +2,37 @@
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { artifactText } = require("./workflow-artifact");
 const { git } = require("./catalog");
 const { problem, redact } = require("./state");
 
 function workflowObservability(db, runs, workspaceRoot) {
+  async function ownedWorkspace(run) {
+    const root = await fs.realpath(workspaceRoot);
+    const workspace = await fs.realpath(run.workspace);
+    if (path.dirname(workspace) !== root || path.basename(workspace) !== run.id) {
+      throw problem(409, "Worktree does not belong to the workflow run");
+    }
+    return workspace;
+  }
+  async function artifact(id, node, file) {
+    const run = runs.get(id);
+    const outcome = runs.nodes(id).find((item) => item.node === node)?.outcome;
+    const ref = outcome?.artifacts?.find(({ path }) => path === file);
+    if (!ref || !run.workspace) throw problem(404, "This execution has no matching artifact");
+    try {
+      const { bytes } = await artifactText(await ownedWorkspace(run), ref, 32 * 1024);
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (decoded.includes("\0")) throw new Error("Binary artifact");
+      return { path: file, text: redact(decoded), truncated: decoded.length > 8000 || decoded.split("\n").length > 100 };
+    } catch {
+      throw problem(409, "The artifact is changed, unavailable or not a previewable text file");
+    }
+  }
   async function review(id) {
     const run = runs.get(id);
     if (!run.workspace) return { status: "", diff: "" };
-    const root = await fs.realpath(workspaceRoot);
-    const workspace = await fs.realpath(run.workspace);
-    if (path.dirname(workspace) !== root || path.basename(workspace) !== id) {
-      throw problem(409, "Worktree does not belong to the workflow run");
-    }
+    const workspace = await ownedWorkspace(run);
     try {
       const [status, diff] = await Promise.all([
         git(workspace, ["--no-optional-locks", "status", "--porcelain=v1", "--untracked-files=normal"]),
@@ -62,7 +81,7 @@ function workflowObservability(db, runs, workspaceRoot) {
       .all(project, cutoff, project, cutoff);
     return { states, measures, usage };
   }
-  return { approvals, dashboard, review, timeline };
+  return { approvals, artifact, dashboard, review, timeline };
 }
 
 module.exports = { workflowObservability };

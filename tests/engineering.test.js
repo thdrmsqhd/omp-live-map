@@ -13,6 +13,7 @@ const { catalog } = require("../server/engineering/catalog");
 const { runStore } = require("../server/engineering/run-store");
 const { loopEngine } = require("../server/engineering/loop");
 const { secureRunner } = require("../server/engineering/runner");
+const { previewHarness } = require("../server/engineering/harness-preview");
 const { worktrees } = require("../server/engineering/worktree");
 
 async function fixture(t, directory) {
@@ -68,6 +69,16 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
     assert.equal(saved.payload.assets.skills[0].name, "verify");
     assert.deepEqual(definitions.versionOf(harness.id, 1).payload.assets.skills, []);
     assert.equal(definitions.dependency(saved).payload.model, "fake-2");
+    const isolated = secureRunner();
+    const previous = await previewHarness(definitions, isolated, { project: project.id, id: harness.id, version: 1 });
+    assert.equal(previous.model.id, "fake-1");
+    assert.equal(previous.ready, false);
+    assert.match(previous.blockedReason, /verified isolation/);
+    const draft = await previewHarness(definitions, isolated, { project: project.id, payload: saved.payload });
+    assert.equal(draft.model.id, "fake-2");
+    assert.deepEqual(draft.prompt.map(({ name }) => name), ["role", "assets"]);
+    assert.match(draft.prompt[1].text, /Run phased tests/);
+    assert.deepEqual(draft.assets, { mcp: "draft-only", hooks: "draft-only" });
 
     const key = randomUUID();
     const { run } = store.create(body, key);
@@ -185,4 +196,103 @@ test("active Loop cancels without another attempt and budget blocks verification
   } finally {
     t.after(() => fs.rm(directory, { recursive: true, force: true, maxRetries: 3 }));
   }
+});
+
+test("harness source preview pins tracked content and checks workflow artifacts", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-harness-sources-"));
+  const { definitions, harness, project, root } = await fixture(t, directory);
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const { resolveSources } = require("../server/engineering/harness-sources");
+  const { artifactDigest } = require("../server/engineering/workflow-artifact");
+  const tracked = path.join(root, "rules.md");
+  await fs.writeFile(tracked, "Tracked review rules.\n");
+  execFileSync("git", ["add", "rules.md"], { cwd: root });
+  execFileSync("git", ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-m", "rules"], { cwd: root });
+  await fs.writeFile(tracked, "Working directory edits.");
+  const payload = { ...harness.payload, assets: { files: ["rules.md"], inputs: ["report"] } };
+  const preview = await previewHarness(definitions, secureRunner(), { project: project.id, payload });
+  assert.match(preview.prompt.at(-1).text, /Tracked review rules/);
+  assert.equal(preview.sources[0].path, "rules.md");
+  assert.match(preview.sources[0].sha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(preview.workflowInputs, ["report"]);
+  await assert.rejects(previewHarness(definitions, secureRunner(), {
+    project: project.id, payload: { ...payload, assets: { files: ["../rules.md"] } },
+  }), /repository-relative/);
+  await assert.rejects(previewHarness(definitions, secureRunner(), {
+    project: project.id, payload: { ...payload, assets: { files: ["missing.txt"] } },
+  }), /not a tracked regular file/);
+  await fs.writeFile(path.join(root, "test.txt"), "Passed tests.");
+  const report = { input: "report", ...await artifactDigest(root, "test.txt") };
+  const resolved = await resolveSources(payload, project, root, [report]);
+  assert.equal(resolved[1].text, "Passed tests.");
+  await fs.writeFile(path.join(root, "test.txt"), "Changed tests.");
+  await assert.rejects(resolveSources(payload, project, root, [report]), /artifact changed/);
+});
+
+test("harness result validation detects missing JSON fields and accepts an empty findings list", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-harness-result-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const { resultContract, verifyResult } = require("../server/engineering/harness-result");
+  const contract = resultContract({ shape: "array", path: "review.json", fields: ["file", "line"] });
+  assert.equal((await verifyResult(contract, directory)).passed, false);
+  await fs.writeFile(path.join(directory, "review.json"), '[{"file":"main.js"}]');
+  assert.match((await verifyResult(contract, directory)).errors[0], /line is missing/);
+  await fs.writeFile(path.join(directory, "review.json"), "[]");
+  assert.equal((await verifyResult(contract, directory)).passed, true);
+  assert.throws(() => resultContract({ ...contract, path: "../review.json" }), /relative paths/);
+});
+
+test("harness comparison shares one commit and inputs, with isolated worktrees and budget", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-harness-trial-"));
+  const { db, definitions, harness, project } = await fixture(t, directory);
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const { projectBudget } = require("../server/engineering/project-budget");
+  const { harnessTrials } = require("../server/engineering/harness-trials");
+  const budget = projectBudget(db);
+  budget.save(project.id, { cap: 12, days: 1 });
+  const work = worktrees(path.join(directory, "worktrees"));
+  const actual = [];
+  const runner = {
+    requireAdapter() {
+      return { async run(context) {
+        actual.push({ cwd: context.cwd, instruction: context.instruction, sources: context.harness.resolvedSources,
+          commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: context.cwd, encoding: "utf8" }).trim() });
+        if (context.harness.result && actual.length > 2) {
+          await fs.writeFile(path.join(context.cwd, context.harness.result.path), '[{"file":"main.js"}]');
+        }
+        return { sessionId: "fixture", costCents: 1, output: "done" };
+      } };
+    },
+  };
+  const compare = harnessTrials(definitions, runner, work, budget);
+  const draft = { ...harness.payload, instructions: "Updated", assets: { inputs: ["report"] },
+    result: { path: "review.json", shape: "array", fields: ["file"] } };
+  const body = { key: "comparison", baseline: { id: harness.id, version: 1 }, payload: draft,
+    instruction: "Review changes", materials: { report: "Tests passed" }, budgetCents: 6, timeoutMs: 4000 };
+  const first = await compare.start(project.id, body);
+  assert.equal((await compare.start(project.id, body)).id, first.id);
+  assert.equal(budget.get(project.id).committed, 12);
+  const deadline = Date.now() + 4000;
+  while (compare.inspect(project.id, first.id).status === "running" && Date.now() < deadline) await delay(20);
+  const end = compare.inspect(project.id, first.id);
+  assert.equal(end.status, "finished");
+  assert.equal(end.results.baseline.status, "succeeded");
+  assert.equal(end.results.draft.status, "failed");
+  assert.equal(end.results.draft.validation.passed, false);
+  assert.equal(actual.length, 2);
+  assert.equal(actual[0].commit, end.commit);
+  assert.equal(actual[1].commit, end.commit);
+  assert.notEqual(actual[0].cwd, actual[1].cwd);
+  assert.equal(actual[0].instruction, actual[1].instruction);
+  assert.equal(actual[1].sources[0].text, "Tests passed");
+  assert.equal(budget.get(project.id).committed, 2);
+  compare.retry(project.id, first.id, "draft");
+  while (compare.inspect(project.id, first.id).status === "running" && Date.now() < deadline) await delay(20);
+  const retried = compare.inspect(project.id, first.id);
+  assert.equal(retried.results.draft.status, "succeeded");
+  assert.deepEqual(retried.results.baseline, end.results.baseline);
+  assert.equal(actual.length, 3);
+  assert.equal(actual[2].commit, end.commit);
+  assert.equal(budget.get(project.id).committed, 3);
+  await assert.rejects(compare.start(project.id, { ...body, key: "over-budget" }), /budget would be exceeded/);
 });

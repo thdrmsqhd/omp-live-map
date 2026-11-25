@@ -11,8 +11,8 @@ function bindStageInput() {
   let drag = null;
 
   stage.addEventListener("pointerdown", (e) => {
-    if (mapMode !== "map") return;
-    const onCard = e.target.closest(".node, .cluster .ch, .jcard");
+    if (mapMode !== "map" || e.target.closest("[data-workflow-controls]")) return;
+    const onCard = e.target.closest(".node, .cluster .ch, .jcard, .wf-node");
     const wantPan = e.button === 1 || (e.button === 0 && (spaceDown || !onCard));
     if (!wantPan) return;
     if (!onCard && !spaceDown) { SELECTED.clear(); GROUP_CARDS.clear(); paintSelection(); paintGroupCards(); }
@@ -69,7 +69,7 @@ function bindStageInput() {
   });
 
   stage.addEventListener("wheel", (e) => {
-    if (mapMode !== "map") return;
+    if (mapMode !== "map" || e.target.closest("[data-workflow-controls]")) return;
     e.preventDefault();
     stopMomentum();
     const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
@@ -107,7 +107,7 @@ function bindStageInput() {
       addLocal(pt.x, pt.y);
       return;
     }
-    if (typing) return;
+    if (typing || e.target.closest?.("[data-workflow-controls]")) return;
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase()==="z") { if(redoLayout())e.preventDefault();return; }
     if (e.altKey && ["1","2","3"].includes(e.key)) { e.preventDefault();setMapMode({1:"overview",2:"workspace",3:"map"}[e.key]);return; }
     if (e.altKey && e.key.toLowerCase()==="n") { e.preventDefault();$("new-session-action").click();return; }

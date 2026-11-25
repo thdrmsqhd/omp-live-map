@@ -72,13 +72,49 @@ test("a V2 database migrates in place and workflows preserve immutable reference
     definitions.saveDefinition({ project: "one", kind: "harness", id: savedHarness.id, version: 1, payload: harness });
     const next = workflows.save({ project: "one", id: saved.id, version: 1, payload: input });
     assert.equal(next.payload.nodes[1].version, 2);
+    assert.deepEqual(workflows.harnessUses("one", savedHarness.id).map(({ node, harnessVersion }) =>
+      [node, harnessVersion]), [["w", 2]]);
+    const loop = definitions.saveDefinition({ project: "one", kind: "loop", payload: {
+      name: "Retry", harness: savedHarness.id, attempts: 2, timeoutMs: 1000, budgetCents: 10,
+      checks: [check.check],
+    } });
+    const loopGraph = { ...input, name: "Loop workflow",
+      nodes: [node("s", "start"), node("w", "loop", { definition: loop.id, instruction: "Try" }), node("z", "end")] };
+    const savedLoop = workflows.save({ project: "one", payload: loopGraph });
+    const refs = workflows.harnessUses("one", savedHarness.id);
+    assert.equal(refs.length, 2);
+    assert.equal(refs.find((ref) => ref.loop)?.loopVersion, 1);
     assert.throws(() => workflows.save({ project: "one", id: saved.id, version: 1, payload: input }), /changed/);
+    const upgraded = definitions.saveDefinition({ project: "one", kind: "harness", id: savedHarness.id, version: 2,
+      payload: { ...harness, result: { path: "review.json", shape: "array", fields: ["file"] } } });
+    const change = { project: "one", node: "w", harness: savedHarness.id, harnessVersion: upgraded.version };
+    const direct = workflows.relinkHarness({ ...change, workflow: saved.id, version: 2 });
+    assert.equal(direct.workflow.version, 3);
+    assert.equal(direct.workflow.payload.nodes[1].version, 3);
+    assert.equal(direct.workflow.payload.nodes[1].outputs[0].path, "review.json");
+    assert.equal(workflows.get("one", saved.id, 2).payload.nodes[1].version, 2);
+    assert.throws(() => workflows.relinkHarness({ ...change, workflow: saved.id, version: 2 }), /changed/);
+    const indirect = workflows.relinkHarness({ ...change, workflow: savedLoop.id, version: 1 });
+    assert.equal(indirect.loop.version, 2);
+    assert.equal(definitions.dependency(indirect.loop).version, 3);
+    assert.equal(definitions.dependency(loop).version, 2);
+    assert.equal(workflows.get("one", savedLoop.id, 1).payload.nodes[1].version, 1);
+    const edited = workflows.saveCanvas({ id: savedLoop.id, project: "one", version: 2, payload: indirect.workflow.payload,
+      loops: [{ node: "w", attempts: 5 }] });
+    assert.equal(edited.version, 3);
+    const adjusted = definitions.versionOf(loop.id, edited.payload.nodes[1].version);
+    assert.equal(adjusted.payload.attempts, 5);
+    assert.equal(definitions.dependency(adjusted).version, 3);
+    assert.equal(definitions.versionOf(loop.id, 2).payload.attempts, 2);
+    assert.throws(() => workflows.saveCanvas({ id: savedLoop.id, project: "one", version: 2, payload: edited.payload,
+      loops: [{ node: "w", attempts: 6 }] }), /changed/);
+    assert.equal(definitions.versionOf(loop.id).version, adjusted.version);
     assert.throws(() => definitions.remove(savedHarness.id), /referenced/);
     db.close();
     db = openDatabase(file);
     const reloaded = workflowCatalog(db, catalog(db));
     assert.equal(reloaded.get("one", saved.id, 1).payload.nodes[1].version, 1);
-    assert.equal(reloaded.get("one", saved.id).version, 2);
+    assert.equal(reloaded.get("one", saved.id).version, 3);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
   } finally {
     db?.close();

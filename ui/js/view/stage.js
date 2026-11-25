@@ -74,7 +74,7 @@ function boundsOf(boxes) {
   return isFinite(minX) ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : null;
 }
 
-const allBoxes = () => [...geo.values(), ...CLUSTERS, ...SATS.values(), ...JOBS];
+const allBoxes = () => [...geo.values(), ...CLUSTERS, ...SATS.values(), ...JOBS, ...(typeof workflowMapBoxes === "function" ? workflowMapBoxes() : [])];
 
 function fit() {
   const b = boundsOf(allBoxes());

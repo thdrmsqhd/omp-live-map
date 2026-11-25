@@ -21,6 +21,29 @@ function checkedDraft(value, name) {
   return value;
 }
 
+function sourceList(value = [], label, parse) {
+  if (!Array.isArray(value) || value.length > 5) throw problem(400, "Provide up to five " + label);
+  const parsed = value.map(parse);
+  if (new Set(parsed).size !== parsed.length) throw problem(400, "Duplicate " + label);
+  return parsed;
+}
+
+function sourcePath(value) {
+  const file = text(value, "repository file path", 300);
+  if (file.split("/").some((part) => !part || part === "." || part === ".." || /^\.git$/i.test(part) ||
+    /[<>:"\\|?*\x00-\x1f]/.test(part) || /[ .]$/.test(part))) {
+    throw problem(400, "Use a repository-relative file path");
+  }
+  return file;
+}
+
+function inputName(value) {
+  if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(value)) {
+    throw problem(400, "Invalid workflow input name");
+  }
+  return value;
+}
+
 function harnessAssets(value) {
   if (value === undefined) return { agents: "", skills: [], mcp: {}, hooks: {} };
   if (!value || typeof value !== "object" || Array.isArray(value)) throw problem(400, "Invalid harness assets");
@@ -31,7 +54,11 @@ function harnessAssets(value) {
     return { name: skill.name, markdown: text(skill.markdown, "skill content", 4000) };
   });
   if (new Set(parsed.map((skill) => skill.name)).size !== parsed.length) throw problem(400, "Duplicate skill name");
+  const files = sourceList(value.files, "repository files", sourcePath);
+  const inputs = sourceList(value.inputs, "workflow inputs", inputName);
   return {
+    ...(files.length ? { files } : {}),
+    ...(inputs.length ? { inputs } : {}),
     agents: text(value.agents ?? "", "AGENTS.md", 10000),
     skills: parsed,
     mcp: checkedDraft(value.mcp, "MCP"),

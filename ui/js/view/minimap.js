@@ -15,6 +15,7 @@ function paintMinimap() {
     ...CLUSTERS.map((c) => R(c, "mm-cl")),
     ...[...geo.values()].map((g) => R(g, "mm-c")),
     ...JOBS.map((j) => R(j, "mm-c")),
+    ...(typeof workflowMapBoxes === "function" ? workflowMapBoxes().map((box) => R(box, "mm-wf")) : []),
     ...[...SATS.entries()].map(([id, box]) => {
       const rec = typeof ATTN !== "undefined" ? ATTN.get(id) : null;
       return R(box, "mm-sat" + (rec ? (rec.kind === "ask" ? " mm-ask" : " mm-done") : ""));
