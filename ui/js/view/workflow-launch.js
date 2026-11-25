@@ -26,14 +26,14 @@ function bindMapWorkflowLaunch() {
       control.closest("label").hidden = !visible;
       const choices = definitions.filter(({ kind, id }) => kind === (role === "loop" ? "loop" : "harness") &&
         !(role === "reviewer" && preset?.author && id === (form.elements.author.value || selectedAuthor)));
-      control.replaceChildren(new Option("선택해 주세요", ""), ...choices.map(option));
+      control.replaceChildren(new Option("선택해 주세요", ""), ...choices.map((entry) => option({ ...entry, name: engineeringDefinitionLabel(entry) })));
       if (choices.some(({ id }) => id === previous)) control.value = previous;
       else if (choices.length === 1) control.value = choices[0].id;
     }
     const missing = roles.filter((role) => preset?.[role] && !form.elements[role].value);
     if (missing.length) {
       settings.open = true;
-      status.textContent = "실행 설정에서 필요한 하네스와 Loop를 선택해 주세요. 목록이 비어 있으면 실행 환경 설정에서 추가합니다.";
+      status.textContent = "실행 설정에서 필요한 하네스와 Loop를 선택해 주세요. 목록에는 개인, 이 프로젝트의 팀, 이 프로젝트에 저장된 하네스가 표시됩니다.";
     }
     submit.disabled = pending || !project.value || !source.value || missing.length > 0;
   }

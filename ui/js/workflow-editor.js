@@ -27,7 +27,7 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
   const harness = bindWorkflowHarness({ el, form, definitions, choices, editHarness: (id, version) => report(() => editHarness(id, version))() });
   const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project,
     onStatus(detail) { runDetail = detail; showRunStates(); } });
-  bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
+  const templateButtons = bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
     await loadList(record.project); if (record.project === project) { selector.value = record.id; open(record); }
   } });
   choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end"].includes(type)));
@@ -196,7 +196,10 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       }
     }));
   }
-  return { showRun: runs.refresh, async selectProject(id) {
+  return { showRun: runs.refresh, refreshProfiles() {
+    harness.refreshChoices();
+    templateButtons.refresh();
+  }, async selectProject(id) {
     if (id === project) return;
     project = id;
     selector.value = "";

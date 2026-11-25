@@ -15,16 +15,23 @@ export function bindWorkflowHarness({ el, form, definitions, choices, editHarnes
     edit.disabled = !selector.value || !versions.value;
   }
 
+  function refreshChoices(chosen = selector.value) {
+    if (fields.disabled) return;
+    choices(selector, [["", "하네스 선택"], ...definitions().filter(({ kind }) => kind === "harness")
+      .map((entry) => [entry.id, engineeringDefinitionLabel(entry)])]);
+    selector.value = chosen;
+    if (selector.selectedIndex < 0) selector.value = "";
+  }
+
   selector.addEventListener("change", () => fillVersions(selector.value));
   edit.addEventListener("click", () => editHarness(selector.value, Number(versions.value)));
   return {
+    refreshChoices,
     show(node) {
       const visible = node?.type === "agent";
       fields.hidden = fields.disabled = !visible;
       if (!visible) return;
-      choices(selector, [["", "하네스 선택"],
-        ...definitions().filter(({ kind }) => kind === "harness").map(({ id, name }) => [id, name])]);
-      selector.value = node.definition || "";
+      refreshChoices(node.definition || "");
       fillVersions(selector.value, node.version);
       instruction.value = node.instruction ?? "";
     },

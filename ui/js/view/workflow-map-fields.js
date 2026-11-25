@@ -75,7 +75,7 @@ async function wfStepForm(node, draft, commit) {
     const entries = node.type === "subgraph" ? draft.workflows.filter(({ id }) => id !== draft.record.id)
       : draft.definitions.filter(({ kind }) => kind === (node.type === "agent" ? "harness" : "loop"));
     const selector = wfField(form, node.type === "agent" ? "하네스" : node.type === "loop" ? "Loop 프로필" : "하위 Workflow",
-      targetKey, wfSelect([wfOption("", "선택"), ...entries.map(({ id, name }) => wfOption(id, name))], node[targetKey] ?? ""));
+      targetKey, wfSelect([wfOption("", "선택"), ...entries.map((entry) => wfOption(entry.id, node.type === "agent" ? engineeringDefinitionLabel(entry) : entry.name))], node[targetKey] ?? ""));
     const version = wfField(form, "버전", "version", wfSelect([]));
     const limit = node.type === "loop" ? wfField(form, "최대 시도 횟수 (1~8)", "attempts", wfInput()) : null;
     if (limit) Object.assign(limit, { type: "number", min: 1, max: 8 });

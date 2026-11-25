@@ -7,6 +7,7 @@
   <title>Engineering · OMP Live Map</title>
   <link rel="stylesheet" href="/css/engineering.css">
   <link rel="stylesheet" href="/css/workflow.css">
+  <script src="/js/engineering-scope-label.js"></script>
   <script type="module" src="/js/engineering.js"></script>
 </head>
 <body>
@@ -38,19 +39,33 @@
         <label>이름 <input name="name" required></label>
         <label>로컬 Git 루트 <input name="root" placeholder="C:\workspace\project" required></label>
         <label>기준 브랜치 <input name="branch" placeholder="현재 브랜치"></label>
+        <label>팀 이름 <input name="team" list="known-teams" maxlength="240" placeholder="선택 사항"></label>
+        <datalist id="known-teams"></datalist>
         <button>등록 또는 수정</button>
       </form>
-      <label>프로젝트 선택 <select id="project"></select></label>
+      <label>작업 프로젝트 <select id="project"></select></label>
       <button id="archive" type="button">보관</button>
     </section>
     <section id="design">
-      <h2>정의 편집</h2>
+      <h2>하네스 편집</h2>
+      <div class="definition-scopes" role="group" aria-label="저장 범위">
+        <button type="button" data-definition-scope="personal" aria-pressed="true"><strong>개인</strong><span>이 앱의 모든 프로젝트</span></button>
+        <button type="button" data-definition-scope="team" aria-pressed="false"><strong>팀</strong><span>같은 팀으로 등록된 프로젝트</span></button>
+        <button type="button" data-definition-scope="project" aria-pressed="false"><strong>프로젝트</strong><span>선택한 프로젝트 한 곳</span></button>
+      </div>
+      <div class="definition-owner">
+        <label id="definition-team-field" hidden>저장할 팀 <select id="definition-team"></select></label>
+        <p id="definition-owner" aria-live="polite"></p>
+      </div>
       <form id="definition-form">
-        <label>종류 <select id="kind" name="kind">
-          <option value="model">모델</option><option value="harness">에이전트 작업 방식 (하네스)</option><option value="loop">Loop</option>
+        <fieldset id="definition-content" disabled hidden>
+        <label>편집 대상 <select id="kind" name="kind">
+          <option value="harness">하네스</option><option value="model">모델</option><option value="loop">Loop</option>
         </select></label>
-        <label>기존 정의 <select id="definition"></select></label>
-        <label>저장 버전 <select id="definition-version"></select></label>
+        <div class="workflow-controls">
+          <label>프로필 <select id="definition"></select></label>
+          <label>저장 버전 <select id="definition-version"></select></label>
+        </div>
         <fieldset id="harness-fields" hidden disabled>
           <legend>에이전트 작업 방식</legend>
           <div class="workflow-controls">
@@ -63,7 +78,8 @@
           </div>
           <label>프로필 이름 <input name="harnessName" required maxlength="240"></label>
           <label>실행기 <select name="adapter"><option value="claude">Claude Code</option><option value="omp">OMP</option></select></label>
-          <label>모델 <select name="harnessModel" required></select></label>
+          <label>모델 <select name="harnessModel" required aria-describedby="definition-model-hint"></select></label>
+          <p id="definition-model-hint" hidden>이 범위에 저장된 모델이 없습니다. 편집 대상을 ‘모델’로 바꿔 먼저 등록하세요.</p>
           <label>역할 <input name="role" required maxlength="240"></label>
           <label>작업 지시 <textarea name="instructions" rows="4" maxlength="12000"></textarea></label>
           <label>프로젝트 규칙 (AGENTS.md) <textarea name="agents" rows="4" maxlength="10000"></textarea></label>
@@ -104,7 +120,7 @@
             <ol id="harness-preview-prompt"></ol>
           </div>
           <details id="harness-uses" hidden>
-            <summary>사용 중인 Workflow</summary>
+            <summary>작업 프로젝트에서 사용 중인 Workflow</summary>
             <ul id="harness-uses-list"></ul>
           </details>
           <details id="harness-trial">
@@ -126,7 +142,8 @@
         </fieldset>
         <pre id="definition-diff" aria-label="현재 버전과의 변경 내역" hidden></pre>
         <label id="definition-json">정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
-        <div><button>버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
+        <div class="workflow-controls"><button id="definition-save">버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
+        </fieldset>
       </form>
     </section>
     <section id="workflow" hidden>

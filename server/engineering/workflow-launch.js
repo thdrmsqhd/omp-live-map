@@ -7,7 +7,7 @@ const { problem } = require("./state");
 
 function profile(catalog, project, ref, kind) {
   const entry = catalog.versionOf(string(ref?.id, kind), integer(ref?.version, "definition version", 1, Number.MAX_SAFE_INTEGER));
-  if (entry.project !== project || entry.kind !== kind) throw problem(400, "Template profile has the wrong project or kind");
+  if (!catalog.availableTo(entry, project) || entry.kind !== kind) throw problem(400, "Template profile has the wrong project or kind");
   return entry;
 }
 

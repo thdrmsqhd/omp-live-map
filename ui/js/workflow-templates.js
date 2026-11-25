@@ -7,7 +7,7 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     for (const field of ["author", "reviewer", "loop"]) {
       const select = presetForm.elements[field], current = select.value;
       const options = definitions().filter(({ kind }) => kind === (field === "loop" ? "loop" : "harness"));
-      select.replaceChildren(new Option("선택", ""), ...options.map(({ id, name }) => new Option(name, id)));
+      select.replaceChildren(new Option("선택", ""), ...options.map((entry) => new Option(engineeringDefinitionLabel(entry), entry.id)));
       if (options.some(({ id }) => id === current)) select.value = current;
       select.required = Boolean(selected?.[field]);
       select.disabled = !selected?.[field];
@@ -54,4 +54,5 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     el("import-name").value = "";
     await imported(record);
   }));
+  return { refresh: showPreset };
 }

@@ -57,10 +57,19 @@ test("a V2 database migrates in place and workflows preserve immutable reference
     const insert = db.prepare("INSERT INTO project VALUES (?,?,?,?,0)");
     insert.run("one", dir, "Original project", "main");
     insert.run("two", path.join(dir, "other"), "Other project", "main");
+    db.exec(`INSERT INTO definition VALUES ('legacy-model', 'two', 'model', 'Legacy model', 1),
+      ('legacy-harness', 'two', 'harness', 'Legacy harness', 1);
+      INSERT INTO definition_version VALUES ('legacy-model', 1, '{"name":"Legacy model"}'),
+      ('legacy-harness', 1, '{"name":"Legacy harness"}');
+      INSERT INTO definition_ref VALUES ('legacy-harness', 1, 'legacy-model', 1)`);
     db.close();
     db = openDatabase(file);
     const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
     assert.equal(definitions.project("one").name, "Original project");
+    const legacy = definitions.versionOf("legacy-harness", 1);
+    assert.equal(legacy.scope, "project");
+    assert.equal(legacy.project, "two");
+    assert.equal(definitions.dependency(legacy).id, "legacy-model");
     const model = definitions.saveDefinition({ project: "one", kind: "model", payload: { name: "M", provider: "fixture", model: "fake" } });
     const harness = { name: "H", adapter: "claude", model: model.id, role: "dev" };
     const savedHarness = definitions.saveDefinition({ project: "one", kind: "harness", payload: harness });
@@ -214,5 +223,50 @@ test("template exchange replaces runtime IDs with project references and rejects
   } finally {
     db.close();
     fs.rmSync(dir, { force: true, recursive: true });
+  }
+});
+
+test("scoped harnesses keep distinct identities and can only run in eligible projects", async () => {
+  const { nodeExecutor } = require("../server/engineering/workflow-node-executor");
+  const { workflowTemplates } = require("../server/engineering/workflow-templates");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-harness-scope-"));
+  const db = openDatabase(path.join(dir, "engineering.sqlite"));
+  try {
+    const add = db.prepare("INSERT INTO project VALUES (?,?,?,?,0)");
+    for (const id of ["one", "two", "other"]) add.run(id, path.join(dir, id), id, "main");
+    db.exec("INSERT INTO harness_team VALUES ('Engineering'), ('Operations'); " +
+      "INSERT INTO project_team VALUES ('one', 'Engineering'), ('two', 'Engineering'), ('other', 'Operations')");
+    const catalogStore = catalog(db);
+    const workflows = workflowCatalog(db, catalogStore);
+    const templates = workflowTemplates(catalogStore, workflows);
+    const make = (owner) => {
+      const model = catalogStore.saveDefinition({ ...owner, kind: "model", payload: { name: "Default", provider: "fixture", model: "fake" } });
+      return catalogStore.saveDefinition({ ...owner, kind: "harness", payload: { name: "Review", adapter: "omp", model: model.id, role: "reviewer" } });
+    };
+    const personal = make({ scope: "personal" });
+    const team = make({ scope: "team", team: "Engineering" });
+    const project = make({ project: "one" });
+    const ids = (id) => catalogStore.definitions(id).filter(({ kind }) => kind === "harness").map((row) => row.id);
+    assert.deepEqual(ids("one"), [project.id, team.id, personal.id]);
+    assert.deepEqual(ids("two"), [team.id, personal.id]);
+    assert.deepEqual(ids("other"), [personal.id]);
+    assert.equal(catalogStore.definitions(null, "personal").length, 2);
+    assert.throws(() => catalogStore.saveDefinition({ scope: "team", team: "Operations", kind: "harness", payload: team.payload }), /incompatible scope/);
+    assert.throws(() => catalogStore.saveDefinition({ scope: "team", team: "Engineering", kind: "harness",
+      id: project.id, version: 1, payload: team.payload }), /immutable/);
+    const payload = { name: "Review", nodes: [node("s", "start"),
+      node("a", "agent", { definition: team.id, instruction: "Review the fixture" }), node("e", "end")],
+      edges: [edge("s", "a"), edge("a", "e")] };
+    assert.throws(() => workflows.save({ project: "other", payload }), /wrong project/);
+    const first = workflows.save({ project: "one", payload });
+    const imported = templates.import("two", templates.export("one", first.id, 1));
+    assert.equal(imported.payload.nodes.find(({ id }) => id === "a").definition, team.id);
+    const execute = nodeExecutor(catalogStore, { requireAdapter: () => ({ run: async () => ({ costCents: 0 }) }) });
+    const outcome = await execute(imported.payload.nodes.find(({ id }) => id === "a"), "two", dir, 10, new AbortController().signal);
+    assert.equal(outcome.status, "succeeded");
+    assert.equal(outcome.definitions.harness.id, team.id);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
