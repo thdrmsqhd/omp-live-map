@@ -21,6 +21,7 @@
       "main.cjs",
       "preload.cjs",
       "credentials.cjs",
+      "icons/omp-live-map.png",
       "package.json"
     ],
     "extraResources": [
@@ -47,7 +48,7 @@
     ],
     "win": {
       "target": "nsis",
-      "signAndEditExecutable": false,
+      "icon": "icons/omp-live-map.ico",
       "artifactName": "OMP-Live-Map-V3-Setup.${ext}"
     },
     "nsis": {
