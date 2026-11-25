@@ -14,17 +14,26 @@ const uiAsk = require("../ui-requests");
 const claude = require("./claude");
 const model = require("./claude-model");
 const input = require("./claude-input");
+const settings=require("./claude-settings");
 
 const runs = new Map(); // 낮춘 카드 경로 -> { node, child, busy, cancelled, full, streamed, answer, seen }
 const cwds = new Map(); // 낮춘 카드 경로 -> 작업 폴더(방금 만든 세션은 기록 스캔 전에도 필요)
-const norm = (p) => path.normalize(String(p || "")).toLowerCase();
+const norm = (p) => {const v=path.normalize(String(p || ""));return process.platform==="win32"?v.toLowerCase():v;};
+const MAX_RUNS=Math.max(1,Math.min(32,Number(process.env.OMP_MAP_CLAUDE_MAX_RUNS)||4));
+const MAX_FRAME=8*1024*1024;
+const diagnostics=new Map();
+const redact=s=>String(s||"").replace(/(?:sk-ant-|Bearer\s+)[A-Za-z0-9._-]+/gi,"[redacted]").slice(-4096);
+function recordDiagnostic(s,code){diagnostics.set(norm(s.node),{state:s.state,code,stderr:redact(s.stderr),at:Date.now()});if(diagnostics.size>200)diagnostics.delete(diagnostics.keys().next().value);}
+function removeRun(s){const k=norm(s.node);if(runs.get(k)===s)runs.delete(k);}
 const errText = (e) => String((e && e.message) || e);
 
 function finish(s, code) {
   if (!s.busy) return;
   const cancelled = s.cancelled;
   s.busy = false;
-  pushChat({ node: s.node, kind: "done", text: s.full, code: cancelled ? 130 : code, ...(cancelled ? { cancelled: true } : {}) });
+  s.state=cancelled?"cancelled":code?"failed":"completed";recordDiagnostic(s,code);
+  pushLive({node:s.node,kind:"turn_end",ts:Date.now()});
+  pushChat({ node: s.node, kind: "done", text: s.full, error:code?redact(s.stderr):undefined, code: cancelled ? 130 : code, ...(cancelled ? { cancelled: true } : {}) });
   s.full = "";
 }
 
@@ -56,8 +65,10 @@ function onFrame(s, o) {
       if (d.type === "text_delta") { s.streamed = true; emitText(s, d.text); }
       else if (d.type === "thinking_delta" && d.thinking) pushLive({ node: s.node, kind: "think", text: d.thinking });
     }
+    if(ev.type==="content_block_start"&&ev.content_block?.type==="tool_use"){const t=ev.content_block;pushLive({node:s.node,kind:"tool",id:t.id,name:t.name,args:""});}
     return;
   }
+  if(o.type==="user"){for(const t of o.message?.content||[])if(t.type==="tool_result"){pushLive({node:s.node,kind:"tool_end",id:t.tool_use_id,error:!!t.is_error});}return;}
   if (o.type === "assistant") {
     const blocks = (o.message && Array.isArray(o.message.content)) ? o.message.content : [];
     const ask = input.askOf(blocks, s.seen);
@@ -67,20 +78,21 @@ function onFrame(s, o) {
   }
   if (o.type === "result") {
     if (!s.streamed && typeof o.result === "string") emitText(s, o.result);
-    finish(s, o.is_error ? 1 : 0);
+    s.resultCode=o.is_error?1:0;s.state="finishing";
   }
 }
 
 function spawnTurn(s, loc, text, images, fresh) {
-  const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", "acceptEdits"];
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", settings.get(s.node).permission];
   if (fresh) args.push("--session-id", loc.sessionId);
   else args.push("--resume", loc.sessionId);
   if (images && images.length) args.push("--input-format", "stream-json");
   const m = model.modelOf(s.node) || model.modelOf(loc.card) || model.modelOf(loc.file) || model.DEFAULT_MODEL;
-  args.push("--model", m);
+  if(m!=="default")args.push("--model", m);
+  const effort=settings.get(s.node).effort;if(effort!=="default")args.push("--effort",effort);
   const child = spawn("claude", args, { cwd: loc.cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   s.child = child;
-  s.busy = true;
+  s.busy = true;s.state="running";s.stderr="";
   s.cancelled = false;
   s.full = "";
   s.streamed = false;
@@ -89,6 +101,7 @@ function spawnTurn(s, loc, text, images, fresh) {
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (d) => {
       buf += d;
+      if(buf.length>MAX_FRAME&&!buf.includes("\n")){s.stderr+="\nstdout frame exceeds limit";s.state="failed";killTree(child);return;}
       let i;
       while ((i = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, i).trim();
@@ -96,35 +109,37 @@ function spawnTurn(s, loc, text, images, fresh) {
         if (!line.startsWith("{")) continue;
         let o;
         try { o = JSON.parse(line); } catch { continue; }
-        try { onFrame(s, o); } catch {}
+        try { onFrame(s, o); } catch (e) {s.stderr=redact(s.stderr+"\n"+errText(e));}
       }
     });
   }
-  if (child.stderr) child.stderr.on("data", () => {});
+  if (child.stderr) {child.stderr.setEncoding("utf8");child.stderr.on("data",d=>{s.stderr=redact(s.stderr+d);});}
   if (child.stdin) child.stdin.on("error", () => {});
   child.on("error", (err) => {
     pushChat({ node: s.node, kind: "done", text: "claude 실행 실패: " + err.message, code: 127 });
-    s.busy = false;
-    runs.delete(norm(s.node));
+    s.stderr=redact(s.stderr+"\n"+err.message);s.state="failed";s.busy=false;recordDiagnostic(s,127);removeRun(s);
   });
   child.on("close", (code) => {
     const answer = s.answer;
     s.answer = "";
-    finish(s, answer ? 0 : code || 0);
-    runs.delete(norm(s.node));
-    if (answer) setTimeout(() => startTurn(s.node, answer, []), 0);
+    if(buf.trim().startsWith("{"))try{onFrame(s,JSON.parse(buf));}catch{}
+    finish(s, answer ? 0 : (s.resultCode??(code===null?1:code)));
+    removeRun(s);
+    if (answer&&!s.cancelled) setTimeout(() => startTurn(s.node, answer, []), 0);
   });
   try {
     child.stdin.write(images && images.length ? input.frameOf(text, images, loc.sessionId) : text);
     child.stdin.end();
   } catch (e) {
     pushChat({ node: s.node, kind: "done", text: errText(e), code: 1 });
-    s.busy = false;
+    s.stderr=redact(errText(e));finish(s,1);killTree(child);
   }
 }
 
 // 카드에 한 턴을 보낸다. 파일이 없고 pending/방금 만든 세션이면 새 session-id 로 시작한다.
 function startTurn(card, text, images) {
+  if(runs.has(norm(card)))return {ok:false,out:"이전 실행이 아직 정리되지 않았습니다"};
+  if(runs.size>=MAX_RUNS)return {ok:false,out:"Claude 동시 실행 제한 "+MAX_RUNS+"개"};
   const loc = locate(card);
   if (!loc.exists && !loc.known) return { ok: false, out: "Claude 세션 기록 없음" };
   pushChat({ node: card, kind: "req", text });
@@ -179,7 +194,7 @@ function bind(card, cwd, file) {
 function cancel(node) {
   const s = runs.get(norm(node));
   if (!s || !s.busy) return { ok: false, out: "실행 중인 프롬프트 없음" };
-  s.cancelled = true;
+  s.cancelled = true;s.state="cancelling";s.answer="";
   if (s.child) killTree(s.child);
   setTimeout(() => { if (s.busy && s.cancelled) finish(s, 130); }, 3000).unref();
   return { ok: true };
@@ -190,13 +205,13 @@ function stop(node) {
   const s = runs.get(key);
   if (!s) return { ok: false, out: "맵이 띄운 세션이 아닙니다" };
   if (s.busy) s.cancelled = true;
+  s.state="stopping";s.answer="";
   if (s.child) killTree(s.child);
-  runs.delete(key);
   return { ok: true };
 }
 
 function list() {
-  return [...runs.values()].map((s) => ({ node: s.node, file: s.node, harness: "claude", pid: s.child ? s.child.pid : 0, busy: !!s.busy }));
+  return [...runs.values()].map((s) => ({ node: s.node, file: s.node, harness: "claude", pid: s.child ? s.child.pid : 0, busy: !!s.busy, state:s.state }));
 }
 
-module.exports = { newSession, prompt, cancel, stop, list, bind, isBusy: (card) => !!busyRun(card) };
+module.exports = { newSession, prompt, cancel, stop, list, bind, isBusy: (card) => runs.has(norm(card)), diagnostics:(card)=>diagnostics.get(norm(card))||null, maxRuns:MAX_RUNS };

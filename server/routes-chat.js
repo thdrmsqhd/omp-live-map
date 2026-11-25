@@ -16,7 +16,11 @@ const promptOf = (p) => {
   return prepare(String(p.text || "").trim(), p.files, claude ? "claude" : "");
 };
 
+const ccSettings=require("./harness/claude-settings");
+const ccRun=require("./harness/claude-run");
 module.exports = {
+  "GET /api/claude/status": async(req,res)=>json(res,await ccSettings.status()),
+  "POST /api/claude/options": (req,res)=>withJson(req,res,async p=>{const node=String(p.node||"");if(!node)return json(res,{ok:false,out:"세션 필요"});if(p.options){if(ccRun.isBusy(node))return json(res,{ok:false,out:"실행 중에는 변경할 수 없습니다"});const status=await ccSettings.status();if(p.options.effort!=="default"&&!status.effort)return json(res,{ok:false,out:"설치 CLI에서 effort 미확인"});return json(res,ccSettings.set(node,p.options));}json(res,{ok:true,options:ccSettings.get(node),diagnostics:ccRun.diagnostics(node),maxRuns:ccRun.maxRuns});}),
   "POST /api/session/new": (req, res) => withJson(req, res, async (p) => {
     const a = promptOf(p);
     if (a.error) return json(res, { ok: false, out: a.error });
