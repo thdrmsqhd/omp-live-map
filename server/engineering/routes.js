@@ -19,6 +19,7 @@ const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
 const { secureRunner } = require("./runner");
 const { worktrees } = require("./worktree");
+const { previewHarness } = require("./harness-preview");
 const { integer, string } = require("./definitions");
 const { problem } = require("./state");
 
@@ -179,6 +180,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflow-delivery/staging") result = await staging.dispatch(string(input.id, "run"), input.environment);
         if (endpoint === "projects/archive") result = definitions.archive(string(input.id, "project"));
         if (endpoint === "definitions") result = definitions.saveDefinition(input);
+        if (endpoint === "harness/preview") result = previewHarness(definitions, runner, input);
         if (endpoint === "definitions/remove") {
           definitions.remove(string(input.id, "definition"));
           result = { removed: true };

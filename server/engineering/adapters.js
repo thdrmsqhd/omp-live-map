@@ -7,15 +7,33 @@ const { open } = require("../rpc");
 const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
 
-function prompt(context) {
-  const { harness, instruction, feedback } = context;
-  return [harness.role, harness.instructions, promptAssets(harness.assets), instruction,
-    feedback.length ? "Previous verification results:\n" + JSON.stringify(feedback) : ""].filter(Boolean).join("\n\n");
+const claudeTools = ["Read", "Edit", "Write", "Glob", "Grep"];
+
+function promptSections(harness, instruction = "", feedback = []) {
+  return [
+    { name: "role", text: harness.role },
+    { name: "instructions", text: harness.instructions },
+    { name: "assets", text: promptAssets(harness.assets) },
+    { name: "task", text: instruction },
+    { name: "feedback", text: feedback.length ? "Previous verification results:\n" + JSON.stringify(feedback) : "" },
+  ].filter(({ text }) => text);
+}
+
+function prompt({ harness, instruction, feedback }) {
+  return promptSections(harness, instruction, feedback).map(({ text }) => text).join("\n\n");
 }
 
 function execution(backend, name, run) {
   return {
     enforced: backend.enforced === true,
+    executionPolicy: backend.protocol === "docker-anthropic" ? Object.freeze({
+      directory: "/workspace",
+      workspace: "managed-worktree",
+      permission: "workspace-only",
+      workspaceWritable: true,
+      network: "isolated",
+      tools: Object.freeze(name === "claude" ? claudeTools : ["read", "edit", "write"]),
+    }) : null,
     supports(model, harness) { return backend.supports(name, model, harness); },
     run(context) {
       if (backend.enforced !== true || !backend.supports(name, context.model, context.harness)) {
@@ -91,7 +109,7 @@ async function claude(backend, context) {
   const sessionId = randomUUID();
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
     "--permission-mode", "acceptEdits", "--session-id", sessionId, "--model", model.model];
-  if (backend.protocol) args.push("--tools", "Read,Edit,Write,Glob,Grep", "--allowedTools", "Read,Edit,Write,Glob,Grep",
+  if (backend.protocol) args.push("--tools", claudeTools.join(","), "--allowedTools", claudeTools.join(","),
     "--setting-sources", "user", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
   const child = backend.launch("claude", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] }, { budgetCents, signal, model });
   const closed = once(child, "close");
@@ -127,4 +145,4 @@ function adaptersFor(backend) {
   return new Map([["omp", execution(backend, "omp", omp)], ["claude", execution(backend, "claude", claude)]]);
 }
 
-module.exports = { adaptersFor };
+module.exports = { adaptersFor, promptSections };

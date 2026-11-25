@@ -13,6 +13,7 @@ const { catalog } = require("../server/engineering/catalog");
 const { runStore } = require("../server/engineering/run-store");
 const { loopEngine } = require("../server/engineering/loop");
 const { secureRunner } = require("../server/engineering/runner");
+const { previewHarness } = require("../server/engineering/harness-preview");
 const { worktrees } = require("../server/engineering/worktree");
 
 async function fixture(t, directory) {
@@ -68,6 +69,16 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
     assert.equal(saved.payload.assets.skills[0].name, "verify");
     assert.deepEqual(definitions.versionOf(harness.id, 1).payload.assets.skills, []);
     assert.equal(definitions.dependency(saved).payload.model, "fake-2");
+    const isolated = secureRunner();
+    const previous = previewHarness(definitions, isolated, { project: project.id, id: harness.id, version: 1 });
+    assert.equal(previous.model.id, "fake-1");
+    assert.equal(previous.ready, false);
+    assert.match(previous.blockedReason, /verified isolation/);
+    const draft = previewHarness(definitions, isolated, { project: project.id, payload: saved.payload });
+    assert.equal(draft.model.id, "fake-2");
+    assert.deepEqual(draft.prompt.map(({ name }) => name), ["role", "assets"]);
+    assert.match(draft.prompt[1].text, /Run phased tests/);
+    assert.deepEqual(draft.assets, { mcp: "draft-only", hooks: "draft-only" });
 
     const key = randomUUID();
     const { run } = store.create(body, key);
