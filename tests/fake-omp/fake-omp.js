@@ -39,6 +39,7 @@ let session = null;
 const ensure = () => session || (session = makeSession(resume, process.cwd()));
 
 // --- 시나리오: FAKE_OMP_SCENARIO 가 가리키는 JSON 의 steps 를 순서대로 보낸다. ---
+let model = { provider: "fake", id: "fake-1", name: "Fake OMP" };
 const WAIT_METHODS = new Set(["ask", "select", "confirm", "input", "editor"]);
 let steps = [];
 const scenarioPath = process.env.FAKE_OMP_SCENARIO || "";
@@ -158,8 +159,13 @@ function handle(line) {
       sessionFile: se.file,
       sessionId: se.id,
       cwd: process.cwd(),
-      model: { provider: "fake", id: "fake-1", name: "Fake OMP" },
+      model,
     });
+    return;
+  }
+  if (c.type === "set_model") {
+    model = { provider: c.provider, id: c.modelId, name: c.modelId };
+    ok(c.id, c.type, model);
     return;
   }
   if (c.type === "set_subagent_subscription") {

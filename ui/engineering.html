@@ -13,37 +13,44 @@
   <header>
     <strong>OMP Live Map</strong>
     <nav aria-label="워크스페이스">
-      <button id="design-nav" aria-pressed="true">설계</button>
-      <button id="workflow-nav" aria-pressed="false">Workflow</button>
+      <button id="design-nav" aria-pressed="false">설계</button>
+      <button id="workflow-nav" aria-pressed="true">Workflow</button>
+      <button id="session-harnesses-nav" aria-pressed="false">세션 하네스</button>
       <button id="sdlc-nav" aria-pressed="false">개발 Task</button>
       <button id="execution-nav" aria-pressed="false">실행</button>
       <a href="/">관측</a>
     </nav>
   </header>
   <main>
-    <h1>Engineering</h1>
     <p id="status" role="status"></p>
-    <p id="runtime-status" role="status"></p>
-    <button id="prepare-runtime" type="button">실행 환경 준비</button>
-    <button id="check-runtime" type="button">인증 다시 확인</button>
-    <button id="console-login" type="button" disabled>Claude Console 로그인</button>
-    <p id="console-login-status" role="status"></p>
-    <form id="provider-key" method="post">
-      <label>Anthropic API 키 <input name="value" type="password" autocomplete="off" required></label>
-      <div><button>키 저장</button> <button id="remove-key" type="button">키 삭제</button></div>
-    </form>
-    <section>
-      <h2>프로젝트</h2>
-      <form id="project-form">
-        <label>이름 <input name="name" required></label>
-        <label>로컬 Git 루트 <input name="root" placeholder="C:\workspace\project" required></label>
-        <label>기준 브랜치 <input name="branch" placeholder="현재 브랜치"></label>
-        <button>등록 또는 수정</button>
-      </form>
-      <label>프로젝트 선택 <select id="project"></select></label>
-      <button id="archive" type="button">보관</button>
-    </section>
-    <section id="design">
+    <div id="engineering-context" class="engineering-context">
+      <label class="engineering-project">프로젝트 <select id="project"></select></label>
+      <details class="engineering-settings">
+        <summary>프로젝트 설정</summary>
+        <form id="project-form">
+          <label>이름 <input name="name" required></label>
+          <label>로컬 Git 루트 <input name="root" placeholder="C:\workspace\project" required></label>
+          <label>기준 브랜치 <input name="branch" placeholder="현재 브랜치"></label>
+          <button>등록 또는 수정</button>
+        </form>
+        <button id="archive" type="button">보관</button>
+      </details>
+      <details class="engineering-settings">
+        <summary>실행 환경</summary>
+        <p id="runtime-status" role="status"></p>
+        <div class="workflow-controls">
+          <button id="prepare-runtime" type="button">실행 환경 준비</button>
+          <button id="check-runtime" type="button">인증 다시 확인</button>
+          <button id="console-login" type="button" disabled>Claude Console 로그인</button>
+        </div>
+        <p id="console-login-status" role="status"></p>
+        <form id="provider-key" method="post">
+          <label>Anthropic API 키 <input name="value" type="password" autocomplete="off" required></label>
+          <div><button>키 저장</button> <button id="remove-key" type="button">키 삭제</button></div>
+        </form>
+      </details>
+    </div>
+    <section id="design" hidden>
       <h2>정의 편집</h2>
       <form id="definition-form">
         <label>종류 <select id="kind" name="kind">
@@ -129,98 +136,159 @@
         <div><button>버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
       </form>
     </section>
-    <section id="workflow" hidden>
-      <h2>Workflow Graph</h2>
-      <div class="workflow-controls">
+    <section id="workflow">
+      <div class="workflow-controls workflow-toolbar">
         <label>Workflow <select id="workflow-list"></select></label>
         <label>이름 <input id="workflow-name" maxlength="240"></label>
         <button id="workflow-plan" type="button">실행 계획 확인</button>
-        <button id="workflow-save" type="button">Workflow 저장</button>
+        <button id="workflow-save" type="button">버전 저장</button>
+        <button id="workflow-open-run" class="workflow-primary" type="button" disabled>새 실행</button>
       </div>
       <p id="workflow-status" role="status"></p>
-      <details><summary>기본 제공 Workflow</summary>
-        <form id="workflow-preset-form" class="workflow-controls">
-          <label>템플릿 <select name="preset" required></select></label>
-          <label>저장할 이름 <input name="name" maxlength="240"></label>
-          <label>설계 / 문서 하네스 <select name="author"></select></label>
-          <label>리뷰 하네스 <select name="reviewer"></select></label>
-          <label>개발 Loop <select name="loop"></select></label>
-          <button>템플릿으로 생성</button>
-        </form>
-      </details>
-      <div class="workflow-controls">
-        <button id="workflow-export" type="button">템플릿 내보내기</button>
-        <label>템플릿 파일 <input id="workflow-import-file" type="file" accept=".json,application/json"></label>
-        <label>가져올 이름 <input id="workflow-import-name" maxlength="240"></label>
-        <button id="workflow-import" type="button">템플릿 가져오기</button>
+      <div class="workflow-tools">
+        <details><summary>기본 제공 Workflow</summary>
+          <form id="workflow-preset-form" class="workflow-controls">
+            <label>템플릿 <select name="preset" required></select></label>
+            <label>저장할 이름 <input name="name" maxlength="240"></label>
+            <label>설계 / 문서 하네스 <select name="author"></select></label>
+            <label>리뷰 하네스 <select name="reviewer"></select></label>
+            <label>개발 Loop <select name="loop"></select></label>
+            <button>템플릿으로 생성</button>
+          </form>
+        </details>
+        <details><summary>템플릿 가져오기·내보내기</summary>
+          <div class="workflow-controls">
+            <button id="workflow-export" type="button">템플릿 내보내기</button>
+            <label>템플릿 파일 <input id="workflow-import-file" type="file" accept=".json,application/json"></label>
+            <label>가져올 이름 <input id="workflow-import-name" maxlength="240"></label>
+            <button id="workflow-import" type="button">템플릿 가져오기</button>
+          </div>
+        </details>
       </div>
-      <div class="workflow-controls">
-        <label>노드 종류 <select id="workflow-type"></select></label>
-        <button id="workflow-add" type="button">노드 추가</button>
-        <label>출발 노드 <select id="workflow-from"></select></label>
-        <label>출력 포트 <select id="workflow-port"></select></label>
-        <label>대상 노드 <select id="workflow-to"></select></label>
-        <button id="workflow-connect" type="button">연결</button>
-      </div>
-      <div class="workflow-scroll" aria-label="Workflow 캔버스">
-        <div id="workflow-canvas"><svg id="workflow-lines" aria-hidden="true"></svg><div id="workflow-nodes"></div></div>
-      </div>
-      <div class="workflow-details">
-        <form id="workflow-node-form" hidden>
-          <label>노드 이름 <input name="label" maxlength="240" required></label>
-          <fieldset id="workflow-agent-profile" hidden disabled>
-            <legend>에이전트 작업 방식</legend>
-            <label>하네스 <select name="harnessDefinition"></select></label>
-            <label>하네스 버전 <select name="harnessVersion"></select></label>
-            <label>작업 지시 <textarea name="harnessInstruction" rows="4" maxlength="12000"></textarea></label>
-            <button id="workflow-harness-edit" type="button">연결된 하네스 편집</button>
-          </fieldset>
-          <label>설정 및 입출력 <textarea name="settings" rows="7" spellcheck="false" required></textarea></label>
-          <div><button>노드 적용</button> <button id="workflow-delete" type="button">노드 삭제</button></div>
-        </form>
-        <div><h3>연결</h3><ul id="workflow-edges"></ul></div>
-        <div><h3>실행 계획</h3><ol id="workflow-order"></ol></div>
-      </div>
-      <h3>Workflow 실행</h3>
-      <form id="workflow-run-form" class="workflow-controls">
-        <label>실행 제목 <input name="title" maxlength="240" required></label>
-        <label>최대 시간(분) <input name="minutes" type="number" min="1" max="60" value="20" required></label>
-        <label>예산(센트) <input name="budget" type="number" min="0" max="100000" value="300" required></label>
-        <button>저장된 버전 실행</button>
-      </form>
-      <label>Workflow 실행 이력 <select id="workflow-run-list"></select></label>
-      <div id="workflow-run-actions" hidden>
-        <button type="button" data-action="pause">일시정지</button>
-        <button type="button" data-action="resume">재개</button>
-        <button type="button" data-action="cancel">취소</button>
-        <button type="button" id="workflow-review">변경사항 보기</button>
-      </div>
-      <p id="workflow-run-status" role="status"></p>
-      <pre id="workflow-review-output" hidden></pre>
-      <form id="workflow-approval" hidden>
-        <label>승인 메모 또는 거절 사유 <input name="reason" maxlength="2000"></label>
-        <div><button name="decision" value="approved">승인</button> <button name="decision" value="rejected">거절</button></div>
-      </form>
-      <ol id="workflow-run-nodes"></ol>
-      <details><summary>실행 타임라인</summary><ol id="workflow-timeline"></ol></details>
-      <details id="workflow-delivery" hidden><summary>GitHub PR 및 CI</summary>
-        <p>작업 Worktree에서 검토한 커밋을 만들고 GitHub의 작업 브랜치에 푸시한 뒤 승인하세요.</p>
-        <form id="workflow-delivery-form" class="workflow-controls">
-          <label>GitHub 작업 브랜치 <input name="branch" maxlength="200" required></label>
-          <button>현재 커밋 승인</button>
-        </form>
-        <div id="workflow-delivery-actions">
-          <button type="button" data-delivery="pr">GitHub PR 생성 또는 연결</button>
-          <button type="button" data-delivery="ci">CI 확인</button>
-          <button type="button" data-delivery="release">릴리스 후보 승인</button>
+      <div class="workflow-workspace">
+        <div class="workflow-graph">
+          <div class="workflow-controls workflow-canvas-tools">
+            <div id="workflow-edit-tools" class="workflow-controls">
+              <label>노드 종류 <select id="workflow-type"></select></label>
+              <button id="workflow-add" type="button">노드 추가</button>
+            </div>
+            <div class="workflow-zoom" aria-label="캔버스 확대·축소">
+              <button id="workflow-zoom-out" type="button" aria-label="축소">−</button>
+              <output id="workflow-scale">100%</output>
+              <button id="workflow-zoom-in" type="button" aria-label="확대">+</button>
+              <button id="workflow-fit" type="button">전체 보기</button>
+            </div>
+          </div>
+          <div id="workflow-viewport" class="workflow-scroll" aria-label="Workflow 캔버스" tabindex="0">
+            <div id="workflow-surface">
+              <div id="workflow-canvas"><svg id="workflow-lines" aria-hidden="true"></svg><div id="workflow-nodes"></div></div>
+            </div>
+          </div>
+          <p id="workflow-graph-help" class="workflow-hint" role="status">빈 공간 드래그로 이동 · Ctrl+휠로 확대·축소 · 출력 포트를 끌거나 선택해 입력에 연결</p>
         </div>
-        <p id="workflow-delivery-status" role="status"></p>
-        <form id="workflow-staging-form" class="workflow-controls" hidden>
-          <label>배포 환경 <select name="environment"><option value="test">test</option><option value="staging">staging</option></select></label>
-          <button>테스트 배포 승인 및 요청</button>
+        <aside class="workflow-inspector" aria-label="Workflow 상세">
+          <div class="workflow-inspector-head">
+            <h2 id="workflow-inspector-title">노드 설정</h2>
+            <label>실행 이력 <select id="workflow-run-list"></select></label>
+          </div>
+          <p id="workflow-inspector-empty">캔버스에서 노드를 선택하세요.</p>
+          <form id="workflow-node-form" hidden>
+            <label>노드 이름 <input name="label" maxlength="240" required></label>
+            <fieldset id="workflow-agent-profile" hidden disabled>
+              <legend>에이전트 작업 방식</legend>
+              <label>하네스 <select name="harnessDefinition"></select></label>
+              <label>하네스 버전 <select name="harnessVersion"></select></label>
+              <label>작업 지시 <textarea name="harnessInstruction" rows="4" maxlength="12000"></textarea></label>
+              <button id="workflow-harness-edit" type="button">연결된 하네스 편집</button>
+            </fieldset>
+            <label>설정 및 입출력 <textarea name="settings" rows="7" spellcheck="false" required></textarea></label>
+            <div><button>노드 적용</button> <button id="workflow-delete" type="button">노드 삭제</button></div>
+          </form>
+          <div id="workflow-inspector-edit">
+            <details>
+              <summary id="workflow-edge-summary">연결</summary>
+              <div class="workflow-controls">
+                <label>출발 노드 <select id="workflow-from"></select></label>
+                <label>출력 포트 <select id="workflow-port"></select></label>
+                <label>대상 노드 <select id="workflow-to"></select></label>
+                <button id="workflow-connect" type="button">연결</button>
+              </div>
+              <ul id="workflow-edges"></ul>
+            </details>
+            <div id="workflow-plan-result" hidden><h3>실행 계획</h3><ol id="workflow-order"></ol></div>
+          </div>
+          <div id="workflow-inspector-run" hidden>
+            <div id="workflow-run-actions" hidden>
+              <button type="button" data-action="pause">일시정지</button>
+              <button type="button" data-action="resume">재개</button>
+              <button type="button" data-action="cancel">취소</button>
+              <button type="button" id="workflow-review">변경사항 보기</button>
+            </div>
+            <p id="workflow-run-status" role="status"></p>
+            <pre id="workflow-review-output" hidden></pre>
+            <form id="workflow-approval" hidden>
+              <label>승인 메모 또는 거절 사유 <input name="reason" maxlength="2000"></label>
+              <div><button name="decision" value="approved">승인</button> <button name="decision" value="rejected">거절</button></div>
+            </form>
+            <ol id="workflow-run-nodes"></ol>
+            <details><summary>실행 타임라인</summary><ol id="workflow-timeline"></ol></details>
+            <details id="workflow-delivery" hidden><summary>GitHub PR 및 CI</summary>
+              <p>작업 Worktree에서 검토한 커밋을 만들고 GitHub의 작업 브랜치에 푸시한 뒤 승인하세요.</p>
+              <form id="workflow-delivery-form" class="workflow-controls">
+                <label>GitHub 작업 브랜치 <input name="branch" maxlength="200" required></label>
+                <button>현재 커밋 승인</button>
+              </form>
+              <div id="workflow-delivery-actions">
+                <button type="button" data-delivery="pr">GitHub PR 생성 또는 연결</button>
+                <button type="button" data-delivery="ci">CI 확인</button>
+                <button type="button" data-delivery="release">릴리스 후보 승인</button>
+              </div>
+              <p id="workflow-delivery-status" role="status"></p>
+              <form id="workflow-staging-form" class="workflow-controls" hidden>
+                <label>배포 환경 <select name="environment"><option value="test">test</option><option value="staging">staging</option></select></label>
+                <button>테스트 배포 승인 및 요청</button>
+              </form>
+              <p id="workflow-staging-status" role="status"></p>
+            </details>
+          </div>
+        </aside>
+      </div>
+      <dialog id="workflow-run-dialog" aria-labelledby="workflow-run-heading">
+        <div class="workflow-dialog-heading">
+          <h2 id="workflow-run-heading">새 Workflow 실행</h2>
+          <button id="workflow-close-run" type="button" aria-label="닫기">×</button>
+        </div>
+        <p id="workflow-run-version"></p>
+        <form id="workflow-run-form">
+          <label>실행 제목 <input name="title" maxlength="240" required></label>
+          <div class="workflow-controls">
+            <label>최대 시간(분) <input name="minutes" type="number" min="1" max="60" value="20" required></label>
+            <label>예산(센트) <input name="budget" type="number" min="0" max="100000" value="300" required></label>
+          </div>
+          <button class="workflow-primary">저장된 버전 실행</button>
         </form>
-        <p id="workflow-staging-status" role="status"></p>
-      </details>
+        <p id="workflow-launch-status" role="status"></p>
+      </dialog>
+    </section>
+    <section id="session-harnesses" class="session-harnesses" hidden>
+      <h2>세션 하네스</h2>
+      <p>저장한 하네스는 작업 폴더에 관계없이 새 세션에서 선택할 수 있습니다.</p>
+      <form id="session-harness-form">
+        <label>저장된 하네스 <select id="session-harness-list"></select></label>
+        <label>이름 <input name="name" placeholder="코드 리뷰어" maxlength="120" required></label>
+        <label>실행기
+          <select name="adapter"><option value="omp">OMP</option><option value="claude">Claude Code</option></select>
+        </label>
+        <label id="session-harness-provider">OMP 모델 제공자 <input name="provider" maxlength="80" placeholder="모델 지정 시 입력"></label>
+        <label>모델 <input name="model" maxlength="160" placeholder="비워 두면 실행기 기본값"></label>
+        <label>역할 <input name="role" maxlength="240"></label>
+        <label>작업 지시 <textarea name="instructions" rows="6" maxlength="12000"></textarea></label>
+        <div class="workflow-controls">
+          <button class="workflow-primary">하네스 저장</button>
+          <button id="session-harness-remove" type="button" disabled>삭제</button>
+        </div>
+        <p id="session-harness-status" role="status"></p>
+      </form>
     </section>
     <section id="sdlc" hidden>
       <h2>개발 Task</h2>

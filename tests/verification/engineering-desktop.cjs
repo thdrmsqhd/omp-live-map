@@ -64,6 +64,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await page.getByRole("button", { name: "실행 환경 준비" }).waitFor({ timeout: 8000 });
     await page.waitForFunction(() => Boolean(document.querySelector("#runtime-status")?.textContent));
     await page.locator("#project option").filter({ hasText: "CI V2 project" }).waitFor({ state: "attached" });
+    await page.getByText("실행 환경", { exact: true }).click();
     const login = page.getByRole("button", { name: "Claude Console 로그인" });
     assert.equal(await login.isVisible(), true);
     if (installed) assert.equal(await login.isEnabled(), true);
@@ -80,6 +81,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await fs.mkdir(repository);
     for (const command of [["init", "-b", "main"], ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
       "commit", "--allow-empty", "-m", "start"]]) execFileSync("git", command, { cwd: repository });
+    await page.getByText("프로젝트 설정", { exact: true }).click();
     const form = page.locator("#project-form");
     await form.locator("[name=name]").fill("desktop fixture");
     await form.locator("[name=root]").fill(repository);
@@ -87,6 +89,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await form.getByRole("button", { name: "등록 또는 수정" }).click();
     const registered = page.locator("#project option").filter({ hasText: "desktop fixture" });
     await registered.waitFor({ state: "attached", timeout: 8000 });
+    await page.locator("#design-nav").click();
     await page.locator("#payload").fill(JSON.stringify({ name: "test profile", provider: "fixture", model: "fake-1" }));
     await page.getByRole("button", { name: "버전 저장" }).click();
     await page.locator("#definition option").filter({ hasText: "test profile" }).waitFor({ state: "attached", timeout: 8000 });
@@ -100,11 +103,13 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await page.mouse.down();
     await page.mouse.move(bounds.x + 60, bounds.y + 45, { steps: 5 });
     await page.mouse.up();
-    assert.equal(await start.evaluate((node) => node.style.left), "85px");
-    await page.getByRole("button", { name: "연결", exact: true }).click();
+    const moved = await start.evaluate((node) => node.style.left);
+    assert.ok(Number.parseInt(moved, 10) > 45);
+    await page.getByRole("button", { name: "Start · 다음 출력" }).click();
+    await page.getByRole("button", { name: "End · 입력" }).click();
     await page.getByRole("button", { name: "실행 계획 확인" }).click();
     await page.locator("#workflow-order li").filter({ hasText: "End" }).waitFor();
-    await page.getByRole("button", { name: "Workflow 저장" }).click();
+    await page.locator("#workflow-save").click();
     await page.getByText("버전 1 저장됨", { exact: true }).waitFor();
     await page.reload();
     await registered.waitFor({ state: "attached", timeout: 8000 });
@@ -113,8 +118,9 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await page.getByRole("button", { name: "Workflow", exact: true }).click();
     await page.locator("#workflow-list").selectOption({ label: "CI workflow" });
     await page.waitForFunction(() => document.querySelector("#workflow-name").value === "CI workflow");
-    assert.equal(await start.evaluate((node) => node.style.left), "85px");
+    assert.equal(await start.evaluate((node) => node.style.left), moved);
     assert.equal(await page.locator("#workflow-edges li").count(), 1);
+    await page.locator("#workflow-open-run").click();
     await page.getByLabel("실행 제목").fill("CI workflow run");
     await page.getByRole("button", { name: "저장된 버전 실행" }).click();
     await page.waitForFunction(() => document.querySelector("#workflow-run-status").textContent === "succeeded");
@@ -189,6 +195,7 @@ async function verifyHarnessEditor(page, repository) {
   await page.locator("[name=harnessVersion]").selectOption("1");
   await page.locator("[name=harnessInstruction]").fill("Review the change.");
   await page.locator("#workflow-node-form").getByRole("button", { name: "노드 적용" }).click();
+  await page.locator("#workflow-edge-summary").click();
   for (const [from, to] of [["start", nodeId], [nodeId, "end"]]) {
     await page.locator("#workflow-from").selectOption(from);
     await page.locator("#workflow-to").selectOption(to);

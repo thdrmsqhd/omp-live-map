@@ -13,6 +13,8 @@ const lineage = require("../lineage");
 const uiAsk = require("../ui-requests");
 const claude = require("./claude");
 const model = require("./claude-model");
+const profiles = require("./session-profiles");
+const { withPromptFile } = require("./prompt-file");
 const input = require("./claude-input");
 const settings=require("./claude-settings");
 const {createQueue}=require("./claude-queue");
@@ -88,15 +90,26 @@ function onFrame(s, o) {
   }
 }
 
+function effectiveModel(loc) {
+  return model.modelOf(loc.card) || model.modelOf(loc.file) || loc.profile?.model || model.DEFAULT_MODEL;
+}
+
+function spawnClaude(args, loc) {
+  const selectedModel = effectiveModel(loc);
+  if (selectedModel !== "default") args.push("--model", selectedModel);
+  return withPromptFile(profiles.systemPrompt(loc.profile), (file) => {
+    if (file) args.push("--append-system-prompt-file", file);
+    return spawn("claude", args, { cwd: loc.cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  });
+}
+
 function spawnTurn(s, loc, text, images, fresh) {
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", settings.get(s.node).permission];
   if (fresh) args.push("--session-id", loc.sessionId);
   else args.push("--resume", loc.sessionId);
   if (images && images.length) args.push("--input-format", "stream-json");
-  const m = model.modelOf(s.node) || model.modelOf(loc.card) || model.modelOf(loc.file) || model.DEFAULT_MODEL;
-  if(m!=="default")args.push("--model", m);
   const effort=settings.get(s.node).effort;if(effort!=="default")args.push("--effort",effort);
-  const child = spawn("claude", args, { cwd: loc.cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawnClaude(args, loc);
   s.child = child;
   s.busy = true;s.state="running";s.stderr="";
   s.cancelled = false;
@@ -152,8 +165,8 @@ function streamTurn(s,text,images){
 }
 function spawnStream(s,loc,text,images){
  const opt=settings.get(s.node),args=["-p","--input-format","stream-json","--output-format","stream-json","--verbose","--include-partial-messages","--permission-prompt-tool","stdio","--permission-mode",opt.permission];
- args.push(loc.exists?"--resume":"--session-id",loc.sessionId);const m=model.modelOf(s.node)||model.DEFAULT_MODEL;if(m!=="default")args.push("--model",m);if(opt.effort!=="default")args.push("--effort",opt.effort);
- const child=spawn("claude",args,{cwd:loc.cwd,windowsHide:true,stdio:["pipe","pipe","pipe"]});s.child=child;s.sessionId=loc.sessionId;s.stderr="";s.state="starting";s.optionsSignature=JSON.stringify([opt,model.modelOf(s.node)||model.DEFAULT_MODEL]);
+ args.push(loc.exists?"--resume":"--session-id",loc.sessionId);if(opt.effort!=="default")args.push("--effort",opt.effort);
+ const child=spawnClaude(args,loc);s.child=child;s.sessionId=loc.sessionId;s.stderr="";s.state="starting";s.optionsSignature=JSON.stringify([opt,effectiveModel(loc)]);
  child.stderr?.setEncoding("utf8");child.stderr?.on("data",d=>{s.stderr=redact(s.stderr+d);});
  s.transport=transport(child,{
  frame:o=>{if(o.type==="assistant"){const blocks=o.message?.content||[];if(!s.streamed)emitText(s,blocks.filter(b=>b.type==="text").map(b=>b.text).join(""));return;}
@@ -167,16 +180,18 @@ function spawnStream(s,loc,text,images){
 }
 function startTurn(card, text, images) {
   const existing=runs.get(norm(card));
-  if(existing?.transport&&!existing.busy&&existing.state==="idle"){const signature=JSON.stringify([settings.get(card),model.modelOf(card)||model.DEFAULT_MODEL]);if(signature!==existing.optionsSignature||existing.sessionId!==locate(card).sessionId){clearTimeout(existing.idleTimer);existing.state="closing";existing.transport.close();setTimeout(()=>{if(!existing.transport.ended)killTree(existing.child);},3000).unref();return {ok:false,out:"실행 설정이 변경되어 기존 프로세스를 정리 중입니다. 잠시 후 다시 보내세요."};}return streamTurn(existing,text,images);}
+  const loc = locate(card);
+  loc.profile = profiles.assigned(loc.file, "claude") || profiles.assigned(card, "claude");
+  if(existing?.transport&&!existing.busy&&existing.state==="idle"){const signature=JSON.stringify([settings.get(card),effectiveModel(loc)]);if(signature!==existing.optionsSignature||existing.sessionId!==loc.sessionId){clearTimeout(existing.idleTimer);existing.state="closing";existing.transport.close();setTimeout(()=>{if(!existing.transport.ended)killTree(existing.child);},3000).unref();return {ok:false,out:"실행 설정이 변경되어 기존 프로세스를 정리 중입니다. 잠시 후 다시 보내세요."};}return streamTurn(existing,text,images);}
   if(existing)return {ok:false,out:"이전 실행이 아직 정리되지 않았습니다"};
   if(runs.size>=MAX_RUNS||!policy().admit){const idle=[...runs.values()].filter(x=>!x.busy&&x.state==="idle").sort((a,b)=>(a.idleSince||0)-(b.idleSince||0));if(idle.length)closeIdle(idle[0]);return {ok:false,retryable:true,out:!policy().admit?"가용 RAM 부족 · 실행 대기":"Claude 동시 실행 제한 "+MAX_RUNS+"개 · 실행 대기"};}
-  const loc = locate(card);
   if (!loc.exists && !loc.known) return { ok: false, out: "Claude 세션 기록 없음" };
   const s = { node: card, seen: new Set() };
   runs.set(norm(card), s);
   if(settings.get(card).protocol==="stream"){try{return spawnStream(s,loc,text,images);}catch(e){removeRun(s);return {ok:false,out:errText(e)};}}
   pushChat({ node: card, kind: "req", text });
-  spawnTurn(s, loc, text, images, !loc.exists);
+  try { spawnTurn(s, loc, text, images, !loc.exists); }
+  catch (error) { removeRun(s); return { ok: false, out: errText(error) }; }
   return { ok: true, node: card };
 }
 
@@ -203,7 +218,7 @@ function answerAsk(card, text) {
   return startTurn(card, text, []);
 }
 
-function newSession(cwd, text, images) {
+function newSession(cwd, text, images, profile) {
   const dir = cwd || process.env.USERPROFILE || "";
   let stat = null;
   try { stat = fs.statSync(dir); } catch { /* 없음 */ }
@@ -212,6 +227,7 @@ function newSession(cwd, text, images) {
   if (!String(text || "").trim() && !(images && images.length)) return { ok: false, out: "Claude Code 세션은 첫 지시가 필요합니다" };
   const id = crypto.randomUUID();
   const file = claude.fileFor(dir, id);
+  if (profile) profiles.assign(file, profile);
   cwds.set(norm(file), dir);
   const r=startTurn(file,text,images);if(r.retryable){const q=queue.enqueue(file,text,images);return {...q,node:file,queued:true};}return r;
 }
