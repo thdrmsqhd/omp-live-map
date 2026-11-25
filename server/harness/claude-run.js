@@ -16,6 +16,7 @@ const model = require("./claude-model");
 const input = require("./claude-input");
 const settings=require("./claude-settings");
 const {createQueue}=require("./claude-queue");
+const {transport}=require("./claude-stream");
 
 const runs = new Map(); // 낮춘 카드 경로 -> { node, child, busy, cancelled, full, streamed, answer, seen }
 const cwds = new Map(); // 낮춘 카드 경로 -> 작업 폴더(방금 만든 세션은 기록 스캔 전에도 필요)
@@ -139,21 +140,45 @@ function spawnTurn(s, loc, text, images, fresh) {
 }
 
 // 카드에 한 턴을 보낸다. 파일이 없고 pending/방금 만든 세션이면 새 session-id 로 시작한다.
+function streamTurn(s,text,images){
+ s.busy=true;s.state="running";s.cancelled=false;s.full="";s.streamed=false;s.resultCode=undefined;s.seen=new Set();clearTimeout(s.idleTimer);
+ pushChat({node:s.node,kind:"req",text});
+ if(!s.transport.write(JSON.parse(input.frameOf(text,images,s.sessionId)))){finish(s,1);killTree(s.child);return {ok:false,out:"CLI stream closed"};}
+ return {ok:true,node:s.node};
+}
+function spawnStream(s,loc,text,images){
+ const opt=settings.get(s.node),args=["-p","--input-format","stream-json","--output-format","stream-json","--verbose","--include-partial-messages","--permission-prompt-tool","stdio","--permission-mode",opt.permission];
+ args.push(loc.exists?"--resume":"--session-id",loc.sessionId);const m=model.modelOf(s.node)||model.DEFAULT_MODEL;if(m!=="default")args.push("--model",m);if(opt.effort!=="default")args.push("--effort",opt.effort);
+ const child=spawn("claude",args,{cwd:loc.cwd,windowsHide:true,stdio:["pipe","pipe","pipe"]});s.child=child;s.sessionId=loc.sessionId;s.stderr="";s.state="starting";
+ child.stderr?.setEncoding("utf8");child.stderr?.on("data",d=>{s.stderr=redact(s.stderr+d);});
+ s.transport=transport(child,{
+ frame:o=>{if(o.type==="assistant"){const blocks=o.message?.content||[];if(!s.streamed)emitText(s,blocks.filter(b=>b.type==="text").map(b=>b.text).join(""));return;}
+ if(o.type==="result"){if(!s.streamed&&typeof o.result==="string")emitText(s,o.result);finish(s,o.is_error?1:0);s.state="idle";uiAsk.drop(s.node);queue.done(s.node,!o.is_error&&!s.cancelled);if(!s.busy){s.state="idle";s.idleTimer=setTimeout(()=>{if(!s.busy){s.state="closing";s.transport.close();setTimeout(()=>{if(!s.transport.ended)killTree(child);},3000).unref();}},60000);s.idleTimer.unref();}return;}onFrame(s,o);},
+ permission:(id,r,respond)=>{s.state="waiting_approval";const tool=r.tool_name||"Tool";const q=input.askOf([{type:"tool_use",name:tool,id,input:r.input}],new Set());
+ if(q){uiAsk.ask(s.node,q,answer=>{if(answer?.cancelled||answer?.timedOut){respond({behavior:"deny",message:"User cancelled"});s.state="running";return {ok:true};}const answers={};for(const [i,a] of (answer?.answers||[]).entries()){const question=q.questions[i]?.question;if(question)answers[question]=[...(a.selectedOptions||[]),a.customInput].filter(Boolean).join(", ");}if(Object.keys(answers).length!==q.questions.length){respond({behavior:"deny",message:"Incomplete answers"});}else respond({behavior:"allow",updatedInput:{...r.input,answers}});s.state="running";return {ok:true};});return;}
+ uiAsk.ask(s.node,{id,method:"confirm",title:"Claude 도구 승인: "+tool,message:JSON.stringify(r.input||{}).slice(0,4000)},answer=>{s.state="running";const allow=answer?.confirmed===true&&!answer.cancelled;return {ok:respond(allow?{behavior:"allow",updatedInput:r.input||{}}:{behavior:"deny",message:"User denied"})};});},
+ error:e=>{s.stderr=redact(s.stderr+"\\n"+errText(e));if(s.busy)finish(s,1);killTree(child);},
+ closed:(code)=>{clearTimeout(s.idleTimer);uiAsk.drop(s.node);const wasBusy=s.busy;if(wasBusy)finish(s,code||1);removeRun(s);if(wasBusy)queue.done(s.node,false);}
+ });return streamTurn(s,text,images);
+}
 function startTurn(card, text, images) {
-  if(runs.has(norm(card)))return {ok:false,out:"이전 실행이 아직 정리되지 않았습니다"};
+  const existing=runs.get(norm(card));
+  if(existing?.transport&&!existing.busy&&existing.state==="idle")return streamTurn(existing,text,images);
+  if(existing)return {ok:false,out:"이전 실행이 아직 정리되지 않았습니다"};
   if(runs.size>=MAX_RUNS)return {ok:false,out:"Claude 동시 실행 제한 "+MAX_RUNS+"개"};
   const loc = locate(card);
   if (!loc.exists && !loc.known) return { ok: false, out: "Claude 세션 기록 없음" };
-  pushChat({ node: card, kind: "req", text });
   const s = { node: card, seen: new Set() };
   runs.set(norm(card), s);
+  if(settings.get(card).protocol==="stream"){try{return spawnStream(s,loc,text,images);}catch(e){removeRun(s);return {ok:false,out:errText(e)};}}
+  pushChat({ node: card, kind: "req", text });
   spawnTurn(s, loc, text, images, !loc.exists);
   return { ok: true, node: card };
 }
 
 const busyRun = (card) => { const s = runs.get(norm(card)); return s && s.busy ? s : null; };
 
-const queue=createQueue({start:startTurn,busy:card=>runs.has(norm(card))});
+const queue=createQueue({start:startTurn,busy:card=>{const s=runs.get(norm(card));return !!s&&(!s.transport||s.busy||s.state!=="idle"&&s.state!=="completed");}});
 function queueCard(node){return lineage.cardOf(node)||node;}
 function prompt(node, text, images) {
   const card = lineage.cardOf(node) || node;
@@ -199,6 +224,7 @@ function cancel(node) {
   const s = runs.get(norm(node));
   if (!s || !s.busy) return { ok: false, out: "실행 중인 프롬프트 없음" };
   s.cancelled = true;s.state="cancelling";s.answer="";queue.change(s.node,"pause");
+  if(s.transport){void s.transport.control({subtype:"interrupt"}).catch(()=>killTree(s.child));setTimeout(()=>{if(s.busy&&s.cancelled)killTree(s.child);},5000).unref();return {ok:true};}
   if (s.child) killTree(s.child);
   setTimeout(() => { if (s.busy && s.cancelled) finish(s, 130); }, 3000).unref();
   return { ok: true };
@@ -218,4 +244,4 @@ function list() {
   return [...runs.values()].map((s) => ({ node: s.node, file: s.node, harness: "claude", pid: s.child ? s.child.pid : 0, busy: !!s.busy, state:s.state }));
 }
 
-module.exports = { newSession, prompt, cancel, stop, list, bind, isBusy: (card) => runs.has(norm(card)), diagnostics:(card)=>diagnostics.get(norm(card))||null, maxRuns:MAX_RUNS, enqueue:(node,text,images)=>queue.enqueue(queueCard(node),text,images), queueView:node=>queue.view(queueCard(node)), queueChange:(node,action,id,text)=>queue.change(queueCard(node),action,id,text), locate };
+module.exports = { newSession, prompt, cancel, stop, list, bind, isBusy: (card) => {const s=runs.get(norm(card));return !!s&&(!s.transport||s.busy||s.state!=="idle");}, diagnostics:(card)=>diagnostics.get(norm(card))||null, maxRuns:MAX_RUNS, enqueue:(node,text,images)=>queue.enqueue(queueCard(node),text,images), queueView:node=>queue.view(queueCard(node)), queueChange:(node,action,id,text)=>queue.change(queueCard(node),action,id,text), locate };
