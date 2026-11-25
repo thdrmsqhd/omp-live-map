@@ -90,11 +90,21 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     const registered = page.locator("#project option").filter({ hasText: "desktop fixture" });
     await registered.waitFor({ state: "attached", timeout: 8000 });
     await page.locator("#design-nav").click();
-    await page.locator("#kind").selectOption("model");
-    await page.locator("#payload").fill(JSON.stringify({ name: "test profile", provider: "fixture", model: "fake-1" }));
+    await page.locator("#definition-model-open").click();
+    await page.locator("[name=modelName]").fill("test profile");
+    await page.locator("[name=catalogModel]").selectOption({ label: "claude-sonnet-4-6 · anthropic" });
     await page.locator("#definition-save").click();
     await page.locator("#definition option").filter({ hasText: "test profile" }).waitFor({ state: "attached", timeout: 8000 });
     await page.getByRole("button", { name: "Workflow", exact: true }).click();
+    await page.getByText("기본 제공 Workflow", { exact: true }).click();
+    const preset = page.locator("#workflow-preset-form");
+    await preset.locator("[name=preset]").selectOption("refactor");
+    assert.equal(await preset.locator("[name=create]").isDisabled(), true);
+    await page.locator("#workflow-preset-defaults").click();
+    await preset.locator("[name=name]").fill("부분수정");
+    await preset.locator("[name=create]").click();
+    await page.locator("#workflow-list option").filter({ hasText: "부분수정" }).waitFor({ state: "attached" });
+    await page.locator("#workflow-list").selectOption("");
     await page.locator("#workflow-name").fill("CI workflow");
     const start = page.locator('.workflow-node[data-node="start"]');
     const handle = start.locator(".workflow-node-title");
@@ -172,8 +182,7 @@ async function verifyHarnessEditor(page, repository) {
   execFileSync("git", ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
     "commit", "-m", "Review fixture"], { cwd: repository });
 
-  await page.getByRole("button", { name: "설계", exact: true }).click();
-  await page.locator("#kind").selectOption("harness");
+  await page.locator("#design-nav").click();
   await page.locator("#harness-template").selectOption("reviewer");
   await page.locator("#harness-template-use").click();
   await page.locator('[name=harnessName]').fill("CI reviewer");

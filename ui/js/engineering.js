@@ -4,6 +4,7 @@ import { bindDefinitionEditor } from "./engineering-definitions.js";
 import { bindRuntimeControls } from "./engineering-runtime.js";
 import { bindWorkflow } from "./workflow-editor.js";
 import { bindSdlc } from "./sdlc.js";
+import { loadModelOptions } from "./engineering-model-options.js";
 
 const find = (id) => document.getElementById(id);
 const status = find("status");
@@ -12,12 +13,15 @@ const loop = find("loop");
 const runs = find("runs");
 const scopeButtons = [...document.querySelectorAll("[data-definition-scope]")];
 const teamPicker = find("definition-team");
+const kind = find("kind");
 let scope = "personal";
 let scopedDefinitions = [];
+let scopedDefinitionsStale = false;
 let scopeRequest = 0;
 let projectRequest = 0;
 let definitions = [];
 let projects = [];
+let modelOptions = [];
 let currentRunRequest = null;
 let workflow;
 let sdlc;
@@ -45,6 +49,8 @@ function options(control, values, first, chosen = control.value) {
 
 function owner() {
   const selected = projects.find(({ id }) => id === project.value);
+  if (kind.value === "loop") return { scope: "project", project: selected?.id, label: "프로젝트 · " + selected?.name,
+    ready: Boolean(selected), archived: selected?.archived };
   if (scope === "personal") return { scope, label: "개인 · 내 하네스", ready: true };
   if (scope === "team") return { scope, team: teamPicker.value, label: "팀 · " + teamPicker.value, ready: Boolean(teamPicker.value) };
   return { scope, project: selected?.id, label: "프로젝트 · " + selected?.name, ready: Boolean(selected), archived: selected?.archived };
@@ -58,15 +64,14 @@ function canPreview() {
 function setScope(value) {
   scope = value;
   for (const button of scopeButtons) button.setAttribute("aria-pressed", String(button.dataset.definitionScope === scope));
-  find("definition-team-field").hidden = scope !== "team";
-  const kind = find("kind");
-  kind.querySelector('[value="loop"]').disabled = scope !== "project";
-  if (scope !== "project" && kind.value === "loop") kind.value = "harness";
 }
 
 const editor = bindDefinitionEditor({
   find, request, report, options, definitions: () => scopedDefinitions, refreshDefinitions: refreshEditor,
   owner, canPreview,
+  models: () => modelOptions,
+  availableHarnesses: () => definitions.filter(({ kind }) => kind === "harness")
+    .map((entry) => ({ ...entry, name: engineeringDefinitionLabel(entry) })),
   openScope(id) {
     const record = definitions.find((entry) => entry.id === id && entry.kind === "harness");
     if (!record) throw new Error("이 작업 프로젝트에서 사용할 수 있는 하네스를 선택해 주세요.");
@@ -79,6 +84,18 @@ async function refreshEditor(chosen, refreshAvailable = false) {
   const destination = owner();
   const { scope, project: projectId, team, label, ready, archived } = destination;
   const revision = ++scopeRequest;
+  const type = kind.value;
+  find("definition-heading").textContent = { harness: "Workflow 하네스", model: "하네스에 연결할 모델", loop: "워크플로 루프" }[type];
+  find("definition-guide").textContent = {
+    harness: "역할, 작업 지시, 적용할 모델과 스킬을 저장합니다. 저장한 하네스를 Workflow 또는 루프에 연결할 수 있습니다.",
+    model: "아래 목록에서 모델을 골라 현재 저장 범위에 등록합니다.",
+    loop: "하네스를 실행하고 검증 명령의 결과에 따라 다시 시도할 수 있습니다. 루프는 작업 프로젝트에 저장됩니다.",
+  }[type];
+  find("definition-list-label").textContent = { harness: "저장된 하네스", model: "저장된 모델", loop: "저장된 루프" }[type];
+  find("definition-scope-controls").hidden = type === "loop";
+  find("definition-team-field").hidden = type === "loop" || scope !== "team";
+  find("definition-model-open").hidden = type !== "harness";
+  find("definition-harness-open").hidden = type !== "model";
   const content = find("definition-content");
   content.disabled = true;
   content.hidden = !ready;
@@ -86,19 +103,34 @@ async function refreshEditor(chosen, refreshAvailable = false) {
     scope === "team" ? "저장할 팀을 선택하세요. 팀이 없으면 프로젝트에 팀 이름을 등록하세요." :
       "위에서 작업 프로젝트를 선택하세요.";
   const selectedId = project.value;
-  const [records, available] = await Promise.all([
+  const [records, available, supportedModels] = await Promise.all([
     ready ? request("definitions", { scope, ...(projectId ? { project: projectId } : {}), ...(team ? { team } : {}) }) : [],
     refreshAvailable && selectedId ? request("definitions", { project: selectedId }) : null,
+    type === "model" && ready ? loadModelOptions() : null,
   ]);
-  if (available && selectedId === project.value) {
-    definitions = available;
-    options(loop, definitions.filter((entry) => entry.kind === "loop"), "Loop 선택");
-    workflow?.refreshProfiles();
-  }
+  if (available && selectedId === project.value) showAvailable(available);
   if (revision !== scopeRequest) return;
+  if (supportedModels) modelOptions = supportedModels.engineering;
   scopedDefinitions = records;
+  scopedDefinitionsStale = false;
   content.disabled = !ready;
   editor.select(chosen);
+}
+
+function showAvailable(records) {
+  definitions = records;
+  options(loop, definitions.filter((entry) => entry.kind === "loop"), "루프 선택");
+  workflow?.refreshProfiles();
+}
+
+async function addWorkflowDefaults(projectId) {
+  const refs = await request("workflows/presets/defaults", {}, { project: projectId });
+  const records = await request("definitions", { project: projectId });
+  if (projectId === project.value) {
+    scopedDefinitionsStale = owner().scope === "project";
+    showAvailable(records);
+  }
+  return refs;
 }
 
 async function refreshProjects(chosen, editSelected = false) {
@@ -121,12 +153,10 @@ async function refreshProjects(chosen, editSelected = false) {
   find("archive").disabled = !selected || selected.archived;
   const available = selected ? await request("definitions", { project: selected.id }) : [];
   if (revision !== projectRequest) return;
-  definitions = available;
-  options(loop, definitions.filter((entry) => entry.kind === "loop"), "Loop 선택");
-  workflow?.refreshProfiles();
+  showAvailable(available);
   await Promise.all([
     refreshEditor(),
-    workflow?.selectProject(selected?.id ?? ""),
+    workflow?.selectProject(selected?.id ?? "", Boolean(selected?.archived)),
     sdlc?.selectProject(selected?.id ?? ""),
     refreshRuns(),
   ]);
@@ -208,25 +238,36 @@ find("workflow-open-profiles").onclick = () => {
 };
 find("workflow-close-profiles").onclick = () => profileDialog.close();
 profileDialog.addEventListener("close", () => find("session-harness-host").append(profileEditor));
-for (const view of views) {
-  find(view + "-nav").addEventListener("click", () => {
-    find("engineering-context").hidden = view === "session-harnesses";
-    if (view === "session-harnesses") {
-      status.textContent = "";
-      void loadSessionHarnesses();
-    } else if (!window.engineeringDesktop) status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";
-    for (const name of views) {
-      find(name).hidden = view !== name;
-      find(name + "-nav").setAttribute("aria-pressed", String(view === name));
-    }
-  });
+function showView(view) {
+  find("engineering-context").hidden = view === "session-harnesses";
+  if (view === "session-harnesses") {
+    status.textContent = "";
+    void loadSessionHarnesses();
+  } else if (!window.engineeringDesktop) status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";
+  for (const name of views) find(name).hidden = (view === "loop" ? "design" : view) !== name;
+  for (const name of [...views, "loop"]) find(name + "-nav").setAttribute("aria-pressed", String(view === name));
 }
+const showDefinitions = (type) => report(async () => {
+  if (kind.value !== type && !editor.mayReplace()) return;
+  const changed = kind.value !== type;
+  kind.value = type;
+  showView(type === "loop" ? "loop" : "design");
+  if (!window.engineeringDesktop) return;
+  if (changed) await refreshEditor("");
+  else if (scopedDefinitionsStale && editor.mayReplace()) await refreshEditor();
+});
+for (const view of views.filter((name) => name !== "design")) find(view + "-nav").onclick = () => showView(view);
+find("design-nav").onclick = showDefinitions("harness");
+find("loop-nav").onclick = showDefinitions("loop");
+find("definition-model-open").onclick = showDefinitions("model");
+find("definition-harness-open").onclick = showDefinitions("harness");
 const params = new URLSearchParams(location.search);
 const target = params.get("view");
-if (views.includes(target)) find(target + "-nav").click();
+if (target === "loop") kind.value = "loop";
+if (views.includes(target) || target === "loop") showView(target);
 
 if (window.engineeringDesktop) {
-  workflow = bindWorkflow({ find, request, report, definitions: () => definitions, editHarness: editor.open });
+  workflow = bindWorkflow({ find, request, report, definitions: () => definitions, editHarness: editor.open, addWorkflowDefaults });
   sdlc = bindSdlc({ find, request, report, showRun: async (id) => {
     find("workflow-nav").click();
     await workflow.showRun(id);

@@ -58,6 +58,12 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .definition-scopes button { display: grid; text-align: start; gap: .25rem; padding: .75rem; border: 1px solid var(--border); border-radius: .45rem; }
 .definition-scopes button[aria-pressed="true"] { border: 2px solid var(--accent); padding: calc(.75rem - 1px); background: color-mix(in srgb, var(--accent) 10%, var(--field)); }
 .definition-scopes span, #definition-model-hint { font-size: .875rem; }
+.setup-hint, #workflow-preset-hint { color: var(--muted); }
+#workflow-preset-hint:empty { display: none; }
+#definition-loop-checks { display: grid; gap: .55rem; margin: .75rem 0; }
+#definition-loop-checks fieldset button { margin: .45rem .4rem 0 0; }
+.loop-arguments > div { display: flex; align-items: end; gap: .5rem; }
+.loop-arguments label { flex: 1; }
 .definition-owner { margin-top: .6rem; padding: .5rem .75rem; border-inline-start: 3px solid var(--accent); }
 .definition-owner p { margin: .3rem 0; font-weight: 600; }
 #definition-content { display: grid; min-width: 0; gap: .7rem; border: 0; padding: 0; margin: 0; }

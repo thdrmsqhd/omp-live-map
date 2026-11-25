@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const { randomBytes } = require("node:crypto");
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -17,6 +18,9 @@ test("engineering API requires its desktop token and preserves the original grap
   try {
     await withLegacyHttp(t, async ({ request }) => {
       assert.equal((await request("/api/graph")).status, 200);
+      const models = await request("/api/session/model-options");
+      assert.equal(models.status, 200);
+      assert.ok(JSON.parse(models.text).engineering.some(({ provider, id }) => provider === "anthropic" && id === "claude-sonnet-4-6"));
       assert.equal((await request("/api/engineering/projects")).status, 403);
       assert.equal((await request("/api/engineering/runtime/login", {
         method: "POST", headers: { "content-type": "application/json" }, body: "{}",
@@ -42,6 +46,29 @@ test("engineering API requires its desktop token and preserves the original grap
         method: "POST", headers: { ...headers, "content-type": "application/json" }, body: "[]",
       });
       assert.equal(bad.status, 400);
+
+      const root = await fs.mkdtemp(path.join(directory, "project-"));
+      execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
+      execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture", "--allow-empty"], { cwd: root });
+      async function send(endpoint, payload, expected = 200) {
+        const response = await request("/api/engineering/" + endpoint, payload === undefined ? { headers } : {
+          method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(payload),
+        });
+        assert.equal(response.status, expected, response.text);
+        return JSON.parse(response.text);
+      }
+      const { id: project } = await send("projects", { name: "Fixture", root });
+      const initial = await send("definitions?project=" + project);
+      assert.deepEqual(initial, []);
+      const refs = await send("workflows/presets/defaults", { project });
+      assert.notEqual(refs.author, refs.reviewer);
+      assert.deepEqual(await send("workflows/presets/defaults", { project }), refs);
+      assert.equal((await send("definitions?project=" + project)).length, 5);
+      const saved = await send("workflows/presets", { project, preset: "refactor", name: "부분수정", refs });
+      assert.deepEqual(saved.payload.nodes.filter(({ definition }) => definition).map(({ definition }) => definition),
+        [refs.author, refs.loop, refs.reviewer]);
+      await send("projects/archive", { id: project });
+      await send("workflows/presets/defaults", { project }, 409);
     });
   } finally {
     delete process.env.OMP_MAP_ENGINEERING_DATA;

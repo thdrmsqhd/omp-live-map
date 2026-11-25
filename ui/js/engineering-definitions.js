@@ -1,19 +1,43 @@
 import { bindHarnessTrials } from "./harness-trials.js";
 import { bindHarnessPreview } from "./harness-preview.js";
 import { bindHarnessEditor } from "./harness-editor.js";
+import { bindLoopFields } from "./engineering-loop-fields.js";
+import { modelKey, showModelOptions } from "./engineering-model-options.js";
 
-export function bindDefinitionEditor({ find, request, report, options, definitions: entries, refreshDefinitions, owner, canPreview, openScope }) {
+export function bindDefinitionEditor({ find, request, report, options, definitions: entries, refreshDefinitions, owner, canPreview, openScope, models, availableHarnesses }) {
   const kind = find("kind");
   const project = find("project");
   const definition = find("definition");
+  const loopFields = bindLoopFields(find, options);
+  const modelFields = find("definition-model-fields");
+  const form = find("definition-form");
+  const controls = form.elements;
+  let initialDefinition = "";
+  function definitionFingerprint() {
+    const fields = kind.value === "loop" ? loopFields.payload()
+      : [controls.modelName.value, controls.catalogModel.value, controls.reasoning.value];
+    return JSON.stringify(fields);
+  }
   function defaultPayload() {
     const model = entries().find((entry) => entry.kind === "model");
-    const harness = entries().find((entry) => entry.kind === "harness");
+    const harness = availableHarnesses()[0];
     if (kind.value === "model") return { name: "Claude Sonnet 4.6", provider: "anthropic", model: "claude-sonnet-4-6", reasoning: "" };
     if (kind.value === "harness") return { name: "Claude Code", adapter: "claude", model: model?.id ?? "", role: "개발", instructions: "", assets: { agents: "", skills: [], mcp: {}, hooks: {} } };
     return { name: "", harness: harness?.id ?? "", attempts: 3, timeoutMs: 600000, budgetCents: 300,
       checks: [{ command: "node", args: ["--test"], code: 0 }] };
   }
+
+  const showFields = (payload) => {
+    modelFields.disabled = modelFields.hidden = kind.value !== "model";
+    if (kind.value === "model") {
+      controls.modelName.value = payload.name;
+      controls.reasoning.value = payload.reasoning;
+      showModelOptions(controls.catalogModel, models(), modelKey(payload.provider, payload.model), "모델 선택");
+    }
+    loopFields.show(payload, availableHarnesses(), kind.value === "loop");
+    harnessEditor.show(payload, entries().filter((entry) => entry.kind === "model"), kind.value === "harness");
+    if (kind.value !== "harness") initialDefinition = definitionFingerprint();
+  };
 
   const harnessEditor = bindHarnessEditor({ find, options, newProfile(payload, models, preserveDraft) {
     if (!preserveDraft && !mayReplace()) return;
@@ -36,7 +60,9 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     for (const control of selection) priorSelection.set(control, control.value);
   }
   function mayReplace(control) {
-    if (harnessEditor.dirty() && !window.confirm("저장하지 않은 하네스 변경 사항을 지우시겠습니까?")) {
+    const dirty = (priorSelection.get(kind) ?? kind.value) === "harness" ? harnessEditor.dirty()
+      : !find("definition-content").disabled && initialDefinition !== definitionFingerprint();
+    if (dirty && !window.confirm("저장하지 않은 변경 사항을 지우시겠습니까?")) {
       if (control) control.value = priorSelection.get(control) ?? "";
       return false;
     }
@@ -54,7 +80,6 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
 
   function showDefinition() {
     const selected = entries().find((entry) => entry.id === definition.value);
-    find("payload").value = JSON.stringify(selected?.payload ?? defaultPayload(), null, 2);
     const destination = owner();
     find("remove").disabled = !selected || destination.archived;
     find("definition-save").disabled = Boolean(destination.archived);
@@ -65,13 +90,12 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     versions.replaceChildren();
     for (let version = selected?.version ?? 0; version > 0; version--) versions.add(new Option(String(version), String(version)));
     versions.disabled = !selected;
-    harnessEditor.show(selected?.payload ?? defaultPayload(), entries().filter((entry) => entry.kind === "model"), kind.value === "harness");
+    showFields(selected?.payload ?? defaultPayload());
     resetTools();
     rememberSelection();
     if (!find("harness-uses").hidden && find("harness-uses").open) void refreshUses();
   }
 
-  kind.addEventListener("change", report(async () => { if (mayReplace(kind)) await refreshDefinitions(""); }));
   definition.addEventListener("change", () => { if (mayReplace(definition)) showDefinition(); });
   const selectVersion = report(async (event) => {
     const selected = entries().find((entry) => entry.id === definition.value);
@@ -82,8 +106,7 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     if (definition.value !== selected.id || find("definition-version").value !== requestedVersion || harnessEditor.revision() !== draft) return;
     const previous = JSON.stringify(historical.payload, null, 2);
     const current = JSON.stringify(selected.payload, null, 2);
-    find("payload").value = previous;
-    harnessEditor.show(historical.payload, entries().filter((entry) => entry.kind === "model"), kind.value === "harness");
+    showFields(historical.payload);
     resetTools();
     rememberSelection();
     if (find("harness-uses").open) void refreshUses();
@@ -92,13 +115,20 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     if (!diff.hidden) diff.textContent = `현재 버전 ${selected.version}\n${current}\n\n선택한 버전 ${historical.version}\n${previous}`;
   });
   find("definition-version").addEventListener("change", selectVersion);
-  find("definition-form").addEventListener("submit", report(async (event) => {
+  form.addEventListener("submit", report(async () => {
     const old = entries().find((entry) => entry.id === definition.value);
-    const payload = kind.value === "harness" ? harnessEditor.payload() : JSON.parse(new FormData(event.currentTarget).get("payload"));
+    let payload;
+    if (kind.value === "harness") payload = harnessEditor.payload();
+    else if (kind.value === "loop") payload = loopFields.payload();
+    else {
+      const [provider, model] = JSON.parse(controls.catalogModel.value);
+      payload = { name: controls.modelName.value, provider, model, reasoning: controls.reasoning.value };
+    }
     const { scope, project: projectId, team } = owner();
     const saved = await request("definitions", {}, { scope, project: projectId, team,
       kind: kind.value, payload, id: old?.id, version: old?.version });
     await refreshDefinitions(saved.id, true);
+    find("status").textContent = `${saved.name} · v${saved.version} 저장됨`;
   }));
   find("remove").addEventListener("click", report(async () => {
     if (!mayReplace()) return;
@@ -171,7 +201,8 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
       find("design-nav").click();
     },
     select(chosen) {
-      options(definition, entries().filter((entry) => entry.kind === kind.value), kind.value === "harness" ? "새 하네스" : "새 정의", chosen);
+      const labels = { harness: "새 하네스", model: "새 모델", loop: "새 루프" };
+      options(definition, entries().filter((entry) => entry.kind === kind.value), labels[kind.value], chosen);
       showDefinition();
     },
   };

@@ -3,7 +3,7 @@
 
 const { json, withJson } = require("./http");
 const { newSession, stopSession, prompt, cancel, list } = require("./sessions");
-const { listModels, setModel } = require("./session-model");
+const { listModels, setModel, modelOptions } = require("./session-model");
 const { prepare, MAX_BODY: UPLOAD_BODY } = require("./uploads");
 const { answer } = require("./ui-requests");
 const harness = require("./harness");
@@ -34,6 +34,7 @@ module.exports = {
     try { json(res, { ok: true, profiles: profiles.list() }); }
     catch (error) { json(res, { ok: false, out: error.message }); }
   },
+  "GET /api/session/model-options": async (req, res, url) => json(res, await modelOptions(url.searchParams.get("omp") === "1")),
   "POST /api/session-harnesses": (req, res) => withJson(req, res, (input) => {
     try {
       if (input.remove === true) {

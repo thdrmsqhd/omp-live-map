@@ -31,10 +31,11 @@ function choices(select, entries, fallback) {
   else if (fallback !== undefined) select.value = fallback;
 }
 
-export function bindWorkflow({ find, request, report, definitions, editHarness }) {
+export function bindWorkflow({ find, request, report, definitions, editHarness, addWorkflowDefaults }) {
   const el = (name) => find("workflow-" + name);
   const selector = el("list"), form = el("node-form");
   let project = "", workflow, selected, documentState = blank(), runDetail, workflows = [];
+  let archived = false;
   let runNode, connection, preview, profiles = [], refreshedProfiles = false;
   const profileList = el("profile-list");
   const activeProfile = () => profiles.find(({ id }) => id === profileList.value);
@@ -75,7 +76,8 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       } else showRunStates();
     },
   });
-  const templateButtons = bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
+  const templateButtons = bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project,
+    isArchived: () => archived, addWorkflowDefaults, async imported(record) {
     await loadList(record.project);
     if (record.project !== project) return;
     if (runDetail) await runs.refresh("");
@@ -441,12 +443,19 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
   }
   render();
   fit();
+  templateButtons.refresh();
   return { showRun: runs.refresh, refreshProfiles() {
     harness.refreshChoices();
     templateButtons.refresh();
-  }, async selectProject(id) {
-    if (id === project) return;
+  }, async selectProject(id, isArchived) {
+    archived = isArchived;
+    if (id === project) {
+      templateButtons.refresh();
+      return;
+    }
+    templateButtons.clear();
     project = id;
+    templateButtons.refresh();
     selector.value = "";
     runDetail = null;
     runNode = null;
