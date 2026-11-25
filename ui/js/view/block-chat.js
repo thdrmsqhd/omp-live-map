@@ -261,4 +261,4 @@ document.addEventListener("selectionchange",()=>{
   }
 });
 
-async function chatOpenFile(id,file,isDiff){const n=nodeById(id),st=chatState(id);if(!n?.cwd)return;try{if(isDiff){const r=await postJSON("/api/chat/diff",{node:id,file});const d=await r.json();if(!d.ok)throw Error(d.out);st.summary=d.out;paintChat(id);return;}const absolute=/^(?:[A-Za-z]:[\\/]|\/)/.test(file)?file:n.cwd.replace(/[\\/]$/,"")+"/"+file;const host=ELS.get(id);const btn=host?.querySelector("[data-card-editor]");if(btn)btn.click();await edOpenAt(id,absolute);}catch(e){st.error=e.message;paintChat(id);}}
+async function chatOpenFile(id,file,isDiff){const n=nodeById(id),st=chatState(id);if(!n?.cwd)return;try{if(isDiff){const r=await postJSON("/api/chat/diff",{node:id,file});const d=await r.json();if(!d.ok)throw Error(d.out);st.summary=d.out;paintChat(id);return;}const absolute=/^(?:[A-Za-z]:[\\/]|\/)/.test(file)?file:n.cwd.replace(/[\\/]$/,"")+"/"+file;await openEditor(id,absolute,{pin:true});}catch(e){st.error=e.message;paintChat(id);}}
