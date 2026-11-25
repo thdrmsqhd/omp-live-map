@@ -8,6 +8,26 @@ function bookmarkKey(m){return String(m.id||m.uuid||[m.role,m.ts||m.since||0,Str
 function chatBookmarks(id){const v=readJSON("omp-map-chat-bookmarks:"+id,[]);return Array.isArray(v)?v:[];}
 function highlightChatCode(code){if(!code||code.dataset.highlighted)return;const lang=String(code.dataset.lang||"").toLowerCase();if(!/^(js|javascript|ts|typescript|py|python|java|cpp|c|rust|rs|go|json|sql|bash|sh)$/.test(lang))return;const text=code.textContent;if(text.length>30000)return;const re=/("(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|\b(?:const|let|var|function|class|return|if|else|for|while|import|from|def|async|await|try|catch|throw|public|private|fn|struct|impl|match|select|where|true|false|null|None)\b|\b\d+(?:\.\d+)?\b)/gi;let pos=0;const frag=document.createDocumentFragment();for(const m of text.matchAll(re)){frag.append(document.createTextNode(text.slice(pos,m.index)));const span=document.createElement("span");span.className=/^["\x27]/.test(m[0])?"code-str":/^\d/.test(m[0])?"code-num":"code-key";span.textContent=m[0];frag.append(span);pos=m.index+m[0].length;}frag.append(document.createTextNode(text.slice(pos)));code.replaceChildren(frag);code.dataset.highlighted="1";}
 function chatViewPrefs(id){const p=readJSON("omp-map-chat-view:"+id,{});return {font:Math.max(12,Math.min(18,Number(p?.font)||14))};}
+const CHAT_STICK_SLACK = 48;
+// 바닥에서 slack px 안이면 새 응답을 따라간다. 그보다 위로 올려 과거를 보는 중이면 위치를 유지한다.
+function chatNearBottom(scrollTop, clientHeight, scrollHeight, slack = CHAT_STICK_SLACK) {
+  if (scrollHeight <= clientHeight + 1) return true;
+  return scrollTop + clientHeight >= scrollHeight - slack;
+}
+function stickChatBottom(list) {
+  list.__programScroll = true;
+  list.scrollTop = list.scrollHeight;
+  list.__programScroll = false;
+}
+function followChatBottom(list, st) {
+  if (st.stickBottom === false || st.historyOffset) return;
+  stickChatBottom(list);
+  cancelAnimationFrame(list.__stickRaf || 0);
+  list.__stickRaf = requestAnimationFrame(() => {
+    list.__stickRaf = 0;
+    if (st.stickBottom !== false && !st.historyOffset && list.isConnected) stickChatBottom(list);
+  });
+}
 function patchChatRows(host,html){const t=document.createElement("template");t.innerHTML=html;const old=new Map([...host.children].filter(x=>x.dataset.chatKey).map(x=>[x.dataset.chatKey,x]));let cursor=host.firstElementChild;for(const fresh of [...t.content.children]){let node=fresh;const prev=old.get(fresh.dataset.chatKey);if(prev){old.delete(fresh.dataset.chatKey);if(prev.__source===fresh.outerHTML||prev.outerHTML===fresh.outerHTML)node=prev;else if(fresh.dataset.chatKey==="stream"){const tx=prev.querySelector(".tx"),next=fresh.querySelector(".tx");if(tx&&next){tx.innerHTML=next.innerHTML;node=prev;}}}node.__source=fresh.outerHTML;if(node!==prev&&prev){const oldDetails=[...prev.querySelectorAll("details")],newDetails=[...node.querySelectorAll("details")];newDetails.forEach((d,i)=>{if(oldDetails[i]?.querySelector("summary")?.textContent===d.querySelector("summary")?.textContent)d.open=oldDetails[i].open;});}if(node!==cursor)host.insertBefore(node,cursor);cursor=node.nextElementSibling;}while(cursor){const next=cursor.nextElementSibling;cursor.remove();cursor=next;}for(const pre of host.querySelectorAll(".cmsg pre")){if(pre.parentElement.classList.contains("chat-code"))continue;const wrap=document.createElement("div");wrap.className="chat-code";const bar=document.createElement("header");const lang=document.createElement("span");lang.textContent=pre.querySelector("code")?.dataset.lang||"code";const btn=document.createElement("button");btn.dataset.codeCopy="1";btn.textContent="코드 복사";bar.append(lang,btn);pre.before(wrap);wrap.append(bar,pre);highlightChatCode(pre.querySelector("code"));}}
 
 
@@ -136,16 +156,21 @@ function paintChat(id) {
   else if (list.__html !== html) {
     CHAT_SELECTION_PENDING.delete(id);
     st.renderedMessages = shown;
-    // 맨 아래를 보고 있었으면 새 메시지를 따라가고, 위로 올려 둔 위치는 지킨다.
-    const wasBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
+    // 바닥 근처에 붙어 있으면 새 메시지를 따라가고, 위로 올려 둔 위치는 메시지 키로 유지한다.
+    const follow = st.stickBottom !== false && !st.historyOffset;
     const top = list.scrollTop;
     const anchor=[...list.children].find(x=>x.offsetTop+x.offsetHeight>top&&x.dataset.chatKey);const anchorKey=anchor?.dataset.chatKey,delta=anchor?anchor.offsetTop-top:0;
     list.__html = html;
     patchChatRows(list,html);
-    const next=anchorKey&&[...list.children].find(x=>x.dataset.chatKey===anchorKey);
-    list.scrollTop = wasBottom ? list.scrollHeight : next?next.offsetTop-delta:top;
+    if (follow) followChatBottom(list, st);
+    else {
+      const next=anchorKey&&[...list.children].find(x=>x.dataset.chatKey===anchorKey);
+      list.__programScroll = true;
+      list.scrollTop = next ? next.offsetTop - delta : top;
+      list.__programScroll = false;
+    }
   }
-  const jump=box.querySelector(".chat-jump");jump.hidden=!page.offset&&list.scrollTop+list.clientHeight>=list.scrollHeight-24;
+  const jump=box.querySelector(".chat-jump");jump.hidden=!page.offset&&chatNearBottom(list.scrollTop, list.clientHeight, list.scrollHeight);
   const send=box.querySelector("[data-send]");send.textContent=st.busy?"추가 지시 ↑":"보내기 ↑";
   send.disabled=!!st.sending||(!String(st.draft||"").trim()&&!st.files.length);
   const sum = box.querySelector(".csum");
@@ -210,7 +235,7 @@ function mountChat(blk, n) {
     else if(b.dataset.codeCopy!==undefined){copyText(b.closest(".chat-code")?.querySelector("code")?.textContent||"",b);}
     else if(b.dataset.chatAttach) box.querySelector(".chat-file").click();
     else if (b.dataset.chatSearchClear) {search.value="";st.search="";st.historyOffset=0;paintChat(id);}
-    else if (b.dataset.chatJump) {st.historyOffset=0;st.search="";search.value="";if(CHAT_TOOL.has(id))CHAT_TOOL.delete(id);paintChat(id);const l=box.querySelector(".cmsgs");l.scrollTop=l.scrollHeight;box.querySelector(".chat-jump").hidden=true;}
+    else if (b.dataset.chatJump) {st.historyOffset=0;st.search="";search.value="";st.stickBottom=true;if(CHAT_TOOL.has(id))CHAT_TOOL.delete(id);paintChat(id);const l=box.querySelector(".cmsgs");followChatBottom(l,st);box.querySelector(".chat-jump").hidden=true;}
     else if (b.dataset.send) submitPrompt(id);
     else if (b.dataset.model) toggleModelPicker(id);
     else if (b.dataset.pickId) { if (!modelPick(id).loading) pickModel(id, b.dataset.pickP, b.dataset.pickId); }
@@ -224,8 +249,12 @@ function mountChat(blk, n) {
       if (b.dataset.more && page.start) st.historyOffset = page.all.length-page.start;
       else if (b.dataset.newer) st.historyOffset = page.offset<=CHAT_PAGE ? 0 : Math.max(CHAT_SHOW,page.offset-CHAT_PAGE);
       else if (b.dataset.latest) st.historyOffset=0;
+      st.stickBottom = !st.historyOffset;
       paintChat(id);
-      const list=box.querySelector(".cmsgs");list.scrollTop=st.historyOffset?0:list.scrollHeight;
+      const list=box.querySelector(".cmsgs");
+      list.__programScroll = true;
+      list.scrollTop = st.historyOffset ? 0 : list.scrollHeight;
+      list.__programScroll = false;
     }
     else if (b.dataset.unfilter) toggleChatTool(id, CHAT_TOOL.get(id));
     else if (b.dataset.copy != null) {
@@ -241,9 +270,14 @@ function mountChat(blk, n) {
   });
   const list = box.querySelector(".cmsgs");
   st.renderedMessages = chatMsgs(n,st).shown;
-  list.scrollTop = list.scrollHeight;
+  st.stickBottom = true;
+  stickChatBottom(list);
   list.addEventListener("wheel",()=>{st.allowHistoryScroll=true;},{passive:true});
-  list.addEventListener("scroll",()=>{if(list.scrollTop<24&&!st.historyOffset&&!st.search&&!st.bookmarksOnly&&st.allowHistoryScroll){const p=chatMsgs(nodeById(id),st);if(p.start>0){st.visibleCount=Math.min(120,(st.visibleCount||CHAT_SHOW)+CHAT_PAGE);paintChat(id);}}box.querySelector(".chat-jump").hidden=!st.historyOffset&&list.scrollTop+list.clientHeight>=list.scrollHeight-24;},{passive:true});
+  list.addEventListener("scroll",()=>{
+    if(!list.__programScroll) st.stickBottom = chatNearBottom(list.scrollTop, list.clientHeight, list.scrollHeight);
+    if(!list.__programScroll&&list.scrollTop<24&&!st.historyOffset&&!st.search&&!st.bookmarksOnly&&st.allowHistoryScroll){const p=chatMsgs(nodeById(id),st);if(p.start>0){st.visibleCount=Math.min(120,(st.visibleCount||CHAT_SHOW)+CHAT_PAGE);paintChat(id);}}
+    box.querySelector(".chat-jump").hidden=!st.historyOffset&&chatNearBottom(list.scrollTop, list.clientHeight, list.scrollHeight);
+  },{passive:true});
   box.addEventListener("keydown",e=>{if(e.key==="Escape"&&box.classList.contains("chat-focused")){e.stopPropagation();box.classList.remove("chat-focused");box.querySelector("[data-chat-focus]").setAttribute("aria-pressed","false");}});
   box.querySelector("[data-send]").disabled=!!st.sending||(!ta.value.trim()&&!st.files.length);
   mountChatModel(box, id);
@@ -253,6 +287,7 @@ function mountChat(blk, n) {
   paintPromptComposer(box,n,st);
 }
 
+if (typeof document !== "undefined") {
 registerBlock({ type: "chat", slot: "main", flex: 7.4, render: chatBlock, mount: mountChat, paint: (box, n) => paintChat(n.id) });
 
 document.addEventListener("selectionchange",()=>{
@@ -262,5 +297,7 @@ document.addEventListener("selectionchange",()=>{
     if(!list || !s || s.isCollapsed || !list.contains(s.anchorNode)){CHAT_SELECTION_PENDING.delete(id);paintChat(id);}
   }
 });
+}
+if (typeof module === "object" && module.exports) module.exports = { chatNearBottom, CHAT_STICK_SLACK };
 
 async function chatOpenFile(id,file,isDiff){const n=nodeById(id),st=chatState(id);if(!n?.cwd)return;try{if(isDiff){const r=await postJSON("/api/chat/diff",{node:id,file});const d=await r.json();if(!d.ok)throw Error(d.out);st.summary=d.out;paintChat(id);return;}const absolute=/^(?:[A-Za-z]:[\\/]|\/)/.test(file)?file:n.cwd.replace(/[\\/]$/,"")+"/"+file;await openEditor(id,absolute,{pin:true});}catch(e){st.error=e.message;paintChat(id);}}

@@ -30,6 +30,25 @@ function liveItemHTML(it) {
   </div>`;
 }
 
+function lastTurnEndTs(list) {
+  for (let i = list.length - 1; i >= 0; i--) if (list[i].kind === "turn_end") return list[i].ts || 0;
+  return 0;
+}
+
+function latestChatMessage(nodeId, st) {
+  const node = typeof nodeById === "function" ? nodeById(nodeId) : null;
+  const msgs = [...(node && node.messages || []), ...(st && st.log || [])];
+  return msgs.length ? msgs[msgs.length - 1] : null;
+}
+
+// 끝난 턴의 활동은 그 턴이 아직 대화의 끝일 때만 목록 맨 아래에 둔다.
+// 다음 사용자 메시지가 이미 있으면 이전 턴 블록을 그 아래에 붙이지 않는다.
+function activityStaysAtBottom(running, lastMessage, turnEndTs) {
+  if (running || !lastMessage || lastMessage.role !== "user" || !turnEndTs) return true;
+  const msgTs = typeof lastMessage.ts === "number" ? lastMessage.ts : Date.parse(lastMessage.ts || "") || 0;
+  return msgTs <= turnEndTs;
+}
+
 // 마지막 턴의 항목 범위. 도는 중이면 마지막 turn_end 뒤, 끝났으면 그 턴(turn_end 두 개 사이)이다.
 // sub(서브 라이프사이클)·notify(알림)는 안내일 뿐이라 turn_end 뒤에 붙어도 도는 중으로 보지 않는다.
 const ACT_WORK = (it) => it.kind !== "sub" && it.kind !== "notify";
@@ -75,8 +94,10 @@ function actSummary(items) {
 // 대화 목록 끝에 붙는 활동 묶음. 도는 중이면 펼치고, 끝난 턴은 한 줄 요약으로 접는다(펼침은 chatState 에 보관).
 function chatActivityHTML(nodeId, st) {
   const { items, running } = actItems(nodeId, st);
-  const history=chatTurnHistory(nodeId);const archive=history.slice(0,running||!items.length?history.length:-1).filter(x=>x.items.length);const old=archive.length?`<details class="chat-old-activity"><summary>이전 작업 ${archive.length}턴</summary>${archive.map(x=>`<details><summary>${esc(new Date(x.ts).toLocaleTimeString())} · ${esc(actSummary(x.items))}</summary>${x.items.map(liveItemHTML).join("")}</details>`).join("")}</details>`:"";
-  if (!items.length) return old;
+  const history=chatTurnHistory(nodeId);
+  const stay=activityStaysAtBottom(running, latestChatMessage(nodeId, st), lastTurnEndTs(liveItems(nodeId)));
+  const archive=history.slice(0,running||!items.length||!stay?history.length:-1).filter(x=>x.items.length);const old=archive.length?`<details class="chat-old-activity"><summary>이전 작업 ${archive.length}턴</summary>${archive.map(x=>`<details><summary>${esc(new Date(x.ts).toLocaleTimeString())} · ${esc(actSummary(x.items))}</summary>${x.items.map(liveItemHTML).join("")}</details>`).join("")}</details>`:"";
+  if (!items.length || !stay) return old;
   const list = items.map(liveItemHTML).join("");
   if (running) {
     const { live, done } = splitRunningItems(items);
@@ -94,4 +115,4 @@ function chatActivityHTML(nodeId, st) {
     + (open ? `<div class="lvact">${list}</div>` : "");
 }
 
-if (typeof module === "object" && module.exports) module.exports = { splitRunningItems, actRange, chatActivityHTML };
+if (typeof module === "object" && module.exports) module.exports = { activityStaysAtBottom, lastTurnEndTs, splitRunningItems, actRange, chatActivityHTML };

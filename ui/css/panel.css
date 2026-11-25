@@ -59,7 +59,7 @@
   .cfilter[hidden] { display: none; }
   .cfilter button { padding: 0 6px; font-size: 9.5px; }
   .cmore { align-self: flex-start; margin-bottom: 3px; padding: 0 7px; font-size: 10px; color: var(--muted); }
-  .cmsgs { width: 100%; min-width: 0; flex: 1; min-height: 44px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .cmsgs { width: 100%; min-width: 0; flex: 1; min-height: 44px; overflow-y: auto; overflow-anchor: none; display: flex; flex-direction: column; gap: 2px; }
   /* 질문 카드(확장 UI 요청): 대화 목록 아래, 입력창 위. 답하기 전까지 스크롤로 머문다. */
   .casks { display: flex; flex-direction: column; gap: 5px; margin-top: 5px; max-height: 52%; overflow-y: auto;
     overflow-anchor: none; }
