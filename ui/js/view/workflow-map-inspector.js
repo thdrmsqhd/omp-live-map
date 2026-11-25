@@ -2,14 +2,14 @@ function paintWorkflowMap() {
   const detail = wfMap.run, graph = detail.graph;
   $("workflow-layer").hidden = $("workflow-inspector").hidden = false;
   $("wf-map-title").textContent = detail.run.title;
-  $("wf-map-version").textContent = graph.name + " · v" + detail.run.version;
+  $("wf-map-version").textContent = wfMap.edit ? "Workflow 편집 · v" + wfMap.edit.record.version + " 기준" : graph.name + " · v" + detail.run.version;
   $("wf-map-engineering").href = "/engineering.html?" + new URLSearchParams({
     project: detail.run.project, view: "workflow", run: detail.run.id,
   });
-  $("wf-map-status").textContent = wfLabel(detail.run.status) + (detail.run.error ? " · " + detail.run.error : "");
-  const executions = new Map(detail.nodes.map((item) => [item.node, item]));
+  if (!wfMap.edit) $("wf-map-status").textContent = [wfLabel(detail.run.status), detail.run.error, wfMap.notice].filter(Boolean).join(" · ");
+  const executions = new Map((wfMap.edit ? [] : detail.nodes).map((item) => [item.node, item]));
   const root = $("workflow-map-nodes");
-  for (const node of graph.nodes) {
+  for (const node of wfNodes()) {
     let button = wfMap.buttons.get(node.id);
     if (!button) {
       button = wfCreateNode(node);
@@ -21,11 +21,13 @@ function paintWorkflowMap() {
     button.style.top = p.y + "px";
     button.dataset.status = status ?? "queued";
     button.setAttribute("aria-pressed", String(node.id === wfMap.selected));
-    button.lastChild.textContent = wfLabel(status);
+    button.firstChild.textContent = node.label;
+    button.lastChild.textContent = wfMap.edit ? wfEditTypes[node.type] ?? node.type : wfLabel(status);
   }
   wfPaintEdges();
   paintMinimap();
 
+  if (wfMap.edit) return;
   const step = graph.nodes.find(({ id }) => id === wfMap.selected);
   const state = executions.get(wfMap.selected);
   const previous = detail.retries.filter(({ node }) => node === wfMap.selected);

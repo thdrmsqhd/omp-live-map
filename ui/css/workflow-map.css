@@ -36,3 +36,6 @@
 #mmsvg .mm-wf { fill: #72b8aa; }
 #workflow-inspector label { display: grid; gap: 4px; margin-block: 6px; }
 #workflow-inspector textarea, #workflow-inspector select, #workflow-inspector input { border: 1px solid #526575; border-radius: 4px; padding: 5px; background: #111923; color: inherit; font: inherit; }
+.wf-node[data-invalid] { outline: 2px solid #f88e88; outline-offset: 2px; }
+#wf-edit-fields form { display: grid; gap: 5px; }
+#wf-map-edit-controls h4 { margin: 8px 0 3px; }

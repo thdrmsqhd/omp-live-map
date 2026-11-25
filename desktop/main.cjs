@@ -16,7 +16,7 @@ const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path
 const endpoints = new Set([
   "projects", "projects/archive", "definitions", "definitions/remove", "definitions/version", "harness/preview", "harness/uses", "harness/apply",
   "harness/trial", "harness/trial/cancel", "harness/trial/retry",
-  "workflows", "workflows/launch", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
+  "workflows", "workflows/launch", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
   "workflow-approvals", "workflow-dashboard", "workflow-review", "workflow-artifact",
@@ -25,8 +25,8 @@ const endpoints = new Set([
 ]);
 
 const liveMapReads = new Set(["projects", "tasks", "workflow-approvals", "workflow-runs", "workflow-run",
-  "workflows", "workflow", "definitions", "workflows/presets", "runtime", "workflow-review", "workflow-artifact"]);
-const liveMapWrites = new Set(["workflows/launch", "workflow-runs/retry", "workflow-runs/approval", "workflow-runs/action"]);
+  "workflows", "workflow", "definitions", "definitions/version", "workflows/presets", "runtime", "workflow-review", "workflow-artifact"]);
+const liveMapWrites = new Set(["workflows/launch", "workflows/save-canvas", "workflows/plan", "workflow-runs/retry", "workflow-runs/approval", "workflow-runs/action"]);
 
 function startServer() {
   const data = app.getPath("userData");

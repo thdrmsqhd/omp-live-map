@@ -120,6 +120,37 @@ function workflowCatalog(db, catalog) {
     });
   }
 
+  function saveCanvas(body) {
+    return transaction(db, () => {
+      const project = string(body.project, "project");
+      const current = get(project, string(body.id, "workflow"));
+      if (body.version !== current.version) throw problem(409, "Workflow changed. Reload it before saving.");
+      const document = plan(project, body.payload).document;
+      const overrides = body.loops ?? [];
+      if (!Array.isArray(overrides) || overrides.length > document.nodes.length ||
+          new Set(overrides.map((entry) => entry?.node)).size !== overrides.length) throw problem(400, "Invalid Loop overrides");
+
+      const replacements = new Map();
+      for (const override of overrides) {
+        const node = document.nodes.find(({ id, type }) => id === override?.node && type === "loop");
+        if (!node) throw problem(400, "Select a valid Loop node");
+        const previous = catalog.versionOf(node.definition, node.version);
+        const attempts = integer(override.attempts, "attempt count", 1, 8);
+        if (previous.payload.attempts === attempts) continue;
+        const key = JSON.stringify([previous.id, previous.version, attempts]);
+        if (!replacements.has(key)) {
+          const latest = catalog.versionOf(previous.id);
+          const harness = catalog.dependency(previous);
+          const replacement = catalog.writeDefinition({ project, id: latest.id, version: latest.version, kind: "loop",
+            payload: { ...previous.payload, name: latest.name, attempts }, referenceVersion: harness.version });
+          replacements.set(key, replacement.version);
+        }
+        node.version = replacements.get(key);
+      }
+      return writeWorkflow({ ...body, payload: document });
+    });
+  }
+
   function ensurePreset(project, payload) {
     for (const row of db.prepare("SELECT id FROM workflow WHERE project=? AND name=?").all(project, payload.name)) {
       const existing = get(project, row.id, 1);
@@ -129,7 +160,7 @@ function workflowCatalog(db, catalog) {
     return writeWorkflow({ project, payload });
   }
 
-  return { get, plan, executionPlan, ensurePreset, save: (body) => transaction(db, () => writeWorkflow(body)), harnessUses, relinkHarness, list(project) {
+  return { get, plan, executionPlan, ensurePreset, saveCanvas, save: (body) => transaction(db, () => writeWorkflow(body)), harnessUses, relinkHarness, list(project) {
     catalog.project(project);
     return db.prepare("SELECT id,name,version FROM workflow WHERE project=? ORDER BY name,id").all(project);
   } };

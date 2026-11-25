@@ -99,6 +99,16 @@ test("a V2 database migrates in place and workflows preserve immutable reference
     assert.equal(definitions.dependency(indirect.loop).version, 3);
     assert.equal(definitions.dependency(loop).version, 2);
     assert.equal(workflows.get("one", savedLoop.id, 1).payload.nodes[1].version, 1);
+    const edited = workflows.saveCanvas({ id: savedLoop.id, project: "one", version: 2, payload: indirect.workflow.payload,
+      loops: [{ node: "w", attempts: 5 }] });
+    assert.equal(edited.version, 3);
+    const adjusted = definitions.versionOf(loop.id, edited.payload.nodes[1].version);
+    assert.equal(adjusted.payload.attempts, 5);
+    assert.equal(definitions.dependency(adjusted).version, 3);
+    assert.equal(definitions.versionOf(loop.id, 2).payload.attempts, 2);
+    assert.throws(() => workflows.saveCanvas({ id: savedLoop.id, project: "one", version: 2, payload: edited.payload,
+      loops: [{ node: "w", attempts: 6 }] }), /changed/);
+    assert.equal(definitions.versionOf(loop.id).version, adjusted.version);
     assert.throws(() => definitions.remove(savedHarness.id), /referenced/);
     db.close();
     db = openDatabase(file);

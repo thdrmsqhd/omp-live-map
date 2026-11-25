@@ -167,6 +167,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "sdlc-stages") result = stages.save(input);
         if (endpoint === "tasks/move") result = tasks.move(string(input.id, "task"), input.status, input.revision);
         if (endpoint === "workflows") result = workflows.save(input);
+        if (endpoint === "workflows/save-canvas") result = workflows.saveCanvas(input);
         if (endpoint === "workflows/presets") {
           const payload = buildPreset(input.preset, input.refs ?? {});
           result = workflows.save({ project: input.project, payload: { ...payload, name: input.name || payload.name } });

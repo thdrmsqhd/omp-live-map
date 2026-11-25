@@ -142,6 +142,9 @@ if (window.engineeringDesktop) {
     const target = params.get("view");
     if (views.includes(target)) find(target + "-nav").click();
     if (target === "workflow" && params.get("run") && project.value) await workflow.showRun(params.get("run"));
+    if (target === "design" && params.get("harness") && project.value) {
+      await editor.open(params.get("harness"), Number(params.get("version")));
+    }
   })();
   setInterval(() => {
     if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {});

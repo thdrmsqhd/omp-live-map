@@ -6,9 +6,12 @@ const wfStatus = { queued: "대기", running: "실행 중", failed: "실패", in
   cancelled: "취소", limit_exceeded: "실행 한도 초과" };
 const wfPositionKey = (run) => run.workflow + ":" + run.version;
 const wfLabel = (status) => wfStatus[status] ?? status ?? "대기";
-const wfNodes = () => wfMap.run?.graph.nodes ?? [];
-const wfEdges = () => wfMap.run?.graph.edges ?? [];
-const wfPoint = (node) => wfMap.positions[node.id] ?? { x: wfMap.origin.x + node.x, y: wfMap.origin.y + node.y };
+const wfNodes = () => wfMap.edit?.payload.nodes ?? wfMap.run?.graph.nodes ?? [];
+const wfEdges = () => wfMap.edit?.payload.edges ?? wfMap.run?.graph.edges ?? [];
+const wfPoint = (node) => {
+  if (!wfMap.edit && wfMap.positions[node.id]) return wfMap.positions[node.id];
+  return { x: wfMap.origin.x + node.x, y: wfMap.origin.y + node.y };
+};
 const workflowMapBoxes = () => wfNodes().map((node) => ({ ...wfPoint(node), ...wfSize }));
 
 function wfText(tag, value) {
@@ -39,7 +42,7 @@ let wfEdgeSignature;
 function wfPaintEdges() {
   const svg = $("workflow-map-edges");
   const points = new Map(wfNodes().map((node) => [node.id, wfPoint(node)]));
-  const executions = new Map((wfMap.run?.nodes ?? []).map((node) => [node.node, node]));
+  const executions = new Map((wfMap.edit ? [] : wfMap.run?.nodes ?? []).map((node) => [node.node, node]));
   const signature = JSON.stringify([points.size ? [...points] : [], wfEdges(),
     [...executions].map(([id, { status, outcome }]) => [id, status, outcome?.port])]);
   if (signature === wfEdgeSignature) return;
@@ -85,24 +88,30 @@ function wfCreateNode(node) {
     moved = true;
     const p = worldPoint(event.clientX, event.clientY);
     const position = { x: Math.round(p.x - drag.x), y: Math.round(p.y - drag.y) };
-    wfMap.positions[node.id] = position;
-    button.style.left = position.x + "px";
-    button.style.top = position.y + "px";
+    if (wfMap.edit) {
+      node.x = Math.min(10000, Math.max(0, position.x - wfMap.origin.x));
+      node.y = Math.min(10000, Math.max(0, position.y - wfMap.origin.y));
+    } else wfMap.positions[node.id] = position;
+    button.style.left = wfPoint(node).x + "px";
+    button.style.top = wfPoint(node).y + "px";
     wfPaintEdges();
   });
   button.addEventListener("lostpointercapture", () => {
-    if (moved && wfMap.run) { wfPersistPosition(); paintMinimap(); }
+    if (moved && wfMap.run) { if (!wfMap.edit) wfPersistPosition(); paintMinimap(); }
     drag = null;
   });
   button.addEventListener("click", () => {
     if (moved) { moved = false; return; }
+    if (wfMap.edit && !wfSelectEditNode(node.id)) return;
     wfMap.selected = node.id;
+    if (!wfMap.edit) writeJSON("omp-workflow-map-selection", { id: wfMap.run.run.id, node: node.id });
     paintWorkflowMap();
   });
   return button;
 }
 
 function wfClose() {
+  if (wfMap.edit && !wfLeaveEditing()) return;
   wfMap.generation++;
   wfMap.run = null;
   wfEdgeSignature = undefined;
@@ -134,7 +143,9 @@ function wfAccept(detail, initial, node) {
 }
 
 async function openMapWorkflow(id, node) {
+  if (wfMap.edit && !wfLeaveEditing()) return;
   const token = ++wfMap.generation;
+  wfMap.notice = "";
   $("workflow-inspector").hidden = false;
   $("wf-map-status").textContent = "실행을 불러오는 중입니다.";
   setMapMode("map");
@@ -150,7 +161,7 @@ async function openMapWorkflow(id, node) {
 }
 
 async function refreshMapWorkflow() {
-  if (!wfMap.run || wfMap.loading || mapMode !== "map") return;
+  if (!wfMap.run || wfMap.edit || wfMap.loading || mapMode !== "map") return;
   const id = wfMap.run.run.id, token = wfMap.generation;
   wfMap.loading = true;
   try {
@@ -170,5 +181,8 @@ if (window.engineeringDesktop) {
   });
   setInterval(refreshMapWorkflow, 1600);
   const last = readJSON("omp-workflow-map-run", null);
-  if (last && mapMode === "map") queueMicrotask(() => void openMapWorkflow(last));
+  if (last && mapMode === "map") document.addEventListener("DOMContentLoaded", () => {
+    const selected = readJSON("omp-workflow-map-selection", null);
+    void openMapWorkflow(last, selected?.id === last ? selected.node : undefined);
+  }, { once: true });
 }

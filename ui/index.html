@@ -98,10 +98,31 @@
           <button id="wf-map-close" aria-label="Workflow 닫기">닫기</button>
         </div>
         <div class="wf-actions">
-          <button id="wf-map-fit">그래프 맞춤</button><a id="wf-map-engineering">Engineering</a>
+          <button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-edit">Workflow 편집</button><a id="wf-map-engineering">Engineering</a>
         </div>
         <p id="wf-map-status" role="status"></p>
         <div id="wf-map-details"></div>
+        <div id="wf-map-edit-controls" hidden>
+          <label>Workflow 이름 <input id="wf-edit-name" maxlength="240"></label>
+          <div class="wf-actions">
+            <button id="wf-edit-validate">그래프 검사</button><button id="wf-edit-save">새 버전 저장</button>
+            <button id="wf-edit-discard">실행으로 돌아가기</button>
+          </div>
+          <p id="wf-edit-status" role="status"></p>
+          <details open>
+            <summary>노드 라이브러리</summary>
+            <div id="wf-edit-palette" class="wf-actions"></div>
+          </details>
+          <div id="wf-edit-fields"></div>
+          <details>
+            <summary>연결 편집</summary>
+            <label>출발 <select id="wf-edit-from"></select></label>
+            <label>경로 <select id="wf-edit-port"></select></label>
+            <label>도착 <select id="wf-edit-to"></select></label>
+            <button id="wf-edit-connect">연결 추가</button>
+            <ul id="wf-edit-edges"></ul>
+          </details>
+        </div>
       </aside>
     </div>
     <section id="overview" hidden aria-label="프로젝트 관제">
@@ -215,5 +236,7 @@
   <script src="js/view/workflow-launch.js"></script>
   <script src="js/view/workflow-map.js"></script>
   <script src="js/view/workflow-map-inspector.js"></script>
+  <script src="js/view/workflow-map-fields.js"></script>
+  <script src="js/view/workflow-map-editor.js"></script>
 </body>
 </html>
