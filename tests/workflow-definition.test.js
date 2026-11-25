@@ -72,6 +72,18 @@ test("a V2 database migrates in place and workflows preserve immutable reference
     definitions.saveDefinition({ project: "one", kind: "harness", id: savedHarness.id, version: 1, payload: harness });
     const next = workflows.save({ project: "one", id: saved.id, version: 1, payload: input });
     assert.equal(next.payload.nodes[1].version, 2);
+    assert.deepEqual(workflows.harnessUses("one", savedHarness.id).map(({ node, harnessVersion }) =>
+      [node, harnessVersion]), [["w", 2]]);
+    const loop = definitions.saveDefinition({ project: "one", kind: "loop", payload: {
+      name: "Retry", harness: savedHarness.id, attempts: 2, timeoutMs: 1000, budgetCents: 10,
+      checks: [check.check],
+    } });
+    const loopGraph = { ...input, name: "Loop workflow",
+      nodes: [node("s", "start"), node("w", "loop", { definition: loop.id, instruction: "Try" }), node("z", "end")] };
+    workflows.save({ project: "one", payload: loopGraph });
+    const refs = workflows.harnessUses("one", savedHarness.id);
+    assert.equal(refs.length, 2);
+    assert.equal(refs.find((ref) => ref.loop)?.loopVersion, 1);
     assert.throws(() => workflows.save({ project: "one", id: saved.id, version: 1, payload: input }), /changed/);
     assert.throws(() => definitions.remove(savedHarness.id), /referenced/);
     db.close();

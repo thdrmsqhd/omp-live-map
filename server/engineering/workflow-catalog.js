@@ -65,7 +65,22 @@ function workflowCatalog(db, catalog) {
     });
   }
 
-  return { get, plan, executionPlan, save, list(project) {
+  function harnessUses(project, id) {
+    const record = catalog.versionOf(id);
+    if (record.project !== project || record.kind !== "harness") throw problem(404, "Harness not found");
+    return db.prepare(`SELECT w.id AS workflow, w.name, w.version, x.node,
+      COALESCE(r.target_version,x.target_version) AS harnessVersion,
+      CASE WHEN r.source IS NOT NULL THEN x.target END AS loop,
+      CASE WHEN r.source IS NOT NULL THEN d.name END AS loopName,
+      CASE WHEN r.source IS NOT NULL THEN x.target_version END AS loopVersion
+      FROM workflow w JOIN workflow_definition x ON x.workflow=w.id AND x.version=w.version
+      JOIN definition d ON d.id=x.target
+      LEFT JOIN definition_ref r ON d.kind='loop' AND r.source=x.target AND r.version=x.target_version
+      WHERE w.project=? AND ((d.kind='harness' AND x.target=?) OR r.target=?)
+      ORDER BY w.name,x.node`).all(project, id, id);
+  }
+
+  return { get, plan, executionPlan, save, harnessUses, list(project) {
     catalog.project(project);
     return db.prepare("SELECT id,name,version FROM workflow WHERE project=? ORDER BY name,id").all(project);
   } };

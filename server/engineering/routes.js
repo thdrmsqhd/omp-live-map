@@ -120,6 +120,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         }
         if (endpoint === "definitions") result = definitions.definitions(query("project"));
         if (endpoint === "harness/trial") result = trials.inspect(query("project"), query("id"));
+        if (endpoint === "harness/uses") result = workflows.harnessUses(query("project"), query("id"));
         if (endpoint === "definitions/version") {
           result = definitions.versionOf(query("id"), integer(Number(query("version")), "version", 1, Number.MAX_SAFE_INTEGER));
         }

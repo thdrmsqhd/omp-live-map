@@ -126,7 +126,7 @@ for (const view of views) {
   });
 }
 if (window.engineeringDesktop) {
-  workflow = bindWorkflow({ find, request, report, definitions: () => definitions });
+  workflow = bindWorkflow({ find, request, report, definitions: () => definitions, editHarness: editor.open });
   sdlc = bindSdlc({ find, request, report, showRun: async (id) => {
     find("workflow-nav").click();
     await workflow.showRun(id);

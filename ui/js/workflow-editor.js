@@ -1,3 +1,4 @@
+import { bindWorkflowHarness } from "./workflow-harness.js";
 import { bindWorkflowRuns } from "./workflow-runs.js";
 import { bindTemplateButtons } from "./workflow-templates.js";
 
@@ -19,10 +20,11 @@ function choices(select, entries, fallback) {
   else if (fallback !== undefined) select.value = fallback;
 }
 
-export function bindWorkflow({ find, request, report, definitions }) {
+export function bindWorkflow({ find, request, report, definitions, editHarness }) {
   const el = (name) => find("workflow-" + name);
   const selector = el("list"), form = el("node-form");
   let project = "", workflow, selected, documentState = blank(), runDetail, workflows = [];
+  const harness = bindWorkflowHarness({ el, form, definitions, choices, editHarness: (id, version) => report(() => editHarness(id, version))() });
   const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project,
     onStatus(detail) { runDetail = detail; showRunStates(); } });
   bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
@@ -109,9 +111,15 @@ export function bindWorkflow({ find, request, report, definitions }) {
     }));
     const item = nodes.find(({ id }) => selected === id);
     form.hidden = !item;
+    harness.show(item);
     if (item) {
       const { id, type, x, y, label, ...settings } = item;
       form.elements.label.value = label;
+      if (type === "agent") {
+        delete settings.definition;
+        delete settings.version;
+        delete settings.instruction;
+      }
       form.elements.settings.value = JSON.stringify(settings, null, 2);
       el("delete").disabled = type === "start" || type === "end";
     }
@@ -161,7 +169,7 @@ export function bindWorkflow({ find, request, report, definitions }) {
     const { id, type, x, y } = documentState.nodes[index];
     const settings = JSON.parse(form.elements.settings.value);
     if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("노드 설정은 JSON 객체여야 합니다.");
-    documentState.nodes[index] = { ...settings, id, type, x, y, label: form.elements.label.value };
+    documentState.nodes[index] = { ...harness.apply(settings), id, type, x, y, label: form.elements.label.value };
     render();
   }));
   el("delete").addEventListener("click", () => {

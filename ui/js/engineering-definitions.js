@@ -48,6 +48,7 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     find("payload").value = JSON.stringify(selected?.payload ?? defaultPayload(), null, 2);
     find("remove").disabled = !selected;
     find("definition-diff").hidden = true;
+    find("harness-uses").hidden = kind.value !== "harness" || !selected;
     const versions = find("definition-version");
     versions.replaceChildren();
     for (let version = selected?.version ?? 0; version > 0; version--) versions.add(new Option(String(version), String(version)));
@@ -56,11 +57,12 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     preview.reset();
     trial.update();
     rememberSelection();
+    if (!find("harness-uses").hidden && find("harness-uses").open) void refreshUses();
   }
 
   kind.addEventListener("change", report(async () => { if (mayReplace(kind)) await refreshDefinitions(""); }));
   definition.addEventListener("change", () => { if (mayReplace(definition)) showDefinition(); });
-  find("definition-version").addEventListener("change", report(async (event) => {
+  const selectVersion = report(async (event) => {
     const selected = entries().find((entry) => entry.id === definition.value);
     if (!selected || !mayReplace(event.currentTarget)) return;
     const requestedVersion = event.currentTarget.value;
@@ -77,7 +79,8 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     const diff = find("definition-diff");
     diff.hidden = current === previous;
     if (!diff.hidden) diff.textContent = `현재 버전 ${selected.version}\n${current}\n\n선택한 버전 ${historical.version}\n${previous}`;
-  }));
+  });
+  find("definition-version").addEventListener("change", selectVersion);
   find("definition-form").addEventListener("submit", report(async (event) => {
     const old = entries().find((entry) => entry.id === definition.value);
     const payload = kind.value === "harness" ? harnessEditor.payload() : JSON.parse(new FormData(event.currentTarget).get("payload"));
@@ -89,8 +92,50 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
     await request("definitions/remove", {}, { id: definition.value });
     await refreshDefinitions("");
   }));
+  let usesRevision = 0;
+  async function refreshUses() {
+    const list = find("harness-uses-list");
+    list.replaceChildren();
+    const id = definition.value;
+    const owner = project.value;
+    const revision = ++usesRevision;
+    if (!id || !owner || kind.value !== "harness") return;
+    try {
+      const uses = await request("harness/uses", { project: owner, id });
+      if (revision !== usesRevision || definition.value !== id || project.value !== owner || kind.value !== "harness") return;
+      if (!uses.length) {
+        const item = document.createElement("li");
+        item.textContent = "연결된 Workflow가 없습니다.";
+        list.append(item);
+      }
+      for (const row of uses) {
+        const item = document.createElement("li");
+        item.textContent = row.name + " v" + row.version + " · 노드 " + row.node + " · " +
+          (row.loop ? row.loopName + " v" + row.loopVersion + " → " : "") + "하네스 v" + row.harnessVersion;
+        list.append(item);
+      }
+    } catch (error) {
+      if (revision !== usesRevision) return;
+      const item = document.createElement("li");
+      item.textContent = error.message;
+      list.replaceChildren(item);
+    }
+  }
+  const uses = find("harness-uses");
+  uses.addEventListener("toggle", () => { if (uses.open) void refreshUses(); });
   return {
     mayReplace,
+    async open(id, version) {
+      if (!mayReplace()) return;
+      kind.value = "harness";
+      await refreshDefinitions(id);
+      const control = find("definition-version");
+      if (version && version !== Number(control.value)) {
+        control.value = String(version);
+        await selectVersion({ currentTarget: control });
+      }
+      find("design-nav").click();
+    },
     select(chosen) {
       options(definition, entries().filter((entry) => entry.kind === kind.value), "새 정의", chosen);
       showDefinition();

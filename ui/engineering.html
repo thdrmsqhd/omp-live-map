@@ -103,6 +103,10 @@
             <h4>프롬프트로 전달되는 순서</h4>
             <ol id="harness-preview-prompt"></ol>
           </div>
+          <details id="harness-uses" hidden>
+            <summary>사용 중인 Workflow</summary>
+            <ul id="harness-uses-list"></ul>
+          </details>
           <details id="harness-trial">
             <summary>동일 입력으로 비교 실행</summary>
             <label>비교 기준 프로필 <select id="trial-baseline"></select></label>
@@ -164,6 +168,13 @@
       <div class="workflow-details">
         <form id="workflow-node-form" hidden>
           <label>노드 이름 <input name="label" maxlength="240" required></label>
+          <fieldset id="workflow-agent-profile" hidden disabled>
+            <legend>에이전트 작업 방식</legend>
+            <label>하네스 <select name="harnessDefinition"></select></label>
+            <label>하네스 버전 <select name="harnessVersion"></select></label>
+            <label>작업 지시 <textarea name="harnessInstruction" rows="4" maxlength="12000"></textarea></label>
+            <button id="workflow-harness-edit" type="button">연결된 하네스 편집</button>
+          </fieldset>
           <label>설정 및 입출력 <textarea name="settings" rows="7" spellcheck="false" required></textarea></label>
           <div><button>노드 적용</button> <button id="workflow-delete" type="button">노드 삭제</button></div>
         </form>
