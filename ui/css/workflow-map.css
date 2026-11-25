@@ -39,3 +39,17 @@
 .wf-node[data-invalid] { outline: 2px solid #f88e88; outline-offset: 2px; }
 #wf-edit-fields form { display: grid; gap: 5px; }
 #wf-map-edit-controls h4 { margin: 8px 0 3px; }
+#workflow-queue-toggle[aria-expanded=true], #workflow-new-run { border-color: var(--accent); }
+#workflow-queue {
+  position: absolute; z-index: 7; inset: 12px auto auto 12px; width: min(330px, calc(100% - 24px));
+  max-height: calc(100% - 24px); overflow: auto; box-sizing: border-box; padding: 12px;
+  border: 1px solid #43515d; border-radius: 8px; background: #17212b; color: #ecf4fb;
+  cursor: default; touch-action: pan-y;
+}
+#workflow-queue h2, #workflow-queue h3 { margin: 0 0 6px; font-size: 14px; }
+#workflow-queue p { margin: 4px 0; color: #abbecf; }
+#workflow-queue section + section { margin-top: 12px; }
+#workflow-queue button { display: grid; gap: 2px; width: 100%; text-align: left; padding: 6px 8px; margin-block: 4px; overflow-wrap: anywhere; }
+#workflow-queue button small { color: #abbecf; }
+#workflow-queue button[data-status=failed] small, #workflow-queue button[data-status=interrupted] small { color: #ffaaa8; }
+#workflow-queue button[data-status=waiting_approval] small { color: #ffd489; }

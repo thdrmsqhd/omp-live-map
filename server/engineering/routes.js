@@ -96,6 +96,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "tasks") result = tasks.list(query("project"));
         if (endpoint === "sdlc-stages") result = stages.list(query("project"));
         if (endpoint === "workflow-approvals") result = observability.approvals(query("project"));
+        if (endpoint === "workflow-live-map") result = observability.liveMapRuns();
         if (endpoint === "workflow-dashboard") result = observability.dashboard(query("project"),
           integer(Number(url.searchParams.get("days") ?? 30), "metrics period", 1, 90));
         if (endpoint === "project-budget") result = { current: budget.get(query("project")) ?? null };

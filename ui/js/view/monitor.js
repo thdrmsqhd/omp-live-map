@@ -1,5 +1,5 @@
 /* 관제/워크스페이스/맵 셸. 기존 열린 카드 상태 및 좌표는 모드 전환 때 보존한다. */
-let mapMode = readJSON("omp-map-view-mode-v2","overview");
+let mapMode = readJSON("omp-map-view-mode-v2", window.engineeringDesktop ? "map" : "overview");
 if (!["map","overview","workspace"].includes(mapMode)) mapMode="map";
 let overviewDensity = readJSON("omp-map-overview-density","standard");
 if (!["compact","standard","detailed"].includes(overviewDensity)) overviewDensity="standard";
@@ -7,6 +7,7 @@ let overviewSort = readJSON("omp-map-overview-sort-v2","stable");
 if (!["stable","attention","memory","recent","name"].includes(overviewSort)) overviewSort="stable";
 let overviewMemory = Math.min(1048576,Math.max(128,Number(readJSON("omp-map-overview-memory",2048))||2048));
 const OVERVIEW_SELECTED = new Set();
+let renderWorkflowQueueMode;
 
 function setMapMode(mode, render = true) {
   if (!["map","overview","workspace"].includes(mode)) return;
@@ -29,6 +30,7 @@ function paintMode() {
     b.classList.toggle("on",on); b.setAttribute("aria-pressed",String(on));
   }
   paintActiveCards();
+  if (renderWorkflowQueueMode) renderWorkflowQueueMode();
 }
 function paintMonitor(sessions) {
   paintMode();
