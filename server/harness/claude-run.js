@@ -149,21 +149,21 @@ function streamTurn(s,text,images){
 function spawnStream(s,loc,text,images){
  const opt=settings.get(s.node),args=["-p","--input-format","stream-json","--output-format","stream-json","--verbose","--include-partial-messages","--permission-prompt-tool","stdio","--permission-mode",opt.permission];
  args.push(loc.exists?"--resume":"--session-id",loc.sessionId);const m=model.modelOf(s.node)||model.DEFAULT_MODEL;if(m!=="default")args.push("--model",m);if(opt.effort!=="default")args.push("--effort",opt.effort);
- const child=spawn("claude",args,{cwd:loc.cwd,windowsHide:true,stdio:["pipe","pipe","pipe"]});s.child=child;s.sessionId=loc.sessionId;s.stderr="";s.state="starting";
+ const child=spawn("claude",args,{cwd:loc.cwd,windowsHide:true,stdio:["pipe","pipe","pipe"]});s.child=child;s.sessionId=loc.sessionId;s.stderr="";s.state="starting";s.optionsSignature=JSON.stringify([opt,model.modelOf(s.node)||model.DEFAULT_MODEL]);
  child.stderr?.setEncoding("utf8");child.stderr?.on("data",d=>{s.stderr=redact(s.stderr+d);});
  s.transport=transport(child,{
  frame:o=>{if(o.type==="assistant"){const blocks=o.message?.content||[];if(!s.streamed)emitText(s,blocks.filter(b=>b.type==="text").map(b=>b.text).join(""));return;}
- if(o.type==="result"){if(!s.streamed&&typeof o.result==="string")emitText(s,o.result);finish(s,o.is_error?1:0);s.state="idle";uiAsk.drop(s.node);queue.done(s.node,!o.is_error&&!s.cancelled);if(!s.busy){s.state="idle";s.idleTimer=setTimeout(()=>{if(!s.busy){s.state="closing";s.transport.close();setTimeout(()=>{if(!s.transport.ended)killTree(child);},3000).unref();}},60000);s.idleTimer.unref();}return;}onFrame(s,o);},
+ if(o.type==="result"){if(!s.busy)return;if(!s.streamed&&typeof o.result==="string")emitText(s,o.result);finish(s,o.is_error?1:0);s.state="idle";uiAsk.drop(s.node);queue.done(s.node,!o.is_error&&!s.cancelled);if(!s.busy){s.state="idle";s.idleTimer=setTimeout(()=>{if(!s.busy){s.state="closing";s.transport.close();setTimeout(()=>{if(!s.transport.ended)killTree(child);},3000).unref();}},60000);s.idleTimer.unref();}return;}onFrame(s,o);},
  permission:(id,r,respond)=>{s.state="waiting_approval";const tool=r.tool_name||"Tool";const q=input.askOf([{type:"tool_use",name:tool,id,input:r.input}],new Set());
  if(q){uiAsk.ask(s.node,q,answer=>{if(answer?.cancelled||answer?.timedOut){respond({behavior:"deny",message:"User cancelled"});s.state="running";return {ok:true};}const answers={};for(const [i,a] of (answer?.answers||[]).entries()){const question=q.questions[i]?.question;if(question)answers[question]=[...(a.selectedOptions||[]),a.customInput].filter(Boolean).join(", ");}if(Object.keys(answers).length!==q.questions.length){respond({behavior:"deny",message:"Incomplete answers"});}else respond({behavior:"allow",updatedInput:{...r.input,answers}});s.state="running";return {ok:true};});return;}
  uiAsk.ask(s.node,{id,method:"confirm",title:"Claude 도구 승인: "+tool,message:JSON.stringify(r.input||{}).slice(0,4000)},answer=>{s.state="running";const allow=answer?.confirmed===true&&!answer.cancelled;return {ok:respond(allow?{behavior:"allow",updatedInput:r.input||{}}:{behavior:"deny",message:"User denied"})};});},
- error:e=>{s.stderr=redact(s.stderr+"\\n"+errText(e));if(s.busy)finish(s,1);killTree(child);},
+ error:e=>{s.stderr=redact(s.stderr+"\n"+errText(e));if(s.busy)finish(s,1);s.state="closing";queue.done(s.node,false);uiAsk.drop(s.node);killTree(child);},
  closed:(code)=>{clearTimeout(s.idleTimer);uiAsk.drop(s.node);const wasBusy=s.busy;if(wasBusy)finish(s,code||1);removeRun(s);if(wasBusy)queue.done(s.node,false);}
  });return streamTurn(s,text,images);
 }
 function startTurn(card, text, images) {
   const existing=runs.get(norm(card));
-  if(existing?.transport&&!existing.busy&&existing.state==="idle")return streamTurn(existing,text,images);
+  if(existing?.transport&&!existing.busy&&existing.state==="idle"){const signature=JSON.stringify([settings.get(card),model.modelOf(card)||model.DEFAULT_MODEL]);if(signature!==existing.optionsSignature||existing.sessionId!==locate(card).sessionId){clearTimeout(existing.idleTimer);existing.state="closing";existing.transport.close();setTimeout(()=>{if(!existing.transport.ended)killTree(existing.child);},3000).unref();return {ok:false,out:"실행 설정이 변경되어 기존 프로세스를 정리 중입니다. 잠시 후 다시 보내세요."};}return streamTurn(existing,text,images);}
   if(existing)return {ok:false,out:"이전 실행이 아직 정리되지 않았습니다"};
   if(runs.size>=MAX_RUNS)return {ok:false,out:"Claude 동시 실행 제한 "+MAX_RUNS+"개"};
   const loc = locate(card);
@@ -235,7 +235,7 @@ function stop(node) {
   const s = runs.get(key);
   if (!s) return { ok: false, out: "맵이 띄운 세션이 아닙니다" };
   if (s.busy) s.cancelled = true;
-  s.state="stopping";s.answer="";queue.change(s.node,"pause");
+  s.state="stopping";s.answer="";clearTimeout(s.idleTimer);uiAsk.drop(s.node);queue.change(s.node,"pause");
   if (s.child) killTree(s.child);
   return { ok: true };
 }

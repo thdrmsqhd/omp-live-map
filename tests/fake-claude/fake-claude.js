@@ -63,10 +63,12 @@ function main() {
   };
   const logIn = (o) => { if (log) { try { fs.appendFileSync(log, JSON.stringify({ type: "fake-input", ...o }) + "\n"); } catch {} } };
 
-  let raw = "";
+  let raw = "", initialized=!!resume;
+  const duplex=streamIn&&argOf("--permission-prompt-tool")==="stdio";
+  let chain=Promise.resolve(), approval=null;
   process.stdin.setEncoding("utf8");
-  process.stdin.on("data", (d) => (raw += d));
-  process.stdin.on("end", () => run(parseInput(raw)));
+  process.stdin.on("data",d=>{raw+=d;if(!duplex)return;let i;while((i=raw.indexOf("\n"))>=0){const line=raw.slice(0,i);raw=raw.slice(i+1);if(!line.trim())continue;const o=JSON.parse(line);if(o.type==="user")chain=chain.then(()=>run(parseInput(line)));else if(o.type==="control_response"&&approval){const resolve=approval;approval=null;resolve(o.response?.response);}else if(o.type==="control_request")out({type:"control_response",response:{subtype:"success",request_id:o.request_id,response:{}}});}});
+  process.stdin.on("end", () => {if(!duplex)void run(parseInput(raw));});
   process.stdin.on("error", () => {});
   process.on("SIGTERM", () => process.exit(143));
   process.on("SIGINT", () => process.exit(130));
@@ -91,7 +93,8 @@ function main() {
   async function run(input) {
     const { text, images } = input;
     const now = Date.now();
-    if (!resume) {
+    if (!initialized) {
+      initialized=true;
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, "");
       append(file, { type: "custom-title", sessionId: id, timestamp: iso(now), customTitle: "가짜 Claude 세션" });
@@ -115,6 +118,7 @@ function main() {
       return;
     }
 
+    if(duplex&&text==="permission fixture"){const response=await new Promise(resolve=>{approval=resolve;out({type:"control_request",request_id:"fixture-approval",request:{subtype:"can_use_tool",tool_name:"Read",input:{file_path:"README.md"}}});});if(response?.behavior!=="allow"){out({type:"result",subtype:"error_during_execution",is_error:true,result:"Permission denied"});return;}}
     const reply = (process.env.FAKE_CLAUDE_REPLY || "가짜 Claude 응답입니다. 스트리밍 출력 확인용입니다. ")
       + (text ? "(" + text.slice(0, 20) + ")" : "") + (images ? " [이미지 " + images + "개]" : "");
     for (const chunk of reply.match(/[\s\S]{1,6}/g) || []) {

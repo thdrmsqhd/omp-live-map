@@ -77,6 +77,16 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
       const node = graph.sessions.flatMap((session) => session.nodes).find(({ id }) => id === claude.node);
       assert.equal(node?.harness, "claude");
       assert.match(node?.lastAssistant, /fixture prompt/);
+      const list=async()=>JSON.parse((await request("/api/session/list")).text).sessions;
+      async function idle(){for(let i=0;i<150;i++){const s=(await list()).find(x=>x.node===claude.node);if(s?.state==="idle"&&!s.busy)return s;await delay(20);}assert.fail("Claude stream did not become idle");}
+      const first=await idle();
+      await post("/api/prompt",{node:claude.node,text:"second fixture"});
+      await waitForText(claude.node,"second fixture");
+      const second=await idle();assert.equal(second.pid,first.pid,"stream must reuse same process");
+      await post("/api/prompt",{node:claude.node,text:"permission fixture"});
+      let ask;for(let i=0;i<150;i++){ask=require("../server/ui-requests").asksFor(claude.node)[0];if(ask)break;await delay(20);}assert.equal(ask?.method,"confirm");
+      await post("/api/chat/answer",{node:claude.node,id:ask.id,response:{confirmed:true}});await idle();
+      await post("/api/session/stop",{node:claude.node});
     } finally {
       const remaining = [...children];
       for (const { child } of remaining) child.kill();
