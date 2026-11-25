@@ -106,10 +106,12 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const id = query("id");
           const run = flowRuns.get(id);
           const workflow = workflows.get(run.project, run.workflow, run.version);
+          const graph = workflows.executionPlan(run.project, workflow.payload, run.workflow).document;
           result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id), timeline: observability.timeline(id),
             delivery: delivery.get(id), staging: staging.get(id),
-            labels: Object.fromEntries(workflows.executionPlan(run.project, workflow.payload, run.workflow)
-              .document.nodes.map(({ id, label }) => [id, label])) };
+            labels: Object.fromEntries(graph.nodes.map(({ id, label }) => [id, label])),
+            graph: { name: graph.name, nodes: graph.nodes.map(({ id, label, type, x, y }) => ({ id, label, type, x, y })),
+              edges: graph.edges } };
         }
         if (endpoint === "workflow") {
           const version = url.searchParams.get("version");

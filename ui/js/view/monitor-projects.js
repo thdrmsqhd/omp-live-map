@@ -67,7 +67,7 @@ async function refreshMonitorProjects() {
   } catch(e) { monitorSource="Engineering 조회 실패 · "+e.message; }
   finally { monitorLoading=false; if(mapMode==="overview")paintOverview(filteredSessions()); }
 }
-const monStatus = {live:"실행 중",idle:"유휴",done:"완료",running:"실행 중",waiting_approval:"승인 대기",blocked:"차단",completed:"완료",backlog:"백로그",ready:"준비"};
+const monStatus = {live:"실행 중",idle:"유휴",done:"완료",running:"실행 중",waiting_approval:"승인 대기",blocked:"차단",failed:"실패",interrupted:"확인 필요",completed:"완료",backlog:"백로그",ready:"준비"};
 const monEngLink = (project,view,run) => "/engineering.html?"+new URLSearchParams({project:project.id,view,...(run?{run}:{})}).toString();
 function monitorTaskHTML(g) {
   if (!g.project) return '<p class="mon-muted">등록 프로젝트와 연결되지 않음 · SDLC 진행률 미수집</p>';
@@ -75,11 +75,15 @@ function monitorTaskHTML(g) {
   if (!detail || detail.error) return '<p class="mon-muted">'+esc(detail?.error || "SDLC 데이터 조회 중")+'</p>';
   const tasks=detail.tasks||[], done=tasks.filter((t)=>t.status==="completed").length;
   const pct=tasks.length?Math.round(done/tasks.length*100):null;
-  const latestRun = detail.runs?.[0];
+  const hotRuns = (detail.runs ?? []).filter(({ status }) => ["failed", "waiting_approval", "interrupted", "running"].includes(status));
+  const runList = [...new Map([...hotRuns, ...(detail.runs ?? [])].map((run) => [run.id, run])).values()].slice(0, 5);
+  const latestRun = runList[0];
   const current=tasks.find((t)=>t.status==="waiting_approval")||tasks.find((t)=>t.status==="running")||tasks.find((t)=>t.status==="blocked");
   return `<div class="mon-progress"><span>SDLC Task ${done}/${tasks.length} 완료</span><b>${pct===null?"미등록":pct+"%"}</b></div>
     ${pct===null?"":`<progress max="100" value="${pct}" aria-label="Task 완료율"></progress>`}
     ${current?`<p class="mon-task">${esc(monStatus[current.status]||current.status)} · ${esc(current.title)} ${current.latest_run?`<a href="${esc(monEngLink(g.project,"workflow",current.latest_run))}">실행 그래프</a>`:""}</p>`:""}
+    ${runList.length ? `<div class="mon-workflow-runs" aria-label="최근 Workflow 실행">${runList.map(run =>
+      `<button type="button" data-map-workflow="${esc(run.id)}">${esc(run.title)} · ${esc(monStatus[run.status] || run.status)}</button>`).join("")}</div>` : ""}
     <div class="mon-links"><a href="${esc(monEngLink(g.project,"sdlc"))}">개발 Task</a><a href="${esc(monEngLink(g.project,"workflow",latestRun?.id))}">Workflow / 실행 이력</a><a href="${esc(monEngLink(g.project,"design"))}">하네스·루프</a><a href="${esc(monEngLink(g.project,"execution"))}">실행</a></div>`;
 }
 function monitorSessionHTML(s) {
@@ -127,7 +131,7 @@ function paintOverview(sessions) {
     const st=monitorSessionStats(s,overviewMemory),n=st.main;if(!n)continue;
     if(askPending(n.id)||st.resourceWarning||ATTN.has(n.id))alerts.push(`<button data-mon-open="${esc(n.id)}">${esc(s.title)} · ${askPending(n.id)?"선택 필요":st.resourceWarning?"RAM 경고":"응답 완료"}</button>`);
   }
-  for(const p of MON_PROJECTS){const d=MON_DETAILS.get(p.id);if(d?.error)continue;for(const a of d?.approvals||[])alerts.push(`<a href="${esc(monEngLink(p,"workflow",a.run))}">${esc(p.name)} · 승인: ${esc(a.title)}</a>`);}
+  for(const p of MON_PROJECTS){const d=MON_DETAILS.get(p.id);if(d?.error)continue;for(const a of d?.approvals||[])alerts.push(`<button type="button" data-map-workflow="${esc(a.run)}" data-map-workflow-node="${esc(a.node)}">${esc(p.name)} · 승인: ${esc(a.title)}</button>`);}
   const ah=alerts.length?'<h2>주의 필요 · '+alerts.length+'</h2><div>'+alerts.join("")+'</div>':"";
   $("overview-attention").hidden=!alerts.length;
   if(ah!==lastAttentionHTML){lastAttentionHTML=ah;$("overview-attention").innerHTML=ah;}
