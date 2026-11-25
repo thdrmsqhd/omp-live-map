@@ -11,6 +11,7 @@ const { catalog } = require("../server/engineering/catalog");
 const { workflowCatalog } = require("../server/engineering/workflow-catalog");
 const { workflowRuns } = require("../server/engineering/workflow-runs");
 const { workflowEngine } = require("../server/engineering/workflow-engine");
+const { quickLaunch } = require("../server/engineering/workflow-launch");
 const { buildPreset, listPresets } = require("../server/engineering/workflow-presets");
 
 test("all built-in workflows complete with mock tools and enforce design and review approval", async () => {
@@ -48,6 +49,21 @@ test("all built-in workflows complete with mock tools and enforce design and rev
       await fs.mkdir(directory);
       return directory;
     } });
+    const quick = { project: "one", title: "Modbus reconnect", goal: "Reconnect when communication is restored",
+      acceptance: "Reconnect test passes", preset: "bugfix", refs: { author: { id: author, version: 1 },
+        reviewer: { id: reviewer, version: 1 }, loop: { id: loop, version: 1 } }, budgetCents: 100, timeoutMs: 6000, key: "quick" };
+    const queue = { start(input, key, preparation) { return runs.create(input, key, preparation).run; } };
+    const notReady = { status: () => ({ status: "missing-key", detail: "Fixture authentication required" }) };
+    assert.throws(() => quickLaunch(catalogues, workflows, queue, notReady, quick), /authentication required/);
+    assert.equal(workflows.list("one").length, 0);
+    const available = { requireAdapter() {} };
+    const quickRun = quickLaunch(catalogues, workflows, queue, available, quick);
+    assert.equal(quickLaunch(catalogues, workflows, queue, notReady, quick).id, quickRun.id);
+    assert.throws(() => quickLaunch(catalogues, workflows, queue, available, { ...quick, acceptance: "Changed" }), /different workflow run/);
+    const second = quickLaunch(catalogues, workflows, queue, available, { ...quick, key: "quick-other", title: "Second reconnect fix" });
+    assert.equal(second.workflow, quickRun.workflow);
+    assert.notEqual(quickRun.id, second.id);
+    assert.match(runs.taskInstruction(quickRun.id), /Reconnect test passes/);
     for (const preset of listPresets()) {
       const flow = workflows.save({ project: "one", payload: buildPreset(preset.id, { author, reviewer, loop }) });
       const run = engine.start({ project: "one", workflow: flow.id, version: 1, title: preset.id, timeoutMs: 6000, budgetCents: 200 }, preset.id);

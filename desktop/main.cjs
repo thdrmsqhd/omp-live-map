@@ -16,13 +16,17 @@ const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path
 const endpoints = new Set([
   "projects", "projects/archive", "definitions", "definitions/remove", "definitions/version", "harness/preview", "harness/uses", "harness/apply",
   "harness/trial", "harness/trial/cancel", "harness/trial/retry",
-  "workflows", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
+  "workflows", "workflows/launch", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
   "workflow-approvals", "workflow-dashboard", "workflow-review",
   "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
 ]);
+
+const liveMapReads = new Set(["projects", "tasks", "workflow-approvals", "workflow-runs", "workflow-run",
+  "workflows", "workflow", "definitions", "workflows/presets", "runtime", "workflow-review"]);
+const liveMapWrites = new Set(["workflows/launch"]);
 
 function startServer() {
   const data = app.getPath("userData");
@@ -65,8 +69,10 @@ function startServer() {
 ipcMain.handle("engineering:request", async (event, { endpoint, params, payload }) => {
   const frame = event.senderFrame;
   const location = frame?.url ? new URL(frame.url) : null;
+  const fromEngineering = location?.pathname === "/engineering.html" && endpoints.has(endpoint);
+  const fromLiveMap = location?.pathname === "/" && (payload === undefined ? liveMapReads : liveMapWrites).has(endpoint);
   if (!window || event.sender !== window.webContents || frame !== window.webContents.mainFrame ||
-      location?.origin !== origin || location?.pathname !== "/engineering.html" || !endpoints.has(endpoint)) {
+      location?.origin !== origin || !(fromEngineering || fromLiveMap)) {
     return { ok: false, error: "Request denied" };
   }
   if (endpoint === "runtime/key") {

@@ -12,6 +12,7 @@ const { sdlcTasks } = require("./sdlc-tasks");
 const { sdlcStages } = require("./sdlc-stages");
 const { workflowObservability } = require("./workflow-observability");
 const { workflowDelivery } = require("./workflow-delivery");
+const { quickLaunch } = require("./workflow-launch");
 const { buildPreset, listPresets } = require("./workflow-presets");
 const { projectBudget } = require("./project-budget");
 const { workflowStaging } = require("./workflow-staging");
@@ -171,6 +172,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflows/plan") result = workflows.executionPlan(string(input.project, "project"), input.payload,
           input.id ? string(input.id, "workflow") : undefined);
         if (endpoint === "workflow-runs") result = flow.start(input, input.key);
+        if (endpoint === "workflows/launch") result = quickLaunch(definitions, workflows, flow, runner, input);
         if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
         if (endpoint === "workflow-runs/retry") result = flow.retry(string(input.id, "run"), string(input.node, "node"));
         if (endpoint === "workflow-runs/approval") {

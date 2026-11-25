@@ -30,31 +30,37 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
       .run(run, node, status, JSON.stringify(outcome ?? null), Date.now());
     event(db, "workflow.node", { id: run, node, status });
   }
-  function create(input, idempotencyKey) {
+  function create(input, idempotencyKey, launch) {
     const task = input.task ? tasks.get(string(input.task, "task id")) : null;
     if (task) input = { ...input, project: task.project, workflow: task.workflow, version: task.workflow_version, title: task.title };
     const project = string(input.project, "project");
-    const id = string(input.workflow, "workflow");
-    const version = integer(input.version, "workflow version", 1, Number.MAX_SAFE_INTEGER);
+    const existingWorkflow = launch ? null : {
+      id: string(input.workflow, "workflow"),
+      version: integer(input.version, "workflow version", 1, Number.MAX_SAFE_INTEGER),
+    };
     const title = string(input.title, "run title");
     const timeout = integer(input.timeoutMs, "workflow timeout", 100, 3600000);
     const budget = integer(input.budgetCents, "workflow budget", 0, 100000);
     const key = string(idempotencyKey, "idempotency key");
-    const hash = createHash("sha256").update(JSON.stringify([project,id,version,title,timeout,budget,task?.id ?? null,task?.instruction ?? null])).digest("hex");
+    const instruction = task?.instruction ?? (launch ? string(input.instruction, "run instruction", 12000) : null);
+    const identity = launch ? ["quick", project, title, timeout, budget, instruction, launch.source] :
+      [project, existingWorkflow.id, existingWorkflow.version, title, timeout, budget, task?.id ?? null, instruction];
+    const hash = createHash("sha256").update(JSON.stringify(identity)).digest("hex");
     return transaction(db, () => {
       const existing = db.prepare("SELECT id,request_hash FROM workflow_run WHERE idempotency_key=?").get(key);
       if (existing) {
         if (existing.request_hash !== hash) throw problem(409, "Idempotency key was used for a different workflow run");
         return { run: get(existing.id), created: false };
       }
-      workflows.get(project, id, version);
       if (catalog.project(project).archived) throw problem(409, "Project is archived");
       if (task && tasks.get(task.id).status !== "ready") throw problem(409, "Development task must be Ready");
       quota.check(project, budget);
+      const { id, version } = launch ? launch.prepare() : existingWorkflow;
+      workflows.get(project, id, version);
       const run = randomUUID(), now = Date.now();
       db.prepare(`INSERT INTO workflow_run (id,workflow,version,title,status,created,deadline,budget,idempotency_key,request_hash,sdlc_task,sdlc_instruction)
         VALUES (?,?,?,?,'queued',?,?,?,?,?,?,?)`)
-        .run(run, id, version, title, now, now + timeout, budget, key, hash, task?.id ?? null, task?.instruction ?? null);
+        .run(run, id, version, title, now, now + timeout, budget, key, hash, task?.id ?? null, instruction);
       tasks.followRun(run, "queued");
       event(db, "workflow.created", { id: run, project, workflow: id, version });
       return { run: get(run), created: true };

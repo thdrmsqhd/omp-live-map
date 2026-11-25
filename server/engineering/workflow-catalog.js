@@ -120,7 +120,16 @@ function workflowCatalog(db, catalog) {
     });
   }
 
-  return { get, plan, executionPlan, save: (body) => transaction(db, () => writeWorkflow(body)), harnessUses, relinkHarness, list(project) {
+  function ensurePreset(project, payload) {
+    for (const row of db.prepare("SELECT id FROM workflow WHERE project=? AND name=?").all(project, payload.name)) {
+      const existing = get(project, row.id, 1);
+      if (JSON.stringify(existing.payload) === JSON.stringify(plan(project, payload).document)) return existing;
+      throw problem(409, "A workflow already uses this template name");
+    }
+    return writeWorkflow({ project, payload });
+  }
+
+  return { get, plan, executionPlan, ensurePreset, save: (body) => transaction(db, () => writeWorkflow(body)), harnessUses, relinkHarness, list(project) {
     catalog.project(project);
     return db.prepare("SELECT id,name,version FROM workflow WHERE project=? ORDER BY name,id").all(project);
   } };

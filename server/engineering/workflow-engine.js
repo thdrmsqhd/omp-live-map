@@ -139,8 +139,8 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
   }
 
   return {
-    start(input, key) {
-      const { run, created } = store.create(input, key);
+    start(input, key, preparation) {
+      const { run, created } = store.create(input, key, preparation);
       if (created) launch(run.id);
       return store.get(run.id);
     },

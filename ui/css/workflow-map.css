@@ -1,0 +1,11 @@
+#workflow-launch { width: min(460px, calc(100vw - 32px)); max-height: 90vh; border: 1px solid #43515d; border-radius: 10px; background: #192029; color: #e8edf3; }
+#workflow-launch::backdrop { background: #0b111bc2; }
+#workflow-launch form, #workflow-launch label { display: grid; gap: 5px; }
+#workflow-launch form { gap: 12px; }
+#workflow-launch h2, #workflow-launch p { margin: 0; }
+#workflow-launch label[hidden] { display: none; }
+#workflow-launch details label { margin-top: 8px; }
+#workflow-launch input, #workflow-launch textarea, #workflow-launch select { width: 100%; box-sizing: border-box; border: 1px solid #465460; border-radius: 5px; padding: 6px; background: #111923; color: inherit; font: inherit; }
+#workflow-launch a { color: #8bdbce; }
+.wf-actions { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+#workflow-launch .wf-actions { justify-content: flex-end; }
