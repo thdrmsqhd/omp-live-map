@@ -6,6 +6,7 @@ const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const credentials = require("./credentials.cjs");
+const icon = path.join(__dirname, "icons", "omp-live-map.png");
 
 const token = randomBytes(32).toString("hex");
 let child, origin, shutdown = false, window;
@@ -95,6 +96,7 @@ ipcMain.handle("engineering:request", async (event, { endpoint, params, payload 
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
+  app.dock?.setIcon(icon);
   const importPath = app.commandLine.getSwitchValue("import-v2-data-dir");
   if (path.isAbsolute(importPath) || (app.isPackaged && !userData && !app.commandLine.hasSwitch("skip-v2-import"))) {
     stage = "copying V2 data";
@@ -107,6 +109,7 @@ else app.whenReady().then(async () => {
   if (key) child.send({ type: "desktop-runtime-key", key });
   window = new BrowserWindow({
     width: 1450, height: 960,
+    icon,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       additionalArguments: app.isPackaged ? ["--omp-local-monaco"] : [],
