@@ -77,18 +77,18 @@ async function refreshProc() {
 // 최근 30분 안에 활동한 노드의 자원 표본을 링 버퍼에 쌓고, 조용한 노드의 버퍼는 지운다.
 function sampleHist() {
   const now = Date.now();
+  const active = new Set();
   for (const st of allStates()) {
     const last = st.lastTs || st.startedAt;
-    if (!last || now - last > QUIET_MS) {
-      hist.delete(st.file);
-      continue;
-    }
+    if (!last || now - last > QUIET_MS) continue;
+    active.add(st.file);
     const r = resFor(st.file);
     const buf = hist.get(st.file) || [];
     buf.push({ cpu: r.cpu, mb: r.mb });
     if (buf.length > HIST_N) buf.shift();
     hist.set(st.file, buf);
   }
+  for (const file of hist.keys()) if (!active.has(file)) hist.delete(file);
 }
 
 function histOf(file) {

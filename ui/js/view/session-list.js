@@ -7,7 +7,6 @@ const SL_MIN = 200, SL_MAX = 520;
 const SL = { w: 270, collapsed: false, ...readJSON(SL_KEY, {}) };
 SL.w = Math.min(SL_MAX, Math.max(SL_MIN, Number(SL.w) || 270));
 SL.collapsed = SL.collapsed === true;
-let slHtml = "";
 
 const saveSL = () => writeJSON(SL_KEY, { w: SL.w, collapsed: SL.collapsed });
 
@@ -60,14 +59,20 @@ function sessionHTML({ s, items, doneTotal, hidden }) {
   return `<div class="sl-sess${s.live ? " live" : ""}" data-key="${esc(encodeURIComponent(s.key))}">${items.map((it) => rowHTML(it, s)).join("")}${pin || fold ? `<div class="sl-foot">${fold}${pin}</div>` : ""}</div>`;
 }
 
-// renderMap 마다 부른다. 마크업이 그대로면 DOM 을 건드리지 않는다(클릭·스크롤 보존).
 function renderSessionList(sessions) {
   const rows = listRows(sessions);
   $("slCount").textContent = String(rows.length);
-  const html = rows.length ? rows.map(sessionHTML).join("") : `<div class="sl-empty">표시할 세션이 없습니다</div>`;
-  if (html === slHtml) return;
-  slHtml = html;
-  $("slList").innerHTML = html;
+  const list = $("slList");
+  const pieces = rows.map((row) => ({ key: "s:" + row.s.key, html: sessionHTML(row) }));
+  if (!pieces.length) pieces.push({ key: "empty", html: `<div class="sl-empty">표시할 세션이 없습니다</div>` });
+  patchPieces(list, pieces);
+  const elements = new Map([...list.children].map((el) => [el.dataset.pieceKey, el]));
+  let cursor = list.firstElementChild;
+  for (const { key } of pieces) {
+    const element = elements.get(key);
+    if (element !== cursor) list.insertBefore(element, cursor);
+    cursor = element.nextElementSibling;
+  }
 }
 
 function patchSessionList(sessions) {
@@ -75,14 +80,7 @@ function patchSessionList(sessions) {
   for (const row of listRows(sessions)) {
     const key = encodeURIComponent(row.s.key);
     const current = list.querySelector(`.sl-sess[data-key="${CSS.escape(key)}"]`);
-    const html = sessionHTML(row);
-    if (!current || current.__html === html) continue;
-    const template = document.createElement("template");
-    template.innerHTML = html;
-    const next = template.content.firstElementChild;
-    next.__html = html;
-    current.replaceWith(next);
-    slHtml = "";
+    if (current) patchPiece(list, { key: "s:" + row.s.key, html: sessionHTML(row) }, current);
   }
 }
 

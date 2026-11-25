@@ -26,10 +26,11 @@ test("same-fixture scan → real SSE → DOM and concurrent chat load", { timeou
     await fs.mkdir(fixture, { recursive: true });
     const browser = await chromium.launch({ executablePath: process.env.OMP_BENCH_CHROMIUM });
     const results = [];
+    let clock = Date.now();
     try {
       for (const count of [1, 4, 8, 10, 16, 32]) {
         const files = Array.from({ length: count }, (_, i) => path.join(fixture, `graph-${i}.jsonl`));
-        const epoch = Date.now();
+        const epoch = ++clock;
         const line = (type, props, time) => JSON.stringify({ type, ...props, timestamp: new Date(time).toISOString() }) + "\n";
         await Promise.all(files.map((file, i) => fs.writeFile(file,
           line("session", { id: `graph-${i}`, cwd: directory }, epoch) + line("title", { title: `Fixture ${i}` }, epoch))));
@@ -57,8 +58,9 @@ test("same-fixture scan → real SSE → DOM and concurrent chat load", { timeou
             if (typeof setMapMode === "function") setMapMode("workspace");
             for (const id of ids) openNode(id);
           }, files.slice(0, 4));
-          await page.waitForSelector(".node.big");
+          await page.waitForSelector(".node.big.active-card:not([data-virtual])");
           broadcast();
+          const incremental = await page.evaluate(() => typeof applyGraphPatch === "function");
           const times = [];
           let rssSampleMax = 0;
           let heapSampleMax = 0;
@@ -70,9 +72,13 @@ test("same-fixture scan → real SSE → DOM and concurrent chat load", { timeou
             if (i === warmup) {
               trafficStart = await page.evaluate(() => window.graphSample);
               timingStart = process.cpuUsage();
+              if (incremental && count > 1) await page.evaluate((id) => {
+                window.unchangedRow = [...document.querySelectorAll("#slList .sl-row")].find((el) => el.dataset.id === id);
+                window.unchangedCard = ELS.get(id);
+              }, files[1]);
             }
             const title = `SSE sample ${i}`;
-            await fs.appendFile(files[0], line("title", { title }, epoch + (i + 1) * 100));
+            await fs.appendFile(files[0], line("title", { title }, ++clock));
             const start = performance.now();
             scan();
             const scanned = performance.now();
@@ -90,6 +96,8 @@ test("same-fixture scan → real SSE → DOM and concurrent chat load", { timeou
           }
           const cpu = process.cpuUsage(timingStart);
           const trafficEnd = await page.evaluate(() => window.graphSample);
+          if (incremental && count > 1) assert.ok(await page.evaluate(() =>
+            window.unchangedRow?.isConnected && window.unchangedCard?.isConnected));
           await page.evaluate((ids) => {
             window.fixtureIds = ids;
           }, files);

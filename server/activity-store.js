@@ -2,10 +2,59 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 function createActivityStore(dir,{maxTurns=20,maxBytes=8*1024*1024,maxNodes=100}={}){
  const file=path.join(dir,"chat-activity.json");let history={};try{const st=fs.statSync(file);if(st.size<=maxBytes)history=JSON.parse(fs.readFileSync(file,"utf8"));}catch{}
- const active=new Map();let dirty=false,timer=null,writing=null,revision=0;
+ const active=new Map();let dirty=false,timer=null,writing=null,revision=0,persistedRevision=0;
  const key=n=>crypto.createHash("sha256").update(String(n)).digest("hex");
- function flush(){clearTimeout(timer);timer=null;if(!dirty)return true;try{fs.mkdirSync(dir,{recursive:true});let data=JSON.stringify(history);while(Buffer.byteLength(data)>maxBytes&&Object.keys(history).length){delete history[Object.keys(history)[0]];data=JSON.stringify(history);}fs.writeFileSync(file+".tmp",data,{mode:0o600});fs.renameSync(file+".tmp",file);dirty=false;return true;}catch{return false;}}
- async function flushAsync(){if(writing)return writing;if(!dirty)return true;const rev=revision;writing=(async()=>{try{let data=JSON.stringify(history);while(Buffer.byteLength(data)>maxBytes&&Object.keys(history).length){delete history[Object.keys(history)[0]];data=JSON.stringify(history);}await fs.promises.mkdir(dir,{recursive:true});await fs.promises.writeFile(file+".async.tmp",data,{mode:0o600});await fs.promises.rename(file+".async.tmp",file);if(revision===rev)dirty=false;return true;}catch{return false;}finally{writing=null;if(dirty&&!timer){timer=setTimeout(()=>{timer=null;void flushAsync();},1000);timer.unref?.();}}})();return writing;}
+ function serialize() {
+  let data = JSON.stringify(history);
+  while (Buffer.byteLength(data) > maxBytes && Object.keys(history).length) {
+   delete history[Object.keys(history)[0]];
+   data = JSON.stringify(history);
+  }
+  return data;
+ }
+ function flush() {
+  clearTimeout(timer);
+  timer = null;
+  if (!dirty) return true;
+  try {
+   fs.mkdirSync(dir, { recursive: true });
+   fs.writeFileSync(file + ".tmp", serialize(), { mode: 0o600 });
+   fs.renameSync(file + ".tmp", file);
+   persistedRevision = revision;
+   dirty = false;
+   return true;
+  } catch { return false; }
+ }
+ async function flushAsync() {
+  if (writing) return writing;
+  if (!dirty) return true;
+  const rev = revision;
+  const staging = file + ".async.tmp";
+  writing = (async () => {
+   try {
+    const data = serialize();
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(staging, data, { mode: 0o600 });
+    // Commit in the same event-loop turn as the revision check. A shutdown flush may have finished during the write.
+    if (rev <= persistedRevision) {
+     fs.rmSync(staging, { force: true });
+     return true;
+    }
+    fs.renameSync(staging, file);
+    persistedRevision = rev;
+    if (revision === rev) dirty = false;
+    return true;
+   } catch { return false; }
+   finally {
+    writing = null;
+    if (dirty && !timer) {
+     timer = setTimeout(() => { timer = null; void flushAsync(); }, 1000);
+     timer.unref?.();
+    }
+   }
+  })();
+  return writing;
+ }
  function record(ev){if(!ev.node||!["tool","out","tool_end","sub","turn_end"].includes(ev.kind))return;const k=key(ev.node);let items=active.get(k);if(!items){items=[];active.set(k,items);if(active.size>maxNodes)active.delete(active.keys().next().value);}
  const id=String(ev.id||"");const t=items.find(x=>x.id===id&&x.kind==="tool");
  if(ev.kind==="tool"&&id){if(t){if(ev.args)t.args=String(ev.args).slice(0,4000);}else items.push({kind:"tool",id,name:String(ev.name||""),args:String(ev.args||"").slice(0,4000),startedAt:Number(ev.ts)||Date.now(),out:"",done:false});}
