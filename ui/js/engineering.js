@@ -1,3 +1,4 @@
+import { bindDefinitionEditor } from "./engineering-definitions.js";
 import { bindRuntimeControls } from "./engineering-runtime.js";
 import { bindWorkflow } from "./workflow-editor.js";
 import { bindSdlc } from "./sdlc.js";
@@ -5,8 +6,6 @@ import { bindSdlc } from "./sdlc.js";
 const find = (id) => document.getElementById(id);
 const status = find("status");
 const project = find("project");
-const kind = find("kind");
-const definition = find("definition");
 const loop = find("loop");
 const runs = find("runs");
 let definitions = [];
@@ -36,26 +35,9 @@ function options(control, values, first, chosen = control.value) {
   if ([...control.options].some((option) => option.value === chosen)) control.value = chosen;
 }
 
-function defaultPayload() {
-  const model = definitions.find((entry) => entry.kind === "model");
-  const harness = definitions.find((entry) => entry.kind === "harness");
-  if (kind.value === "model") return { name: "Claude Sonnet 4.6", provider: "anthropic", model: "claude-sonnet-4-6", reasoning: "" };
-  if (kind.value === "harness") return { name: "Claude Code", adapter: "claude", model: model?.id ?? "", role: "개발", instructions: "", assets: { agents: "", skills: [], mcp: {}, hooks: {} } };
-  return { name: "", harness: harness?.id ?? "", attempts: 3, timeoutMs: 600000, budgetCents: 300,
-    checks: [{ command: "node", args: ["--test"], code: 0 }] };
-}
-
-function showDefinition() {
-  const selected = definitions.find((entry) => entry.id === definition.value);
-  find("payload").value = JSON.stringify(selected?.payload ?? defaultPayload(), null, 2);
-  find("remove").disabled = !selected;
-  find("definition-diff").hidden = true;
-  const versions = find("definition-version");
-  versions.replaceChildren();
-  for (let version = selected?.version ?? 0; version > 0; version--) versions.add(new Option(String(version), String(version)));
-  versions.disabled = !selected;
-  find("harness-assets").hidden = kind.value !== "harness";
-}
+const editor = bindDefinitionEditor({
+  find, request, report, options, definitions: () => definitions, refreshDefinitions,
+});
 
 async function refreshProjects(chosen, editSelected = false) {
   projects = await request("projects");
@@ -75,9 +57,8 @@ async function refreshDefinitions(chosen) {
   const selected = projects.find((entry) => entry.id === project.value);
   find("archive").disabled = !selected || selected.archived;
   definitions = selected ? await request("definitions", { project: selected.id }) : [];
-  options(definition, definitions.filter((entry) => entry.kind === kind.value), "새 정의", chosen);
+  editor.select(chosen);
   options(loop, definitions.filter((entry) => entry.kind === "loop"), "Loop 선택");
-  showDefinition();
   await workflow?.selectProject(selected?.id ?? "");
   await sdlc?.selectProject(selected?.id ?? "");
   await refreshRuns();
@@ -109,38 +90,16 @@ find("project-form").addEventListener("input", (event) => {
   if (event.target.name === "root") event.currentTarget.dataset.project = "";
 });
 find("project-form").addEventListener("submit", report(async (event) => {
+  if (!editor.mayReplace()) return;
   const values = formValues(event);
   const saved = await request("projects", {}, { ...values, id: event.currentTarget.dataset.project || undefined });
   await refreshProjects(saved.id, true);
 }));
-project.addEventListener("change", report(async () => refreshProjects(project.value, true)));
+project.addEventListener("change", report(async () => { if (editor.mayReplace(project)) await refreshProjects(project.value, true); }));
 find("archive").addEventListener("click", report(async () => {
+  if (!editor.mayReplace()) return;
   await request("projects/archive", {}, { id: project.value });
   await refreshProjects(project.value, true);
-}));
-kind.addEventListener("change", report(async () => refreshDefinitions("")));
-definition.addEventListener("change", showDefinition);
-find("definition-version").addEventListener("change", report(async (event) => {
-  const selected = definitions.find((entry) => entry.id === definition.value);
-  if (!selected) return;
-  const historical = await request("definitions/version", { id: selected.id, version: event.currentTarget.value });
-  if (definition.value !== selected.id) return;
-  const previous = JSON.stringify(historical.payload, null, 2);
-  const current = JSON.stringify(selected.payload, null, 2);
-  find("payload").value = previous;
-  const diff = find("definition-diff");
-  diff.hidden = current === previous;
-  if (!diff.hidden) diff.textContent = `현재 버전 ${selected.version}\n${current}\n\n선택한 버전 ${historical.version}\n${previous}`;
-}));
-find("definition-form").addEventListener("submit", report(async (event) => {
-  const old = definitions.find((entry) => entry.id === definition.value);
-  const payload = JSON.parse(formValues(event).payload);
-  const saved = await request("definitions", {}, { project: project.value, kind: kind.value, payload, id: old?.id, version: old?.version });
-  await refreshDefinitions(saved.id);
-}));
-find("remove").addEventListener("click", report(async () => {
-  await request("definitions/remove", {}, { id: definition.value });
-  await refreshDefinitions("");
 }));
 find("run-form").addEventListener("submit", report(async (event) => {
   const values = { ...formValues(event), project: project.value };

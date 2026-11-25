@@ -47,13 +47,41 @@
       <h2>정의 편집</h2>
       <form id="definition-form">
         <label>종류 <select id="kind" name="kind">
-          <option value="model">모델</option><option value="harness">하네스</option><option value="loop">Loop</option>
+          <option value="model">모델</option><option value="harness">에이전트 작업 방식 (하네스)</option><option value="loop">Loop</option>
         </select></label>
         <label>기존 정의 <select id="definition"></select></label>
         <label>저장 버전 <select id="definition-version"></select></label>
-        <p id="harness-assets" hidden>AGENTS.md와 Skills는 실행 지시에 반영됩니다. MCP와 Hooks는 설정 초안으로 저장됩니다.</p>
+        <fieldset id="harness-fields" hidden disabled>
+          <legend>에이전트 작업 방식</legend>
+          <div class="workflow-controls">
+            <label>역할 템플릿 <select id="harness-template">
+              <option value="developer">개발자</option><option value="reviewer">코드 리뷰어</option>
+              <option value="writer">문서 작성자</option><option value="custom">사용자 정의</option>
+            </select></label>
+            <button id="harness-template-use" type="button">템플릿으로 새 프로필</button>
+            <button id="harness-copy" type="button">현재 프로필 복제</button>
+          </div>
+          <label>프로필 이름 <input name="harnessName" required maxlength="240"></label>
+          <label>실행기 <select name="adapter"><option value="claude">Claude Code</option><option value="omp">OMP</option></select></label>
+          <label>모델 <select name="harnessModel" required></select></label>
+          <label>역할 <input name="role" required maxlength="240"></label>
+          <label>작업 지시 <textarea name="instructions" rows="4" maxlength="12000"></textarea></label>
+          <label>프로젝트 규칙 (AGENTS.md) <textarea name="agents" rows="4" maxlength="10000"></textarea></label>
+          <fieldset>
+            <legend>스킬</legend>
+            <div id="harness-skills"></div>
+            <button id="harness-add-skill" type="button">스킬 추가</button>
+          </fieldset>
+          <details>
+            <summary>MCP 및 Hooks 설정 초안</summary>
+            <p>MCP와 Hooks는 설정 초안으로 보관됩니다.</p>
+            <label>MCP <textarea name="mcp" rows="4" spellcheck="false"></textarea></label>
+            <label>Hooks <textarea name="hooks" rows="4" spellcheck="false"></textarea></label>
+          </details>
+          <p id="harness-draft" role="status"></p>
+        </fieldset>
         <pre id="definition-diff" aria-label="현재 버전과의 변경 내역" hidden></pre>
-        <label>정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
+        <label id="definition-json">정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>
         <div><button>버전 저장</button> <button type="button" id="remove">선택한 정의 삭제</button></div>
       </form>
     </section>
