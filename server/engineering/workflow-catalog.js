@@ -7,6 +7,7 @@ const { compileGraph } = require("./graph-definition");
 const { expandSubgraphs } = require("./workflow-subgraphs");
 const { string, integer } = require("./definitions");
 const { problem } = require("./state");
+const profiles = require("../harness/session-profiles");
 
 function workflowCatalog(db, catalog) {
   function get(project, id, version) {
@@ -17,10 +18,18 @@ function workflowCatalog(db, catalog) {
     return { ...row, name: payload.name, payload };
   }
 
+  function resolveProfile(node) {
+    const profile = profiles.pinned(node.profileId, node.profileVersion);
+    if (!profile) throw problem(400, "프로필 버전을 찾을 수 없습니다: " + node.label);
+    if (!profile.model) throw problem(400, "Workflow에서 사용할 모델을 프로필에 지정하세요: " + node.label);
+    return profile;
+  }
+
   function plan(project, payload) {
     catalog.project(project);
     const result = compileGraph(payload);
     for (const item of result.document.nodes) {
+      if (item.type === "profile") resolveProfile(item);
       if (item.type === "subgraph") item.version = get(project, item.workflow, item.version).version;
       if (!item.definition) continue;
       const target = catalog.versionOf(item.definition, item.version);
@@ -34,7 +43,12 @@ function workflowCatalog(db, catalog) {
 
   function executionPlan(project, payload, id) {
     const { document } = plan(project, payload);
-    return compileGraph(expandSubgraphs(document, (workflow, version) => get(project, workflow, version).payload, id), { expanded: true });
+    const expanded = compileGraph(expandSubgraphs(document, (workflow, version) => get(project, workflow, version).payload, id), { expanded: true });
+    for (const node of expanded.document.nodes) {
+      const linked = expanded.configuration.get(node.id);
+      if (linked) node.sessionProfile = resolveProfile(linked);
+    }
+    return expanded;
   }
 
   function writeWorkflow(body) {

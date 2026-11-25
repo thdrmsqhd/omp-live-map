@@ -5,6 +5,26 @@ const { executionDefinitions } = require("./harness-provenance");
 const { verifyResult } = require("./harness-result");
 const { problem, redact } = require("./state");
 
+function nodeDefinitions(catalog, project, node) {
+  const profile = node.sessionProfile;
+  if (profile) {
+    const { id, version, name, adapter, role, instructions } = profile;
+    return {
+      harness: { id, version, payload: { name, adapter, role, instructions, permission: "workspace-only" } },
+      model: { id, version, payload: { name: profile.model, model: profile.model, provider: adapter === "claude" ? "anthropic" : profile.provider, reasoning: "" } },
+    };
+  }
+  const target = catalog.versionOf(node.definition, node.version);
+  if (!catalog.availableTo(target, project) || target.kind !== (node.type === "agent" ? "harness" : "loop")) {
+    throw problem(409, "Pinned workflow execution definition is invalid");
+  }
+  const loop = node.type === "loop" ? target.payload : null;
+  const harness = loop ? catalog.dependency(target) : target;
+  const model = harness && catalog.dependency(harness);
+  if (!model) throw problem(409, "No pinned model for workflow execution node");
+  return { loop, harness, model };
+}
+
 function nodeExecutor(catalog, runner) {
   return async function execute(node, project, workspace, remaining, signal, inputs = []) {
     if (node.type === "command") {
@@ -12,14 +32,7 @@ function nodeExecutor(catalog, runner) {
       const passed = checks.every((check) => check.passed);
       return { status: passed ? "succeeded" : "failed", passed, checks };
     }
-    const target = catalog.versionOf(node.definition, node.version);
-    if (!catalog.availableTo(target, project) || target.kind !== (node.type === "agent" ? "harness" : "loop")) {
-      throw problem(409, "Pinned workflow execution definition is invalid");
-    }
-    const loop = node.type === "loop" ? target.payload : null;
-    const harness = loop ? catalog.dependency(target) : target;
-    const model = harness && catalog.dependency(harness);
-    if (!model) throw problem(409, "No pinned model for workflow execution node");
+    const { loop, harness, model } = nodeDefinitions(catalog, project, node);
     const checks = loop?.checks ?? [];
     const definitions = executionDefinitions(harness, model);
     if (node.verificationOnly) {
@@ -67,4 +80,4 @@ function nodeExecutor(catalog, runner) {
   };
 }
 
-module.exports = { nodeExecutor };
+module.exports = { nodeExecutor, nodeDefinitions };

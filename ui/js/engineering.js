@@ -1,3 +1,4 @@
+import { bindSessionHarnesses } from "./session-harnesses.js";
 import { harnessProvenance } from "./harness-provenance.js";
 import { bindDefinitionEditor } from "./engineering-definitions.js";
 import { bindRuntimeControls } from "./engineering-runtime.js";
@@ -196,15 +197,34 @@ find("actions").addEventListener("click", report(async (event) => {
     await refreshRuns();
   }
 }));
-const views = ["design", "workflow", "sdlc", "execution"];
+const views = ["design", "workflow", "session-harnesses", "sdlc", "execution"];
+const loadSessionHarnesses = bindSessionHarnesses(find);
+const profileDialog = find("workflow-profile-dialog");
+const profileEditor = find("session-harness-editor");
+find("workflow-open-profiles").onclick = () => {
+  find("workflow-profile-host").append(profileEditor);
+  profileDialog.showModal();
+  void loadSessionHarnesses();
+};
+find("workflow-close-profiles").onclick = () => profileDialog.close();
+profileDialog.addEventListener("close", () => find("session-harness-host").append(profileEditor));
 for (const view of views) {
   find(view + "-nav").addEventListener("click", () => {
+    find("engineering-context").hidden = view === "session-harnesses";
+    if (view === "session-harnesses") {
+      status.textContent = "";
+      void loadSessionHarnesses();
+    } else if (!window.engineeringDesktop) status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";
     for (const name of views) {
       find(name).hidden = view !== name;
       find(name + "-nav").setAttribute("aria-pressed", String(view === name));
     }
   });
 }
+const params = new URLSearchParams(location.search);
+const target = params.get("view");
+if (views.includes(target)) find(target + "-nav").click();
+
 if (window.engineeringDesktop) {
   workflow = bindWorkflow({ find, request, report, definitions: () => definitions, editHarness: editor.open });
   sdlc = bindSdlc({ find, request, report, showRun: async (id) => {
@@ -213,11 +233,8 @@ if (window.engineeringDesktop) {
   } });
   const runtimeStatus = bindRuntimeControls({ find, request, report, status, formValues });
   report(async () => {
-    const params = new URLSearchParams(location.search);
     setScope(params.get("project") ? "project" : "personal");
     await Promise.all([refreshProjects(params.get("project") || undefined, true), runtimeStatus()]);
-    const target = params.get("view");
-    if (views.includes(target)) find(target + "-nav").click();
     if (target === "workflow" && params.get("run") && project.value) await workflow.showRun(params.get("run"));
     if (target === "design" && params.get("harness") && project.value) {
       await editor.open(params.get("harness"), Number(params.get("version")));
@@ -227,4 +244,4 @@ if (window.engineeringDesktop) {
     if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {});
     void runtimeStatus().catch(() => {});
   }, 1800);
-} else status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";
+} else if (target !== "session-harnesses") status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";

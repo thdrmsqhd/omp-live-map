@@ -195,6 +195,9 @@
   #newsess { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; background: #0009; }
   #newsess .nsbox { width: 440px; max-width: calc(100vw - 32px); display: flex; flex-direction: column; gap: 8px; padding: 14px;
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 18px 48px #000a; }
+  #newsess .nsbox { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  #newsess .nsharness-tools { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--muted); }
+  #newsess .nsharness-tools a { margin-left: auto; white-space: nowrap; }
   #newsess .nst { font-size: 13px; font-weight: 600; }
   #newsess label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; color: var(--muted); }
   #newsess input, #newsess textarea { background: #0a1017; border: 1px solid #1c2a39; border-radius: 6px; color: var(--fg);

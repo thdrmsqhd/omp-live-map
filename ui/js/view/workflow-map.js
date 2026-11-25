@@ -69,6 +69,7 @@ function wfPaintEdges() {
     const tx = end.x, ty = end.y + wfSize.h / 2, bend = Math.max(36, Math.abs(tx - x) / 2);
     const group = el("g"), path = el("path"), label = el("text");
     path.setAttribute("d", `M${x},${y} C${x + bend},${y} ${tx - bend},${ty} ${tx},${ty} m-7,-4 l7,4 -7,4`);
+    if (port === "profile") group.setAttribute("data-profile", "");
     const before = executions.get(from), after = executions.get(to);
     if (before?.status === "succeeded" && after && after.status !== "skipped" && (before.outcome?.port ?? "next") === port) {
       group.setAttribute("data-active", "");
@@ -76,7 +77,7 @@ function wfPaintEdges() {
     label.setAttribute("x", String((x + tx) / 2));
     label.setAttribute("y", String((y + ty) / 2 - 8));
     label.setAttribute("text-anchor", "middle");
-    label.textContent = { next: "다음", true: "통과", false: "조건 불충족", approved: "승인", rejected: "반려" }[port] ?? port;
+    label.textContent = { next: "다음", true: "통과", false: "조건 불충족", approved: "승인", rejected: "반려", profile: "프로필" }[port] ?? port;
     group.append(path, label);
     return [group];
   }));
@@ -87,6 +88,7 @@ function wfCreateNode(node) {
   button.type = "button";
   button.className = "wf-node";
   button.dataset.workflowNode = node.id;
+  button.dataset.type = node.type;
   button.append(wfText("strong", node.label), wfText("small", ""));
   let drag, moved = false;
   button.addEventListener("pointerdown", (event) => {

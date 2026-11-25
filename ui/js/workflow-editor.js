@@ -1,13 +1,24 @@
+import { bindWorkflowCanvas, nodeWidth, nodeHeight } from "./workflow-canvas.js";
 import { bindWorkflowHarness } from "./workflow-harness.js";
 import { bindWorkflowRuns } from "./workflow-runs.js";
 import { bindTemplateButtons } from "./workflow-templates.js";
 
 const types = {
   start: "Start", end: "End", agent: "Agent", command: "Command", loop: "Loop",
-  condition: "Condition", parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph",
+  condition: "Condition", parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph", profile: "에이전트 프로필",
 };
-const ports = { end: [], condition: ["true", "false"], approval: ["approved", "rejected"] };
-const nodeWidth = 132, nodeHeight = 52;
+const ports = { end: [], profile: ["profile"], condition: ["true", "false"], approval: ["approved", "rejected"] };
+const outputOf = (type) => ports[type] ?? ["next"];
+const inputY = 54;
+const profileInputY = 76;
+const portY = (type, port) => outputOf(type).length === 1 ? inputY : 54 + 22 * outputOf(type).indexOf(port);
+const portLabels = { next: "다음", true: "참", false: "거짓", approved: "승인", rejected: "거절", profile: "프로필" };
+const statusLabels = {
+  queued: "대기", running: "실행 중", waiting_approval: "승인 대기", succeeded: "완료",
+  failed: "실패", skipped: "건너뜀", interrupted: "중단", paused: "일시정지", canceled: "취소",
+};
+const graphHint = "빈 공간 드래그로 이동 · Ctrl+휠로 확대·축소 · 출력 포트를 끌거나 선택해 입력에 연결";
+const bound = (value) => Math.min(10000, Math.max(0, Math.round(value)));
 const blank = () => ({ name: "", nodes: [
   { id: "start", type: "start", label: "Start", x: 45, y: 70 },
   { id: "end", type: "end", label: "End", x: 460, y: 70 },
@@ -24,94 +35,297 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
   const el = (name) => find("workflow-" + name);
   const selector = el("list"), form = el("node-form");
   let project = "", workflow, selected, documentState = blank(), runDetail, workflows = [];
-  const harness = bindWorkflowHarness({ el, form, definitions, choices, editHarness: (id, version) => report(() => editHarness(id, version))() });
-  const runs = bindWorkflowRuns({ el, request, report, current: () => workflow, projectId: () => project,
-    onStatus(detail) { runDetail = detail; showRunStates(); } });
-  const templateButtons = bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
-    await loadList(record.project); if (record.project === project) { selector.value = record.id; open(record); }
-  } });
-  choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end"].includes(type)));
-  function draw() {
-    const nodes = documentState.nodes;
-    const width = Math.max(650, ...nodes.map((node) => node.x + nodeWidth + 30));
-    const height = Math.max(400, ...nodes.map((node) => node.y + nodeHeight + 30));
-    const lines = el("lines");
-    el("canvas").style.width = width + "px";
-    el("canvas").style.height = height + "px";
-    lines.setAttribute("width", width);
-    lines.setAttribute("height", height);
-    const positions = new Map(nodes.map((node) => [node.id, node]));
-    const svg = (tag) => document.createElementNS("http://www.w3.org/2000/svg", tag);
-    lines.replaceChildren(...documentState.edges.map(({ from, to, port }) => {
-      const start = positions.get(from), end = positions.get(to);
-      const x1 = start.x + nodeWidth, y1 = start.y + nodeHeight / 2;
-      const x2 = end.x, y2 = end.y + nodeHeight / 2, middle = (x1 + x2) / 2;
-      const group = svg("g"), path = svg("path"), label = svg("text");
-      path.setAttribute("d", `M${x1} ${y1} C${middle} ${y1} ${middle} ${y2} ${x2} ${y2} M${x2 - 7} ${y2 - 4} L${x2} ${y2} L${x2 - 7} ${y2 + 4}`);
-      label.setAttribute("x", middle + 3);
-      label.setAttribute("y", (y1 + y2) / 2 - 5);
-      label.textContent = port; group.append(path, label);
-      return group;
-    }));
+  let runNode, connection, preview, profiles = [], refreshedProfiles = false;
+  const profileList = el("profile-list");
+  const activeProfile = () => profiles.find(({ id }) => id === profileList.value);
+  const updateProfileButton = () => { el("add-profile").disabled = !activeProfile(); };
+  profileList.onchange = updateProfileButton;
+  function showProfiles(entries) {
+    profiles = entries;
+    choices(profileList, [["", "프로필 선택"], ...entries.map(({ id, name, version }) => [id, `${name} · v${version}`])]);
+    updateProfileButton();
+    showProfileVersion();
   }
-  function nodeButton(node) {
+  find("session-harness-editor").addEventListener("profileschange", ({ detail }) => {
+    refreshedProfiles = true;
+    showProfiles(detail);
+  });
+  fetch("/api/session-harnesses").then((response) => response.json()).then((result) => {
+    if (result.ok && !refreshedProfiles) showProfiles(result.profiles);
+  }).catch(() => {});
+  const graph = () => runDetail?.graph ?? documentState;
+  const canvas = bindWorkflowCanvas(el, () => setConnection(null));
+  let pendingFit;
+  const fit = () => { pendingFit = !canvas.fit(graph().nodes); };
+  el("fit").onclick = fit;
+  new ResizeObserver(() => { if (pendingFit) fit(); }).observe(el("viewport"));
+  const harness = bindWorkflowHarness({ el, form, definitions, choices, editHarness: (id, version) => report(() => editHarness(id, version))() });
+  const runs = bindWorkflowRuns({ el, request, report, current: () => runDetail ? {
+      id: runDetail.run.workflow, version: runDetail.run.version, name: runDetail.graph?.name ?? runDetail.run.title,
+    } : workflow, projectId: () => project,
+    focusedNode: () => runNode,
+    onStatus(detail) {
+      const changed = detail?.run.id !== runDetail?.run.id;
+      runDetail = detail;
+      if (changed) {
+        runNode = null;
+        setConnection(null);
+        render();
+        fit();
+      } else showRunStates();
+    },
+  });
+  const templateButtons = bindTemplateButtons({ el, request, report, definitions, current: () => workflow, projectId: () => project, async imported(record) {
+    await loadList(record.project);
+    if (record.project !== project) return;
+    if (runDetail) await runs.refresh("");
+    if (record.project === project) {
+      selector.value = record.id;
+      open(record);
+    }
+  } });
+  choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end", "profile"].includes(type)));
+  function draw() {
+    const { nodes, edges } = graph();
+    const lines = el("lines");
+    const positions = new Map(nodes.map((node) => [node.id, node]));
+    const states = new Map((runDetail?.nodes ?? []).map((node) => [node.node, node]));
+    const paths = [];
+    function wire(x1, y1, x2, y2, state) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const bend = Math.max(45, Math.abs(x2 - x1) * .48);
+      path.setAttribute("d", `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`);
+      if (state) path.dataset.state = state;
+      paths.push(path);
+    }
+    for (const { from, to, port } of edges) {
+      const start = positions.get(from), target = positions.get(to);
+      if (!start || !target) continue;
+      const source = states.get(from), destination = states.get(to);
+      const active = source?.status === "succeeded" && (source.outcome?.port ?? "next") === port &&
+        destination && destination.status !== "skipped";
+      wire(start.x + nodeWidth, start.y + portY(start.type, port), target.x, target.y + (port === "profile" ? profileInputY : inputY),
+        port === "profile" ? port : runDetail ? (active ? "active" : "inactive") : port);
+    }
+    const source = connection && positions.get(connection.from);
+    if (source && preview) {
+      wire(source.x + nodeWidth, source.y + portY(source.type, connection.port), preview.x, preview.y, "preview");
+    }
+    lines.replaceChildren(...paths);
+  }
+  function setConnection(next, message) {
+    connection = next;
+    preview = null;
+    for (const output of el("nodes").querySelectorAll("[data-port]")) {
+      output.setAttribute("aria-pressed", String(Boolean(next && output.dataset.port === next.port &&
+        output.closest(".workflow-node").dataset.node === next.from)));
+    }
+    el("viewport").classList.toggle("is-connecting", Boolean(next));
+    const source = next && documentState.nodes.find(({ id }) => id === next.from);
+    el("graph-help").textContent = message ?? (source
+      ? `${source.label} · ${portLabels[next.port]} → ${next.port === "profile" ? "Agent의 프로필 입력을" : "입력 포트를"} 선택하세요. Esc로 취소`
+      : runDetail ? "노드를 선택하면 해당 단계의 실행 결과를 볼 수 있습니다." : graphHint);
+    draw();
+  }
+  function connect({ from, to, port }, input = port === "profile" ? "profile" : "flow") {
+    const source = documentState.nodes.find(({ id }) => id === from);
+    const target = documentState.nodes.find(({ id }) => id === to);
+    if (!source || !target || from === to || target.type === "start" || !outputOf(source.type).includes(port)) {
+      setConnection(connection, "서로 다른 노드의 출력과 입력을 연결하세요.");
+      return;
+    }
+    if (port === "profile" ? target.type !== "agent" || input !== "profile" : target.type === "profile" || input !== "flow") {
+      setConnection(connection, "프로필은 Agent의 프로필 입력에, 실행 순서는 일반 입력에 연결하세요.");
+      return;
+    }
+    if (documentState.edges.some((edge) => edge.from === from && edge.to === to && edge.port === port)) {
+      setConnection(null, "이미 연결된 포트입니다.");
+      return;
+    }
+    if (port === "profile") {
+      documentState.edges = documentState.edges.filter((edge) => edge.to !== to || edge.port !== "profile");
+    }
+    documentState.edges.push({ from, to, port });
+    if (port === "profile" && selected === to) showInspector();
+    setConnection(null, `${source.label} → ${target.label} 연결됨`);
+    renderEdges();
+  }
+  function portButton(node, port, input = "flow") {
     const button = document.createElement("button");
-    const label = document.createElement("strong"), type = document.createElement("small");
-    button.className = "workflow-node";
-    button.dataset.node = node.id;
     button.type = "button";
-    button.setAttribute("aria-pressed", String(selected === node.id));
-    label.textContent = node.label; type.textContent = types[node.type]; button.append(label, type);
-    const position = () => { button.style.left = node.x + "px"; button.style.top = node.y + "px"; };
+    button.className = "workflow-port";
+    const caption = portLabels[port] ?? (input === "profile" ? "프로필" : "입력");
+    button.textContent = caption;
+    button.style.top = (port ? portY(node.type, port) : input === "profile" ? profileInputY : inputY) + "px";
+    button.dataset.direction = port ? "output" : "input";
+    button.setAttribute("aria-label", node.label + " · " + (port ? caption + " 출력" : input === "profile" ? "프로필 입력" : caption));
+    if (!port) {
+      button.dataset.input = node.id;
+      button.dataset.inputKind = input;
+      button.onclick = () => {
+        if (connection) connect({ ...connection, to: node.id }, input);
+        else setConnection(null, "연결할 출력 포트를 먼저 선택하세요.");
+      };
+      return button;
+    }
+    const start = { from: node.id, port };
+    button.dataset.port = port;
+    button.setAttribute("aria-pressed", "false");
+    button.onclick = (event) => {
+      if (event.detail === 0) setConnection(start);
+    };
+    button.onpointerdown = (event) => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      button.setPointerCapture(event.pointerId);
+      setConnection(start);
+    };
+    button.onpointermove = (event) => {
+      if (!button.hasPointerCapture(event.pointerId) || connection !== start) return;
+      preview = canvas.point(event.clientX, event.clientY);
+      draw();
+    };
+    button.onpointerup = (event) => {
+      if (!button.hasPointerCapture(event.pointerId) || connection !== start) return;
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-input]");
+      if (target) connect({ ...start, to: target.dataset.input }, target.dataset.inputKind);
+      else setConnection(start);
+    };
+    button.onpointercancel = () => setConnection(null);
+    return button;
+  }
+  function nodeCard(node) {
+    const card = document.createElement("div"), button = document.createElement("button");
+    const label = document.createElement("strong"), state = document.createElement("small");
+    card.className = "workflow-node";
+    card.dataset.node = node.id;
+    card.dataset.type = node.type;
+    button.className = "workflow-node-title";
+    button.type = "button";
+    button.setAttribute("aria-pressed", String((runDetail ? runNode : selected) === node.id));
+    label.textContent = node.label;
+    button.title = node.label;
+    state.textContent = types[node.type];
+    button.append(label, state);
+    card.append(button);
+    const position = () => { card.style.left = node.x + "px"; card.style.top = node.y + "px"; };
     position();
-    button.addEventListener("click", () => { selected = node.id; render(); });
+    card.addEventListener("click", (event) => {
+      if (event.target.closest(".workflow-port")) return;
+      if (runDetail) {
+        runNode = runNode === node.id ? null : node.id;
+        runs.focus();
+      } else {
+        if (selected === node.id) return;
+        selected = node.id;
+        showInspector();
+      }
+      showSelection();
+    });
+    if (runDetail) return card;
+    if (!["start", "profile"].includes(node.type)) card.append(portButton(node));
+    if (node.type === "agent") card.append(portButton(node, null, "profile"));
+    for (const port of outputOf(node.type)) card.append(portButton(node, port));
     button.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0) return;
-      const x = node.x - event.clientX, y = node.y - event.clientY;
+      if (event.button !== 0 || !event.isPrimary) return;
+      const origin = canvas.point(event.clientX, event.clientY);
+      const { x, y } = node;
       button.setPointerCapture(event.pointerId);
       const move = (event) => {
-        node.x = Math.min(10000, Math.max(0, Math.round(x + event.clientX)));
-        node.y = Math.min(10000, Math.max(0, Math.round(y + event.clientY)));
-        position(); draw();
+        const point = canvas.point(event.clientX, event.clientY);
+        if (!button.hasPointerCapture(event.pointerId)) return;
+        node.x = bound(x + point.x - origin.x);
+        node.y = bound(y + point.y - origin.y);
+        position();
+        draw();
       };
       button.addEventListener("pointermove", move);
       button.addEventListener("lostpointercapture", () => button.removeEventListener("pointermove", move), { once: true });
     });
-    return button;
+    return card;
+  }
+  function showSelection() {
+    const id = runDetail ? runNode : selected;
+    for (const card of el("nodes").children) {
+      card.firstElementChild.setAttribute("aria-pressed", String(card.dataset.node === id));
+    }
   }
   function showRunStates() {
-    const sameVersion = runDetail?.run.workflow === workflow?.id && runDetail?.run.version === workflow?.version;
-    const statusByNode = new Map((sameVersion ? runDetail?.nodes ?? [] : []).map(({ node, status }) => [node, status]));
-    for (const button of el("nodes").children) {
-      const node = documentState.nodes.find(({ id }) => id === button.dataset.node);
-      const status = statusByNode.get(node.id) ?? "";
-      button.dataset.status = status;
-      button.querySelector("small").textContent = status ? types[node.type] + " · " + status : types[node.type];
+    const states = new Map((runDetail?.nodes ?? []).map(({ node, status }) => [node, status]));
+    for (const card of el("nodes").children) {
+      const status = states.get(card.dataset.node) ?? "";
+      card.dataset.status = status;
+      const version = graph().nodes.find(({ id }) => id === card.dataset.node)?.profileVersion;
+      card.querySelector("small").textContent = [types[card.dataset.type], version && "v" + version, statusLabels[status] ?? status].filter(Boolean).join(" · ");
     }
+    draw();
   }
   function outputPorts() {
     const type = documentState.nodes.find(({ id }) => id === el("from").value)?.type;
-    choices(el("port"), (ports[type] ?? ["next"]).map((port) => [port, port]));
+    choices(el("port"), outputOf(type).map((port) => [port, port]));
   }
   function render() {
+    el("nodes").replaceChildren(...graph().nodes.map(nodeCard));
+    const observing = Boolean(runDetail);
+    el("edit-tools").hidden = observing;
+    el("inspector-edit").hidden = observing;
+    el("inspector-run").hidden = !observing;
+    el("inspector-title").textContent = observing ? `실행 상세 · v${runDetail.run.version}` : "노드 설정";
+    el("name").disabled = observing;
+    el("plan").disabled = observing || !project;
+    el("save").disabled = observing || !project;
+    el("open-run").disabled = !workflow && !runDetail;
+    showInspector();
+    if (!observing) renderEdges();
+    setConnection(null);
+    showRunStates();
+  }
+  function renderEdges() {
     const nodes = documentState.nodes;
     const entries = nodes.map(({ id, label }) => [id, label]);
-    el("nodes").replaceChildren(...nodes.map(nodeButton));
-    showRunStates();
     choices(el("from"), entries.filter(([id]) => nodes.find((node) => node.id === id).type !== "end"));
-    choices(el("to"), entries.filter(([id]) => nodes.find((node) => node.id === id).type !== "start"));
+    choices(el("to"), entries.filter(([id]) => !["start", "profile"].includes(nodes.find((node) => node.id === id).type)));
     outputPorts();
+    el("edge-summary").textContent = `연결 (${documentState.edges.length})`;
     el("edges").replaceChildren(...documentState.edges.map((edge, index) => {
       const line = document.createElement("li"), remove = document.createElement("button");
-      const name = (id) => nodes.find((node) => node.id === id).label;
-      remove.type = "button"; remove.textContent = "연결 삭제";
-      remove.onclick = () => { documentState.edges.splice(index, 1); render(); };
-      line.append(name(edge.from) + " → " + name(edge.to) + " (" + edge.port + ")", remove);
+      const name = (id) => nodes.find((node) => node.id === id)?.label ?? id;
+      remove.type = "button";
+      remove.textContent = "삭제";
+      remove.setAttribute("aria-label", `${name(edge.from)} → ${name(edge.to)} 연결 삭제`);
+      remove.onclick = () => { documentState.edges.splice(index, 1); if (edge.port === "profile") showInspector(); renderEdges(); draw(); };
+      line.append(name(edge.from) + " → " + name(edge.to) + " · " + portLabels[edge.port], remove);
       return line;
     }));
+  }
+  function showProfileVersion() {
+    const item = documentState.nodes.find(({ id, type }) => id === selected && type === "profile");
+    el("profile-version").hidden = !item;
+    if (!item) return;
+    const latest = profiles.find(({ id }) => id === item.profileId);
+    el("profile-version-caption").textContent = `연결에 사용할 버전 · v${item.profileVersion}`;
+    el("update-profile").disabled = !latest?.model || latest.version <= item.profileVersion;
+  }
+  el("update-profile").onclick = () => {
+    const item = documentState.nodes.find(({ id, type }) => id === selected && type === "profile");
+    const latest = item && profiles.find(({ id }) => id === item.profileId);
+    if (!latest?.model || latest.version <= item.profileVersion) return;
+    item.profileVersion = latest.version;
+    el("status").textContent = `프로필 v${latest.version}이 초안에 적용됐습니다. Workflow를 저장하세요.`;
+    showProfileVersion();
+    showRunStates();
+  };
+  function showInspector() {
+    const nodes = documentState.nodes;
     const item = nodes.find(({ id }) => selected === id);
-    form.hidden = !item;
-    harness.show(item);
+    form.hidden = Boolean(runDetail) || !item;
+    el("inspector-empty").hidden = Boolean(runDetail) || Boolean(item);
+    if (runDetail) return;
+    const linked = documentState.edges.find(({ to, port }) => to === selected && port === "profile");
+    harness.show(item, linked && nodes.find(({ id }) => id === linked.from));
+    const profile = item?.type === "profile";
+    showProfileVersion();
+    el("node-settings").hidden = profile;
+    form.elements.settings.disabled = profile;
     if (item) {
       const { id, type, x, y, label, ...settings } = item;
       form.elements.label.value = label;
@@ -123,16 +337,17 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       form.elements.settings.value = JSON.stringify(settings, null, 2);
       el("delete").disabled = type === "start" || type === "end";
     }
-    draw();
   }
   function open(record) {
     workflow = record;
-    documentState = record?.payload ?? blank();
+    documentState = record ? structuredClone(record.payload) : blank();
     selected = null;
     el("name").value = documentState.name;
     el("status").textContent = "";
     el("order").replaceChildren();
+    el("plan-result").hidden = true;
     render();
+    fit();
   }
   async function loadList(id) {
     const records = id ? await request("workflows", { project: id }) : [];
@@ -143,7 +358,10 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
   selector.addEventListener("change", report(async () => {
     const id = selector.value, owner = project;
     const current = id ? await request("workflow", { project: owner, id }) : null;
-    if (owner === project && id === selector.value) open(current);
+    if (owner === project && id === selector.value) {
+      if (runDetail || el("run-list").value) await runs.refresh("");
+      if (owner === project && id === selector.value) open(current);
+    }
   }));
   el("from").addEventListener("change", outputPorts);
   el("add").addEventListener("click", () => {
@@ -155,18 +373,42 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       condition: { source: "", field: "passed", equals: true }, approval: { prompt: "" },
       subgraph: { workflow: workflows.find((item) => item.id !== workflow?.id)?.id ?? "" },
     };
-    const position = documentState.nodes.length;
-    documentState.nodes.push({ id, type, label: types[type], x: 230, y: 70 + (position - 2) * 65, ...config[type] });
-    selected = id; render();
+    addNode({ id, type, label: types[type], ...config[type] });
   });
+  el("add-profile").addEventListener("click", () => {
+    const profile = activeProfile();
+    if (!profile) return;
+    if (!profile.model) {
+      el("status").textContent = "에이전트 프로필 설정에서 Workflow에 사용할 모델을 지정하세요.";
+      return;
+    }
+    addNode({ id: crypto.randomUUID(), type: "profile", label: profile.name, profileId: profile.id, profileVersion: profile.version });
+  });
+  function addNode(node) {
+    const viewport = el("viewport").getBoundingClientRect();
+    const center = canvas.point(viewport.left + viewport.width / 2, viewport.top + viewport.height / 2);
+    const x = bound(center.x - nodeWidth / 2), centerY = bound(center.y - nodeHeight / 2);
+    let y = centerY;
+    while (y < 10000 && documentState.nodes.some((node) => Math.abs(node.x - x) < nodeWidth &&
+      Math.abs(node.y - y) < nodeHeight)) y = bound(y + nodeHeight + 12);
+    documentState.nodes.push({ ...node, x, y });
+    selected = node.id;
+    render();
+    const added = el("nodes").lastElementChild.getBoundingClientRect();
+    if (added.bottom > viewport.bottom || added.top < viewport.top || added.right > viewport.right || added.left < viewport.left) fit();
+  }
   el("connect").addEventListener("click", () => {
-    const edge = { from: el("from").value, to: el("to").value, port: el("port").value };
-    if (edge.from === edge.to || documentState.edges.some(({ from, to, port }) => from === edge.from && to === edge.to && port === edge.port)) return;
-    documentState.edges.push(edge); render();
+    connect({ from: el("from").value, to: el("to").value, port: el("port").value });
   });
   form.addEventListener("submit", report(async () => {
     const index = documentState.nodes.findIndex(({ id }) => selected === id);
-    const { id, type, x, y } = documentState.nodes[index];
+    const node = documentState.nodes[index];
+    const { id, type, x, y } = node;
+    if (type === "profile") {
+      node.label = form.elements.label.value;
+      render();
+      return;
+    }
     const settings = JSON.parse(form.elements.settings.value);
     if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("노드 설정은 JSON 객체여야 합니다.");
     documentState.nodes[index] = { ...harness.apply(settings), id, type, x, y, label: form.elements.label.value };
@@ -190,12 +432,15 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
         el("status").textContent = "버전 " + result.version + " 저장됨";
       } else {
         const labels = new Map(result.document.nodes.map(({ id, label }) => [id, label]));
+        el("plan-result").hidden = false;
         el("order").replaceChildren(...result.order.map((id) => {
           const item = document.createElement("li"); item.textContent = labels.get(id); return item;
         }));
       }
     }));
   }
+  render();
+  fit();
   return { showRun: runs.refresh, refreshProfiles() {
     harness.refreshChoices();
     templateButtons.refresh();
@@ -203,6 +448,8 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
     if (id === project) return;
     project = id;
     selector.value = "";
+    runDetail = null;
+    runNode = null;
     open(null);
     await loadList(id);
     await runs.refresh();

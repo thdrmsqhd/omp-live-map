@@ -1,20 +1,53 @@
 import { harnessProvenance } from "./harness-provenance.js";
 
-export function bindWorkflowRuns({ el, request, report, current, projectId, onStatus }) {
+export function bindWorkflowRuns({ el, request, report, current, projectId, onStatus, focusedNode }) {
   const list = el("run-list"), approval = el("approval");
   const deliveryForm = el("delivery-form"), deliveryActions = el("delivery-actions");
   const stageForm = el("staging-form");
-  let pending, selected, refreshing = false;
+  const dialog = el("run-dialog"), runForm = el("run-form"), launchStatus = el("launch-status");
+  const submitRun = runForm.querySelector('button:not([type])');
+  let pending, selected, refreshing = false, submitting = false, refreshVersion = 0;
+  let nodeResultsVersion = "", explicitRefreshes = 0;
+
+  el("open-run").onclick = () => {
+    const workflow = current();
+    if (!workflow) return;
+    el("run-version").textContent = workflow.name + " · v" + workflow.version;
+    launchStatus.textContent = "";
+    dialog.showModal();
+  };
+  el("close-run").onclick = () => dialog.close();
+
+  function focus() {
+    const id = focusedNode();
+    const results = el("run-nodes");
+    results.querySelector("[data-no-result]")?.remove();
+    for (const item of results.children) item.hidden = Boolean(id) && item.dataset.node !== id;
+    if (id && ![...results.children].some((item) => item.dataset.node === id)) {
+      const empty = document.createElement("li");
+      empty.dataset.noResult = "";
+      const node = selected?.graph?.nodes.find((item) => item.id === id);
+      empty.textContent = node?.type === "profile"
+        ? `${node.label} · 연결된 Agent에 적용된 프로필 v${node.profileVersion}`
+        : "이 노드의 실행 결과가 아직 없습니다.";
+      results.append(empty);
+    }
+  }
 
   async function refresh(preferred = list.value) {
-    const project = projectId();
+    explicitRefreshes++;
+    try { await load(preferred); } finally { explicitRefreshes--; }
+  }
+
+  async function load(preferred) {
+    const project = projectId(), version = ++refreshVersion;
     const rows = project ? await request("workflow-runs", { project }) : [];
-    if (project !== projectId()) return;
-    list.replaceChildren(new Option("실행 선택", ""), ...rows.map((row) => new Option(row.title + " · " + row.status, row.id)));
+    if (project !== projectId() || version !== refreshVersion) return;
+    list.replaceChildren(new Option("편집 화면", ""), ...rows.map((row) => new Option(row.title + " · " + row.status, row.id)));
     const id = rows.some((row) => row.id === preferred) ? preferred : "";
     list.value = id;
     const detail = id ? await request("workflow-run", { id }) : null;
-    if (project !== projectId() || id !== list.value) return;
+    if (project !== projectId() || version !== refreshVersion || id !== list.value) return;
     if (selected?.run.id !== detail?.run.id) {
       el("review-output").hidden = true;
       deliveryForm.elements.branch.value = detail?.delivery?.head ?? "";
@@ -53,8 +86,12 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
       event.textContent = [new Date(created).toLocaleTimeString(), kind, detail.labels[payload.node], payload.status].filter(Boolean).join(" · ");
       return event;
     }));
+    const nextResults = detail ? JSON.stringify([detail.run.id, status, detail.nodes, detail.retries]) : "";
+    if (nodeResultsVersion === nextResults) return;
+    nodeResultsVersion = nextResults;
     el("run-nodes").replaceChildren(...(detail?.nodes ?? []).map((node) => {
       const item = document.createElement("li");
+      item.dataset.node = node.node;
       const heading = document.createElement("strong");
       heading.textContent = (detail.labels[node.node] ?? node.node) + " · " + node.status;
       item.append(heading);
@@ -84,20 +121,32 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
       }
       return item;
     }));
+    focus();
   }
 
-  el("run-form").addEventListener("submit", report(async (event) => {
+  runForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
     const workflow = current();
-    if (!workflow) throw new Error("먼저 Workflow 버전을 저장하거나 선택해 주세요.");
-    const form = new FormData(event.currentTarget);
+    if (submitting || !workflow) return;
+    const form = new FormData(runForm);
     const input = { project: projectId(), workflow: workflow.id, version: workflow.version, title: form.get("title"),
       timeoutMs: Number(form.get("minutes")) * 60000, budgetCents: Number(form.get("budget")) };
     const identity = JSON.stringify(input);
     if (pending?.identity !== identity) pending = { identity, key: crypto.randomUUID() };
-    const run = await request("workflow-runs", {}, { ...input, key: pending.key });
-    pending = null;
-    await refresh(run.id);
-  }));
+    submitting = submitRun.disabled = true;
+    launchStatus.textContent = "";
+    try {
+      const run = await request("workflow-runs", {}, { ...input, key: pending.key });
+      await refresh(run.id);
+      pending = null;
+      runForm.elements.title.value = "";
+      dialog.close();
+    } catch (error) {
+      launchStatus.textContent = error.message;
+    } finally {
+      submitting = submitRun.disabled = false;
+    }
+  });
   list.addEventListener("change", report(async () => refresh()));
   deliveryForm.addEventListener("submit", report(async () => {
     if (!selected) return;
@@ -138,9 +187,9 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
     await refresh();
   }));
   setInterval(async () => {
-    if (refreshing || document.getElementById("workflow").hidden || !projectId()) return;
+    if (submitting || refreshing || explicitRefreshes || document.getElementById("workflow").hidden || !projectId()) return;
     refreshing = true;
-    try { await refresh(); } catch { /* the next poll retries */ } finally { refreshing = false; }
+    try { await load(list.value); } catch { /* the next poll retries */ } finally { refreshing = false; }
   }, 1800);
-  return { refresh };
+  return { refresh, focus };
 }

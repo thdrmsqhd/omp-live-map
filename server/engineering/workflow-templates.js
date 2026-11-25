@@ -60,6 +60,10 @@ function workflowTemplates(catalog, workflows) {
           workflow: lookupName(graph, string(node.reference?.name, "workflow name")),
           version: integer(node.reference?.version, "referenced version", 1, Number.MAX_SAFE_INTEGER) };
         if (!["agent", "loop"].includes(node?.type)) return node;
+        if (node.type === "agent" && !node.reference) {
+          const { definition, version, ...portable } = node;
+          return portable;
+        }
         return { ...node, definition: lookupName(definitions, string(node.reference?.name, "definition name"),
           node.type === "agent" ? "harness" : "loop", node.reference?.scope),
         version: integer(node.reference?.version, "referenced version", 1, Number.MAX_SAFE_INTEGER) };

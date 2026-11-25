@@ -70,7 +70,11 @@ async function wfStepForm(node, draft, commit) {
   form.append(wfText("h3", node.label));
   wfField(form, "단계 이름", "label", wfInput(node.label));
   let picked;
-  if (["agent", "loop", "subgraph"].includes(node.type)) {
+  const profileLink = draft.payload.edges.find(({ to, port }) => to === node.id && port === "profile");
+  const profile = profileLink && draft.payload.nodes.find(({ id }) => id === profileLink.from);
+  if (profile) form.append(wfText("p", `연결된 프로필 · ${profile.label} · v${profile.profileVersion}`));
+  if (node.type === "profile") form.append(wfText("p", `프로필 v${node.profileVersion} · 엔지니어링 Workflow에서 설정`));
+  if (!profile && ["agent", "loop", "subgraph"].includes(node.type)) {
     const targetKey = node.type === "subgraph" ? "workflow" : "definition";
     const entries = node.type === "subgraph" ? draft.workflows.filter(({ id }) => id !== draft.record.id)
       : draft.definitions.filter(({ kind }) => kind === (node.type === "agent" ? "harness" : "loop"));
