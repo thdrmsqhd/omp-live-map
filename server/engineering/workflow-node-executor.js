@@ -22,6 +22,13 @@ function nodeExecutor(catalog, runner) {
     if (!model) throw problem(409, "No pinned model for workflow execution node");
     const checks = loop?.checks ?? [];
     const definitions = executionDefinitions(harness, model);
+    if (node.verificationOnly) {
+      const results = await runner.verify(checks, workspace, signal);
+      const validation = await verifyResult(harness.payload.result, workspace, signal);
+      const passed = results.every((check) => check.passed) && validation?.passed !== false;
+      return { status: passed ? "succeeded" : "failed", passed, checks: results, result: validation,
+        definitions, verificationOnly: true, costCents: 0 };
+    }
     const adapter = runner.requireAdapter(harness.payload, model.payload, checks);
     const timeout = loop ? AbortSignal.any([signal, AbortSignal.timeout(loop.timeoutMs)]) : signal;
     const budget = Math.min(remaining, loop?.budgetCents ?? remaining);

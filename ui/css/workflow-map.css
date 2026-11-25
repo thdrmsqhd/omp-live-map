@@ -34,3 +34,5 @@
 #workflow-inspector ul { padding-left: 20px; }
 .mon-workflow-runs { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 6px; }
 #mmsvg .mm-wf { fill: #72b8aa; }
+#workflow-inspector label { display: grid; gap: 4px; margin-block: 6px; }
+#workflow-inspector textarea, #workflow-inspector select, #workflow-inspector input { border: 1px solid #526575; border-radius: 4px; padding: 5px; background: #111923; color: inherit; font: inherit; }

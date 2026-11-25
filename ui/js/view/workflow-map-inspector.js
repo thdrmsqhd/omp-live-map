@@ -35,7 +35,8 @@ function paintWorkflowMap() {
 let wfEvidenceSignature;
 function paintWorkflowEvidence(node, execution, history) {
   const frame = $("wf-map-details");
-  const signature = JSON.stringify([wfMap.run.run.id, node, execution, history]);
+  const run = wfMap.run.run;
+  const signature = JSON.stringify([run.id, run.status, run.workspace, node, execution, history]);
   if (signature === wfEvidenceSignature) return;
   wfEvidenceSignature = signature;
   frame.replaceChildren();
@@ -43,13 +44,18 @@ function paintWorkflowEvidence(node, execution, history) {
   frame.append(wfText("h3", node.label + " · " + wfLabel(execution?.status)));
   const outcome = execution?.outcome;
   if (!outcome) return;
+  if (run.workspace) frame.append(workflowEvidencePreview("작업 공간 변경분", "workflow-review", { id: run.id }));
+  for (const { path, sha256 } of outcome.artifacts ?? []) {
+    const section = workflowEvidencePreview("산출물 " + path, "workflow-artifact", { id: run.id, node: node.id, path });
+    section.append(wfText("small", sha256));
+    frame.append(section);
+  }
   if (outcome.error) frame.append(wfText("p", outcome.error));
   if (outcome.prompt) frame.append(wfText("p", outcome.prompt));
   const definitions = outcome.definitions;
   if (definitions) frame.append(wfText("p", definitions.harness.name + " v" + definitions.harness.version +
     " · " + definitions.model.name + " v" + definitions.model.version));
   const evidence = [
-    ...(outcome.artifacts ?? []).map(({ path, sha256 }) => ["산출물 " + path, sha256]),
     ...(outcome.checks ?? []).map((check) => [check.command + " · " + (check.passed ? "통과" : "실패"), check.log]),
     ...(outcome.attempts ?? []).map((attempt, index) => ["시도 " + (index + 1) + (attempt.sessionId ? " · 세션 " + attempt.sessionId : ""),
       JSON.stringify(attempt, null, 2)]),
@@ -61,4 +67,94 @@ function paintWorkflowEvidence(node, execution, history) {
     if (text) detail.append(wfText("pre", text));
     frame.append(detail);
   }
+  paintWorkflowInterventions(frame, node, execution, run);
+}
+
+function workflowEvidencePreview(label, endpoint, params) {
+  const section = document.createElement("details"), summary = wfText("summary", label);
+  section.append(summary);
+  section.addEventListener("toggle", async () => {
+    if (!section.open || section.querySelector("pre")) return;
+    const content = wfText("pre", "불러오는 중…");
+    section.append(content);
+    try {
+      const result = await mapWorkflowRequest(endpoint, params);
+      content.textContent = [result.status, result.diff, result.text, result.truncated && "표시 범위를 초과한 내용이 있습니다."]
+        .filter(Boolean).join("\n\n") || "표시할 내용이 없습니다.";
+    } catch (error) {
+      content.textContent = error.message;
+      section.addEventListener("toggle", () => { if (!section.open) content.remove(); }, { once: true });
+    }
+  });
+  return section;
+}
+
+function wfActionButton(label, action) {
+  const button = wfText("button", label);
+  button.type = "button";
+  button.onclick = action;
+  return button;
+}
+
+async function wfPerform(button, endpoint, extra) {
+  const generation = ++wfMap.generation, id = wfMap.run.run.id;
+  button.disabled = true;
+  try {
+    await mapWorkflowRequest(endpoint, {}, { id, ...extra });
+    const detail = await mapWorkflowRequest("workflow-run", { id });
+    if (wfMap.generation === generation) wfAccept(detail, false);
+  } catch (error) {
+    if (wfMap.generation === generation) $("wf-map-intervention-status").textContent = error.message;
+  } finally { button.disabled = false; }
+}
+
+function paintWorkflowInterventions(frame, node, execution, run) {
+  const options = wfMap.run.interventions?.[node.id];
+  const approval = run.status === "waiting_approval" && execution?.status === "waiting_approval";
+  if (!options && !approval) return;
+  const actions = document.createElement("div");
+  actions.className = "wf-actions";
+  const retry = (button, mode, extra) => wfPerform(button, "workflow-runs/retry", { node: node.id, mode, ...extra });
+  if (options) {
+    actions.append(wfActionButton(options.verify ? "검증만 재실행" : "선택 단계 재실행",
+      ({ currentTarget }) => retry(currentTarget, options.verify ? "verify" : "retry")));
+    if (options.rework.length) {
+      const box = document.createElement("details");
+      box.append(wfText("summary", "수정 요청"));
+      const label = wfText("label", "다시 실행할 단계");
+      const target = document.createElement("select");
+      target.append(...options.rework.map(({ id, label }) => new Option(label, id)));
+      label.append(target);
+      const request = wfText("label", "추가 요청 사항");
+      const notes = document.createElement("textarea");
+      notes.rows = 3;
+      notes.maxLength = 2000;
+      request.append(notes);
+      box.append(label, request, wfActionButton("실패 근거를 넘겨 다시 실행",
+        ({ currentTarget }) => retry(currentTarget, "rework", { restart: target.value, note: notes.value })));
+      frame.append(box);
+    }
+  }
+  if (approval) {
+    const label = wfText("label", "승인 메모 또는 반려 사유");
+    const reason = document.createElement("textarea");
+    reason.rows = 3;
+    reason.maxLength = 2000;
+    label.append(reason);
+    frame.append(label);
+    for (const [decision, label] of [["approved", "승인"], ["rejected", "반려"]]) {
+      actions.append(wfActionButton(label, ({ currentTarget }) => {
+        if (decision === "rejected" && !reason.value.trim()) {
+          $("wf-map-intervention-status").textContent = "반려 사유를 입력해 주세요.";
+          reason.focus();
+          return;
+        }
+        return wfPerform(currentTarget, "workflow-runs/approval", { node: node.id, decision, reason: reason.value });
+      }));
+    }
+  }
+  const status = wfText("p", "");
+  status.id = "wf-map-intervention-status";
+  status.setAttribute("role", "status");
+  frame.append(actions, status);
 }

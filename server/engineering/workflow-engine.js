@@ -1,6 +1,7 @@
 "use strict";
 
 const { graphScheduler } = require("./graph-scheduler");
+const { retryPlan } = require("./workflow-retry-plan");
 const { nodeExecutor } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
 const { runParallel } = require("./workflow-parallel");
@@ -39,7 +40,11 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
     }
     async function executeExternal(node, location, remaining, references) {
       const task = store.taskInstruction(id);
-      const input = task && node.instruction ? { ...node, instruction: node.instruction + "\n\nDevelopment task:\n" + task } : node;
+      const retry = store.retryInstruction(id, node.id);
+      const context = [node.instruction, task && "Development task:\n" + task,
+        retry?.mode === "rework" && "Rework requested after " + retry.failed + " failed.\n" +
+          [retry.note, "Previous failure evidence:\n" + retry.evidence].filter(Boolean).join("\n\n")].filter(Boolean);
+      const input = node.instruction ? { ...node, instruction: context.join("\n\n"), verificationOnly: retry?.mode === "verify" } : node;
       let result = await runNode(input, run.project, location, Math.max(0, remaining), signal, references);
       if (result.status === "succeeded" && node.outputs.length) {
         try { result.artifacts = await collectOutputs(location, node, signal); } catch (error) {
@@ -155,21 +160,13 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       launch(id);
       return store.get(id);
     },
-    retry(id, node) {
+    retry(id, node, { restart = node, mode = "retry", note = "" } = {}) {
       const run = store.get(id);
       if (active.has(id)) throw problem(409, "Workflow is still active");
       const saved = workflows.get(run.project, run.workflow, run.version);
-      const workflow = workflows.executionPlan(run.project, saved.payload, run.workflow).document;
-      const children = new Map(workflow.nodes.map((item) => [item.id, []]));
-      for (const edge of workflow.edges) children.get(edge.from).push(edge.to);
-      const descendants = new Set(), pending = [...(children.get(node) ?? [])];
-      while (pending.length) {
-        const child = pending.pop();
-        if (descendants.has(child)) continue;
-        descendants.add(child);
-        pending.push(...children.get(child));
-      }
-      store.retry(id, node, descendants);
+      const graph = workflows.executionPlan(run.project, saved.payload, run.workflow).document;
+      const children = retryPlan(graph, store.nodes(id), node, restart, mode);
+      store.retry(id, restart, children, { failed: node, mode, note });
       launch(id);
       return store.get(id);
     },

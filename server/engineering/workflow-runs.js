@@ -125,30 +125,40 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
       });
     },
     retries,
-    retry(id, node, descendants) {
+    retryInstruction(id, node) {
+      const row = db.prepare(`SELECT payload FROM event WHERE kind='workflow.retry' AND json_extract(payload,'$.id')=?
+        AND json_extract(payload,'$.node')=? ORDER BY seq DESC LIMIT 1`).get(id, node);
+      return row ? JSON.parse(row.payload) : null;
+    },
+    retry(id, node, descendants, { failed = node, mode = "retry", note = "" } = {}) {
       transaction(db, () => {
         const run = get(id);
         const history = nodes(id);
-        const failed = history.find((item) => item.node === node);
-        if (run.status !== "failed" || failed?.status !== "failed" || failed.outcome?.interrupted ||
-            failed.outcome?.passed !== false || run.deadline <= Date.now()) {
+        const failure = history.find((item) => item.node === failed);
+        if (run.status !== "failed" || failure?.status !== "failed" || failure.outcome?.interrupted ||
+            failure.outcome?.passed !== false || run.deadline <= Date.now()) {
           throw problem(409, "Only a failed node with a known result and time remaining can be retried");
         }
         if (run.sdlc_task && db.prepare("SELECT id FROM workflow_run WHERE sdlc_task=? ORDER BY created DESC,rowid DESC LIMIT 1")
           .get(run.sdlc_task).id !== id) throw problem(409, "The task already has a newer workflow run");
-        if (history.some((item) => descendants.has(item.node) && item.status !== "skipped")) {
-          throw problem(409, "A downstream node already executed; start a new workflow run");
-        }
         const used = [...history, ...retries(id)].reduce((total, item) => total + (item.outcome?.costCents ?? 0), 0);
         quota.check(run.project, Math.max(0, run.budget - used));
-        const count = db.prepare("SELECT COUNT(*) AS n FROM workflow_retry WHERE run=? AND node=?").get(id, node).n;
-        if (count >= 3) throw problem(409, "Workflow node retry limit reached");
-        db.prepare("INSERT INTO workflow_retry VALUES (?,?,?,?,?)").run(id, node, count + 1, JSON.stringify(failed.outcome), Date.now());
+        const count = db.prepare("SELECT COUNT(*) AS n FROM workflow_retry WHERE run=? AND node=?");
+        const archive = db.prepare("INSERT INTO workflow_retry VALUES (?,?,?,?,?)");
+        if (count.get(id, node).n >= 3 || count.get(id, failed).n >= 3) throw problem(409, "Workflow node retry limit reached");
         const remove = db.prepare("DELETE FROM workflow_node WHERE run=? AND node=?");
-        remove.run(id, node);
-        for (const child of descendants) remove.run(id, child);
+        for (const item of history.filter((item) => item.node === node || descendants.has(item.node))) {
+          if (item.status !== "skipped") archive.run(id, item.node, count.get(id, item.node).n + 1, JSON.stringify(item.outcome), Date.now());
+          remove.run(id, item.node);
+        }
+        const lastAttempt = failure.outcome.attempts?.at(-1);
+        const evidence = mode === "rework" ? redact(JSON.stringify({
+          error: failure.outcome.error,
+          checks: (failure.outcome.checks ?? lastAttempt?.checks ?? []).filter((check) => !check.passed),
+          resultErrors: (failure.outcome.result ?? lastAttempt?.result)?.errors,
+        })) : "";
         setStatus(id, ["failed"], "queued");
-        event(db, "workflow.retry", { id, node, attempt: count + 1 });
+        event(db, "workflow.retry", { id, node, failed, mode, note: note ? redact(string(note, "rework note", 2000)) : "", evidence });
       });
     },
     recover() {

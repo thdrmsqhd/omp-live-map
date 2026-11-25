@@ -175,3 +175,47 @@ test("parallel workflow branches run in distinct Git worktrees and publish outpu
     fs.rmSync(directory, { force: true, recursive: true });
   }
 });
+
+test("workflow rework archives the failed verification and returns evidence to the implementation", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-rework-"));
+  const db = openDatabase(path.join(directory, "engineering.sqlite"));
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Fixture", "main");
+    const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
+    const runs = workflowRuns(db, definitions, workflows);
+    const model = definitions.saveDefinition({ project: "one", kind: "model", payload: { name: "M", provider: "test", model: "fake" } });
+    const harness = definitions.saveDefinition({ project: "one", kind: "harness",
+      payload: { name: "Developer", role: "developer", adapter: "claude", model: model.id } });
+    const graph = workflows.save({ project: "one", payload: { name: "Modbus reconnect", nodes: [
+      { id: "start", type: "start", label: "Start" },
+      { id: "fix", type: "agent", label: "Implement", definition: harness.id, instruction: "Fix reconnect" },
+      { id: "test", type: "command", label: "Verify", check: { command: "verify", args: [] } },
+      { id: "end", type: "end", label: "End" },
+    ], edges: [["start","fix"],["fix","test"],["test","end"]].map(([from,to]) => ({ from,to })) } });
+    const prompts = [];
+    const engine = workflowEngine(runs, workflows, definitions, {
+      requireAdapter() { return { async run({ instruction }) {
+        prompts.push(instruction);
+        return { costCents: 1, sessionId: "fixture" };
+      } }; },
+      async verify() { return [{ command: "verify", passed: prompts.length > 1, log: "Reconnect timeout test failed" }]; },
+    }, { async create() { return directory; } });
+    const run = engine.start({ project: "one", workflow: graph.id, version: 1, title: "Reconnect", timeoutMs: 5000, budgetCents: 20 }, "fix");
+    const settle = async () => {
+      for (let i = 0; i < 100 && ["queued","running"].includes(runs.get(run.id).status); i++) await delay(10);
+    };
+    await settle();
+    assert.equal(runs.get(run.id).status, "failed");
+    engine.retry(run.id, "test", { mode: "rework", restart: "fix", note: "Check reconnect timing" });
+    await settle();
+    assert.equal(runs.get(run.id).status, "succeeded");
+    assert.equal(prompts.length, 2);
+    assert.match(prompts[1], /Reconnect timeout test failed/);
+    assert.match(prompts[1], /Check reconnect timing/);
+    assert.deepEqual(runs.retries(run.id).map(({ node }) => node).sort(), ["fix", "test"]);
+    assert.equal(runs.get(run.id).version, 1);
+  } finally {
+    db.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

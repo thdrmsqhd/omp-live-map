@@ -19,14 +19,14 @@ const endpoints = new Set([
   "workflows", "workflows/launch", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
-  "workflow-approvals", "workflow-dashboard", "workflow-review",
+  "workflow-approvals", "workflow-dashboard", "workflow-review", "workflow-artifact",
   "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
 ]);
 
 const liveMapReads = new Set(["projects", "tasks", "workflow-approvals", "workflow-runs", "workflow-run",
-  "workflows", "workflow", "definitions", "workflows/presets", "runtime", "workflow-review"]);
-const liveMapWrites = new Set(["workflows/launch"]);
+  "workflows", "workflow", "definitions", "workflows/presets", "runtime", "workflow-review", "workflow-artifact"]);
+const liveMapWrites = new Set(["workflows/launch", "workflow-runs/retry", "workflow-runs/approval", "workflow-runs/action"]);
 
 function startServer() {
   const data = app.getPath("userData");

@@ -12,6 +12,7 @@ const { sdlcTasks } = require("./sdlc-tasks");
 const { sdlcStages } = require("./sdlc-stages");
 const { workflowObservability } = require("./workflow-observability");
 const { workflowDelivery } = require("./workflow-delivery");
+const { retryOptions } = require("./workflow-retry-plan");
 const { quickLaunch } = require("./workflow-launch");
 const { buildPreset, listPresets } = require("./workflow-presets");
 const { projectBudget } = require("./project-budget");
@@ -99,6 +100,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           integer(Number(url.searchParams.get("days") ?? 30), "metrics period", 1, 90));
         if (endpoint === "project-budget") result = { current: budget.get(query("project")) ?? null };
         if (endpoint === "workflow-review") result = await observability.review(query("id"));
+        if (endpoint === "workflow-artifact") result = await observability.artifact(query("id"), query("node"), query("path"));
         if (endpoint === "workflows") result = workflows.list(query("project"));
         if (endpoint === "workflows/presets") result = listPresets();
         if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
@@ -107,7 +109,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const run = flowRuns.get(id);
           const workflow = workflows.get(run.project, run.workflow, run.version);
           const graph = workflows.executionPlan(run.project, workflow.payload, run.workflow).document;
-          result = { run, nodes: flowRuns.nodes(id), retries: flowRuns.retries(id), timeline: observability.timeline(id),
+          const nodes = flowRuns.nodes(id);
+          result = { run, nodes, interventions: run.status === "failed" ? retryOptions(graph, nodes) : {}, retries: flowRuns.retries(id), timeline: observability.timeline(id),
             delivery: delivery.get(id), staging: staging.get(id),
             labels: Object.fromEntries(graph.nodes.map(({ id, label }) => [id, label])),
             graph: { name: graph.name, nodes: graph.nodes.map(({ id, label, type, x, y }) => ({ id, label, type, x, y })),
@@ -176,7 +179,11 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflow-runs") result = flow.start(input, input.key);
         if (endpoint === "workflows/launch") result = quickLaunch(definitions, workflows, flow, runner, input);
         if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
-        if (endpoint === "workflow-runs/retry") result = flow.retry(string(input.id, "run"), string(input.node, "node"));
+        if (endpoint === "workflow-runs/retry") {
+          const node = string(input.node, "node");
+          result = flow.retry(string(input.id, "run"), node, { mode: input.mode,
+            restart: input.restart ? string(input.restart, "restart node") : node, note: input.note });
+        }
         if (endpoint === "workflow-runs/approval") {
           result = await flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
         }
