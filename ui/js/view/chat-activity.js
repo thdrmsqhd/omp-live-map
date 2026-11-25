@@ -44,11 +44,23 @@ function actRange(list) {
   return { items: list.slice(prev + 1, end), running: false };
 }
 
-// 글(text) 항목은 도는 중에만 넣는다 — 끝난 턴의 답변은 기록 메시지가 보여준다.
-function actItems(nodeId) {
+// 글(text)은 스트림이 없을 때만 활동에 넣는다. 끝난 턴의 답변은 기록 메시지가 보여준다.
+// 생각·알림·실패·진행 중 도구는 시간순으로 그대로 보여 준다. 끝난 도구만 따로 접는다.
+function splitRunningItems(items) {
+  const live = [], done = [];
+  for (const it of items) {
+    if (it.kind === "tool" && it.done && !it.error) done.push(it);
+    else live.push(it);
+  }
+  return { live, done };
+}
+
+function actItems(nodeId, st) {
   const { items, running } = actRange(liveItems(nodeId));
+  // 본문 스트림이 없는 서브에이전트는 실시간 text 가 답변이다. 스트림과 겹치면 빼 이중 표시를 막는다.
+  const showText = running && !(st && st.stream);
   return {
-    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || it.kind === "notify")
+    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || it.kind === "notify" || (showText && it.kind === "text"))
       && (it.kind !== "sub" || !HIDE_DONE_SUBS || !it.status || LIVE_RUNNING.test(it.status))),
     running,
   };
@@ -62,14 +74,24 @@ function actSummary(items) {
 
 // 대화 목록 끝에 붙는 활동 묶음. 도는 중이면 펼치고, 끝난 턴은 한 줄 요약으로 접는다(펼침은 chatState 에 보관).
 function chatActivityHTML(nodeId, st) {
-  const { items, running } = actItems(nodeId);
+  const { items, running } = actItems(nodeId, st);
   const history=chatTurnHistory(nodeId);const archive=history.slice(0,running||!items.length?history.length:-1).filter(x=>x.items.length);const old=archive.length?`<details class="chat-old-activity"><summary>이전 작업 ${archive.length}턴</summary>${archive.map(x=>`<details><summary>${esc(new Date(x.ts).toLocaleTimeString())} · ${esc(actSummary(x.items))}</summary>${x.items.map(liveItemHTML).join("")}</details>`).join("")}</details>`:"";
   if (!items.length) return old;
   const list = items.map(liveItemHTML).join("");
-  if(running){const active=items.filter(x=>x.kind==="tool"&&!x.done||x.kind==="sub"&&LIVE_RUNNING.test(x.status||""));const failed=items.filter(x=>x.error);const completed=items.filter(x=>!active.includes(x)&&!failed.includes(x));return old+`<div class="lvact">${active.map(liveItemHTML).join("")}${failed.map(liveItemHTML).join("")}${completed.length?`<details class="chat-activity-done"><summary>이전 활동 ${completed.length}건</summary>${completed.map(liveItemHTML).join("")}</details>`:""}</div>`;}
+  if (running) {
+    const { live, done } = splitRunningItems(items);
+    const folded = done.length ? `<details class="chat-activity-done"><summary>완료된 도구 ${done.length}건</summary>${done.map(liveItemHTML).join("")}</details>` : "";
+    return old + `<div class="lvact">${live.map(liveItemHTML).join("")}${folded}</div>`;
+  }
   const seq = items[items.length - 1].seq;
-  if (st.actTurn !== seq) { st.actTurn = seq; st.actOpen = false; }
+  if (st.actTurn !== seq) {
+    st.actTurn = seq;
+    const node = typeof nodeById === "function" ? nodeById(nodeId) : null;
+    st.actOpen = !!(node && node.kind === "sub");
+  }
   const open = !!st.actOpen;
   return old+`<button class="lvsum" data-actsum="1" title="${open ? "활동 접기" : "활동 펼치기"}"><span class="lvk">작업 내역</span><span class="lva">${esc(actSummary(items))}</span><span class="lvcar">${open ? "▴" : "▾"}</span></button>`
     + (open ? `<div class="lvact">${list}</div>` : "");
 }
+
+if (typeof module === "object" && module.exports) module.exports = { splitRunningItems, actRange, chatActivityHTML };
