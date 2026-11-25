@@ -7,6 +7,14 @@ const LIVE_TEXT_MAX = 8000;  // 글·생각 한 항목이 쥐는 글자 수(끝�
 const LIVE_DIRTY = new Set();
 const LIVE_HISTORY=new Map();
 function chatTurnHistory(id){return LIVE_HISTORY.get(liveKey(id))||[];}
+// 끝난 턴을 보관할 때 도구만 남기면 서브에이전트의 생각이 사라진다.
+function liveHistoryItems(items) {
+  return items.filter((x) => x.kind === "tool" || x.kind === "sub" || x.kind === "think" || x.kind === "text").map((x) => ({
+    ...x,
+    out: String(x.out || "").slice(-12000),
+    text: x.text ? String(x.text).slice(-8000) : x.text,
+  }));
+}
 async function loadChatActivity(id){try{const res=await postJSON("/api/chat/activity",{node:id});const data=await res.json();if(!data.ok)return;const k=liveKey(id),merged=new Map();for(const x of [...data.turns,...chatTurnHistory(id)])merged.set(x.ts,x);LIVE_HISTORY.set(k,[...merged.values()].sort((a,b)=>a.ts-b.ts).slice(-20));liveTouch(id);}catch{}}
 let liveSeq = 0;
 
@@ -108,12 +116,15 @@ function handleLiveEvent(ev) {
   } else if (ev.kind === "turn_end") {
     // 턴이 끝났는데 닫히지 않은 툴은 더 돌지 않는 것으로 본다(백그라운드로 넘어간 출력은 계속 반영된다).
     for (const it of list) if (it.kind === "tool") it.done = true;
-    const range=actRange(list);if(range.running&&range.items.length){const hist=chatTurnHistory(ev.node).slice(-19);hist.push({ts:Number(ev.ts)||Date.now(),items:range.items.filter(x=>x.kind==="tool"||x.kind==="sub").map(x=>({...x,out:String(x.out||"").slice(-12000)}))});LIVE_HISTORY.set(key,hist);if(LIVE_HISTORY.size>100)LIVE_HISTORY.delete(LIVE_HISTORY.keys().next().value);}
+    const range=actRange(list);if(range.running&&range.items.length){const hist=chatTurnHistory(ev.node).slice(-19);hist.push({ts:Number(ev.ts)||Date.now(),items:liveHistoryItems(range.items)});LIVE_HISTORY.set(key,hist);if(LIVE_HISTORY.size>100)LIVE_HISTORY.delete(LIVE_HISTORY.keys().next().value);}
     livePush(list, { kind: "turn_end", ts: Number(ev.ts) || Date.now() });
     scheduleSubDockCheck(ev.node);
   } else return;
   liveTouch(ev.node);
 }
 
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)for(const id of openIds)liveTouch(id);});
-setInterval(()=>{const keep=new Set([...openIds].map(liveKey));for(const s of DATA.sessions||[])for(const n of s.nodes)if(n.status==="live"||CHAT.get(n.id)?.busy)keep.add(liveKey(n.id));for(const k of LIVE.keys())if(!keep.has(k))LIVE.delete(k);for(const k of LIVE_HISTORY.keys())if(!keep.has(k))LIVE_HISTORY.delete(k);},60000);
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)for(const id of openIds)liveTouch(id);});
+  setInterval(()=>{const keep=new Set([...openIds].map(liveKey));for(const s of DATA.sessions||[])for(const n of s.nodes)if(n.status==="live"||CHAT.get(n.id)?.busy)keep.add(liveKey(n.id));for(const k of LIVE.keys())if(!keep.has(k))LIVE.delete(k);for(const k of LIVE_HISTORY.keys())if(!keep.has(k))LIVE_HISTORY.delete(k);},60000);
+}
+if (typeof module === "object" && module.exports) module.exports = { liveHistoryItems, handleLiveEvent };
