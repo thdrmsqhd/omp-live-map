@@ -75,11 +75,12 @@ function monitorTaskHTML(g) {
   if (!detail || detail.error) return '<p class="mon-muted">'+esc(detail?.error || "SDLC 데이터 조회 중")+'</p>';
   const tasks=detail.tasks||[], done=tasks.filter((t)=>t.status==="completed").length;
   const pct=tasks.length?Math.round(done/tasks.length*100):null;
+  const latestRun = detail.runs?.[0];
   const current=tasks.find((t)=>t.status==="waiting_approval")||tasks.find((t)=>t.status==="running")||tasks.find((t)=>t.status==="blocked");
   return `<div class="mon-progress"><span>SDLC Task ${done}/${tasks.length} 완료</span><b>${pct===null?"미등록":pct+"%"}</b></div>
     ${pct===null?"":`<progress max="100" value="${pct}" aria-label="Task 완료율"></progress>`}
     ${current?`<p class="mon-task">${esc(monStatus[current.status]||current.status)} · ${esc(current.title)} ${current.latest_run?`<a href="${esc(monEngLink(g.project,"workflow",current.latest_run))}">실행 그래프</a>`:""}</p>`:""}
-    <div class="mon-links"><a href="${esc(monEngLink(g.project,"sdlc"))}">개발 Task</a><a href="${esc(monEngLink(g.project,"workflow"))}">Workflow / 타임라인</a><a href="${esc(monEngLink(g.project,"design"))}">하네스·루프</a><a href="${esc(monEngLink(g.project,"execution"))}">실행</a></div>`;
+    <div class="mon-links"><a href="${esc(monEngLink(g.project,"sdlc"))}">개발 Task</a><a href="${esc(monEngLink(g.project,"workflow",latestRun?.id))}">Workflow / 실행 이력</a><a href="${esc(monEngLink(g.project,"design"))}">하네스·루프</a><a href="${esc(monEngLink(g.project,"execution"))}">실행</a></div>`;
 }
 function monitorSessionHTML(s) {
   const st=monitorSessionStats(s,overviewMemory), n=st.main;

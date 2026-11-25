@@ -1,3 +1,4 @@
+import { harnessProvenance } from "./harness-provenance.js";
 import { bindDefinitionEditor } from "./engineering-definitions.js";
 import { bindRuntimeControls } from "./engineering-runtime.js";
 import { bindWorkflow } from "./workflow-editor.js";
@@ -77,7 +78,10 @@ async function refreshRuns(chosen) {
     const line = document.createElement("li");
     const output = document.createElement("pre");
     output.textContent = JSON.stringify(attempt.outcome, null, 2);
-    line.append(`시도 ${attempt.number} · ${attempt.status}`, output);
+    line.append(`시도 ${attempt.number} · ${attempt.status}`);
+    const source = harnessProvenance(attempt.outcome?.definitions, attempt.outcome ? [attempt.outcome] : []);
+    if (source) line.append(source);
+    line.append(output);
     return line;
   }));
 }

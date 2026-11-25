@@ -64,8 +64,9 @@ function startServer() {
 
 ipcMain.handle("engineering:request", async (event, { endpoint, params, payload }) => {
   const frame = event.senderFrame;
+  const location = frame?.url ? new URL(frame.url) : null;
   if (!window || event.sender !== window.webContents || frame !== window.webContents.mainFrame ||
-      frame.url !== origin + "/engineering.html" || !endpoints.has(endpoint)) {
+      location?.origin !== origin || location?.pathname !== "/engineering.html" || !endpoints.has(endpoint)) {
     return { ok: false, error: "Request denied" };
   }
   if (endpoint === "runtime/key") {

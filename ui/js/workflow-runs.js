@@ -1,3 +1,5 @@
+import { harnessProvenance } from "./harness-provenance.js";
+
 export function bindWorkflowRuns({ el, request, report, current, projectId, onStatus }) {
   const list = el("run-list"), approval = el("approval");
   const deliveryForm = el("delivery-form"), deliveryActions = el("delivery-actions");
@@ -67,6 +69,8 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
         item.append(retry);
       }
       if (node.outcome) {
+        const source = harnessProvenance(node.outcome.definitions, node.outcome.attempts ?? []);
+        if (source) item.append(source);
         const details = document.createElement("pre");
         details.textContent = JSON.stringify(node.outcome, null, 2);
         item.append(details);

@@ -1,6 +1,7 @@
 "use strict";
 
 const { resolveSources, withSources, sourceReferences } = require("./harness-sources");
+const { executionDefinitions } = require("./harness-provenance");
 const { verifyResult } = require("./harness-result");
 const { problem, redact } = require("./state");
 
@@ -11,11 +12,11 @@ function loopEngine(store, catalog, runner, worktrees) {
     const harness = catalog.dependency(loop);
     const model = harness && catalog.dependency(harness);
     if (!model) throw problem(409, "Loop requires a saved harness and model version");
-    return { loop: loop.payload, harness: harness.payload, model: model.payload };
+    return { loop: loop.payload, harness: harness.payload, model: model.payload, definitions: executionDefinitions(harness, model) };
   }
   async function execute(id) {
     const run = store.get(id);
-    const { loop, harness, model } = resolve(run);
+    const { loop, harness, model, definitions } = resolve(run);
     const execution = runner.snapshot?.() ?? runner;
     const agent = execution.requireAdapter(harness, model, loop.checks);
     const stop = new AbortController();
@@ -41,7 +42,7 @@ function loopEngine(store, catalog, runner, worktrees) {
           const sources = await resolveSources(harness, project, workspace, [], signal);
           const output = await agent.run({
             cwd: workspace, instruction: run.instruction, harness: withSources(harness, sources), model,
-            feedback, signal, budgetCents: loop.budgetCents - used,
+            feedback, signal, budgetCents: loop.budgetCents - used, capture: true,
           });
           signal.throwIfAborted();
           if (!Number.isFinite(output.costCents) || output.costCents < 0) {
@@ -55,14 +56,14 @@ function loopEngine(store, catalog, runner, worktrees) {
           const passed = !overBudget && results.every((result) => result.passed);
           store.finishAttempt(id, number, passed ? "passed" : "rejected", {
             checks: results, costCents: output.costCents, costBasis: output.costBasis ?? "reported", sessionId: output.sessionId ?? null,
-            model: model.model, agent: harness.adapter, sources: sourceReferences(sources),
+            model: model.model, agent: harness.adapter, sources: sourceReferences(sources), definitions, tools: output.tools ?? null,
             ...(validation ? { result: validation } : {}),
           });
           if (overBudget) return store.change(id, "limit_exceeded");
           if (passed) return store.change(id, "succeeded");
           feedback = results;
         } catch (error) {
-          store.finishAttempt(id, number, signal.aborted ? "cancelled" : "error", { error: redact(error.message) });
+          store.finishAttempt(id, number, signal.aborted ? "cancelled" : "error", { error: redact(error.message), definitions });
           if (stop.signal.aborted) return store.change(id, "cancelled");
           return store.change(id, signal.aborted ? "limit_exceeded" : "failed");
         }
