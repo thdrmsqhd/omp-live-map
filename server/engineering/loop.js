@@ -1,6 +1,7 @@
 "use strict";
 
 const { resolveSources, withSources, sourceReferences } = require("./harness-sources");
+const { verifyResult } = require("./harness-result");
 const { problem, redact } = require("./state");
 
 function loopEngine(store, catalog, runner, worktrees) {
@@ -49,10 +50,13 @@ function loopEngine(store, catalog, runner, worktrees) {
           used += output.costCents;
           const overBudget = used > loop.budgetCents;
           const results = overBudget ? [] : await execution.verify(loop.checks, workspace, signal);
+          const validation = overBudget ? null : await verifyResult(harness.result, workspace, signal);
+          if (validation) results.push({ command: "harness result", passed: validation.passed, log: validation.errors.join("\n") });
           const passed = !overBudget && results.every((result) => result.passed);
           store.finishAttempt(id, number, passed ? "passed" : "rejected", {
             checks: results, costCents: output.costCents, costBasis: output.costBasis ?? "reported", sessionId: output.sessionId ?? null,
             model: model.model, agent: harness.adapter, sources: sourceReferences(sources),
+            ...(validation ? { result: validation } : {}),
           });
           if (overBudget) return store.change(id, "limit_exceeded");
           if (passed) return store.change(id, "succeeded");

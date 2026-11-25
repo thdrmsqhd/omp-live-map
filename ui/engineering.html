@@ -77,6 +77,14 @@
             <div id="harness-skills"></div>
             <button id="harness-add-skill" type="button">스킬 추가</button>
           </fieldset>
+          <fieldset>
+            <legend>결과 형식</legend>
+            <label>형식 <select name="resultShape">
+              <option value="">자유 형식</option><option value="object">JSON 객체</option><option value="array">JSON 객체 목록</option>
+            </select></label>
+            <label>결과 파일 경로 <input name="resultPath" placeholder="review.json"></label>
+            <label>필수 필드 (줄마다 하나)<textarea name="resultFields" rows="3" placeholder="file"></textarea></label>
+          </fieldset>
           <details>
             <summary>MCP 및 Hooks 설정 초안</summary>
             <p>MCP와 Hooks는 설정 초안으로 보관됩니다.</p>

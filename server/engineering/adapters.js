@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const { once } = require("node:events");
 const { createInterface } = require("node:readline");
 const { open } = require("../rpc");
+const { resultInstruction } = require("./harness-result");
 const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
 
@@ -17,6 +18,7 @@ function promptSections(harness, instruction = "", feedback = []) {
     ...(harness.resolvedSources ?? []).map(({ path, input, text }) => ({
       name: "source", path, text: (input ? "Workflow input " + input + " (" + path + ")" : "Repository file " + path) + ":\n" + text,
     })),
+    { name: "result", text: resultInstruction(harness.result) },
     { name: "task", text: instruction },
     { name: "feedback", text: feedback.length ? "Previous verification results:\n" + JSON.stringify(feedback) : "" },
   ].filter(({ text }) => text);

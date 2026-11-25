@@ -228,3 +228,16 @@ test("harness source preview pins tracked content and checks workflow artifacts"
   await fs.writeFile(path.join(root, "test.txt"), "Changed tests.");
   await assert.rejects(resolveSources(payload, project, root, [report]), /artifact changed/);
 });
+
+test("harness result validation detects missing JSON fields and accepts an empty findings list", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-harness-result-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const { resultContract, verifyResult } = require("../server/engineering/harness-result");
+  const contract = resultContract({ shape: "array", path: "review.json", fields: ["file", "line"] });
+  assert.equal((await verifyResult(contract, directory)).passed, false);
+  await fs.writeFile(path.join(directory, "review.json"), '[{"file":"main.js"}]');
+  assert.match((await verifyResult(contract, directory)).errors[0], /line is missing/);
+  await fs.writeFile(path.join(directory, "review.json"), "[]");
+  assert.equal((await verifyResult(contract, directory)).passed, true);
+  assert.throws(() => resultContract({ ...contract, path: "../review.json" }), /relative paths/);
+});

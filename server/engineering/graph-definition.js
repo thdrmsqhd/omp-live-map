@@ -1,6 +1,7 @@
 "use strict";
 
 const { string, integer, checkCommand } = require("./definitions");
+const { artifactPath } = require("./artifact-path");
 const { problem } = require("./state");
 
 const types = new Set(["start", "end", "agent", "command", "loop", "condition", "parallel", "join", "approval", "subgraph"]);
@@ -21,14 +22,6 @@ function identifier(value, label) {
   const id = string(value, label, 64);
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) bad("Invalid " + label);
   return id;
-}
-
-function artifactPath(value) {
-  const file = string(value, "artifact path", 512);
-  const parts = file.split("/");
-  if (parts.some((part) => !part || /^\.git$/i.test(part) || /[<>:"\\|?*\x00-\x1f]/.test(part) || /[ .]$/.test(part) ||
-      /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) bad("Artifact paths must be portable workspace-relative paths");
-  return file;
 }
 
 function contract(raw) {

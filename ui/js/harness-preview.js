@@ -1,4 +1,4 @@
-const sections = { role: "역할", instructions: "작업 지시", assets: "프로젝트 규칙과 스킬" };
+const sections = { role: "역할", instructions: "작업 지시", assets: "프로젝트 규칙과 스킬", result: "결과 형식" };
 
 function element(tag, text) {
   const result = document.createElement(tag);

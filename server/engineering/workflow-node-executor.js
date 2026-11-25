@@ -1,6 +1,7 @@
 "use strict";
 
 const { resolveSources, withSources, sourceReferences } = require("./harness-sources");
+const { verifyResult } = require("./harness-result");
 const { problem, redact } = require("./state");
 
 function nodeExecutor(catalog, runner) {
@@ -28,6 +29,9 @@ function nodeExecutor(catalog, runner) {
     try {
       const sources = await resolveSources(harness.payload, catalog.project(project), workspace, inputs, timeout);
       const effective = withSources(harness.payload, sources);
+      if (effective.result && !node.outputs.some(({ path }) => path === effective.result.path)) {
+        throw problem(409, "Workflow node must declare the harness result file as an output: " + effective.result.path);
+      }
       for (let index = 0; index < (loop?.attempts ?? 1) && spent < budget; index++) {
         timeout.throwIfAborted();
         const output = await adapter.run({ cwd: workspace, instruction: node.instruction, harness: effective,
@@ -39,6 +43,11 @@ function nodeExecutor(catalog, runner) {
         if (spent > budget) break;
         timeout.throwIfAborted();
         feedback = checks.length ? await runner.verify(checks, workspace, timeout) : [];
+        const validation = await verifyResult(effective.result, workspace, timeout);
+        if (validation) {
+          attempts.at(-1).result = validation;
+          feedback.push({ command: "harness result", passed: validation.passed, log: validation.errors.join("\n") });
+        }
         attempts.at(-1).checks = feedback;
         if (feedback.every((check) => check.passed)) return { status: "succeeded", passed: true, costCents: spent, attempts };
       }

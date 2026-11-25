@@ -70,8 +70,12 @@ export function bindHarnessEditor({ find, options, newProfile }) {
   function payload() {
     const data = values();
     const markdown = data.getAll("skillMarkdown");
+    const shape = data.get("resultShape");
+    const value = { ...original };
+    delete value.result;
+    if (shape) value.result = { shape, path: data.get("resultPath"), fields: lines(data.get("resultFields")) };
     return {
-      ...original,
+      ...value,
       name: data.get("harnessName"),
       adapter: data.get("adapter"),
       model: data.get("harnessModel"),
@@ -105,6 +109,9 @@ export function bindHarnessEditor({ find, options, newProfile }) {
     get("agents").value = value.assets?.agents ?? "";
     get("sourceFiles").value = value.assets?.files?.join("\n") ?? "";
     get("sourceInputs").value = value.assets?.inputs?.join("\n") ?? "";
+    get("resultShape").value = value.result?.shape ?? "";
+    get("resultPath").value = value.result?.path ?? "";
+    get("resultFields").value = value.result?.fields?.join("\n") ?? "";
     get("mcp").value = JSON.stringify(value.assets?.mcp ?? {}, null, 2);
     get("hooks").value = JSON.stringify(value.assets?.hooks ?? {}, null, 2);
     options(get("harnessModel"), models, "모델 선택", value.model ?? "");

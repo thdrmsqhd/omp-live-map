@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const { constants } = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
-const { artifactPath } = require("./graph-definition");
+const { artifactPath } = require("./artifact-path");
 const { problem } = require("./state");
 
 const limit = 32 * 1024 * 1024;
@@ -67,7 +67,7 @@ function artifactDigest(workspace, relative, signal) {
 async function artifactText(workspace, reference, maxBytes, signal) {
   const chunks = [];
   const result = await readArtifact(workspace, reference.path, signal, maxBytes, (chunk) => chunks.push(Buffer.from(chunk)));
-  if (reference.sha256 !== result.sha256) throw problem(409, "Workflow artifact changed: " + reference.path);
+  if (reference.sha256 !== undefined && reference.sha256 !== result.sha256) throw problem(409, "Workflow artifact changed: " + reference.path);
   return { ...result, bytes: Buffer.concat(chunks) };
 }
 
