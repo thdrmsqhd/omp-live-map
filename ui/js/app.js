@@ -29,9 +29,10 @@ function applyGraphPatch(previous, patch) {
     if (!fields) return null;
     sessions.set(change.key, { ...fields, nodes });
   }
-  const ordered = patch.order.map((key) => sessions.get(key));
+  const ordered = patch.order ? patch.order.map((key) => sessions.get(key)) : [...sessions.values()];
   if (ordered.includes(undefined)) return null;
-  return { ...patch.meta, graphRevision: patch.revision, sessions: ordered };
+  const next = patch.meta ?? previous;
+  return { ...next, generatedAt: patch.generatedAt, graphRevision: patch.revision, sessions: ordered };
 }
 
 async function boot() {

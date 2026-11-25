@@ -66,7 +66,7 @@ let renderedSessionKeys = [];
 
 function renderGraphPatch(previous, patch) {
   if (previous !== renderedGraph || pendingRender || DEFER || typingNow() || patch.remove.length || JOBS.length) return false;
-  if (["env", "fx", "harness"].some((key) => JSON.stringify(previous[key]) !== JSON.stringify(DATA[key]))) return false;
+  if (patch.meta) return false;
   const sessions = filteredSessions();
   if (sessions.length !== renderedSessionKeys.length || sessions.some((session, i) => session.key !== renderedSessionKeys[i])) return false;
   const previousSessions = new Map(previous.sessions.map((session) => [session.key, session]));

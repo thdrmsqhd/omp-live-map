@@ -4,6 +4,7 @@
 "use strict";
 
 const { recordUser, recordAssistant, noteHourly, keepText } = require("../turns");
+const { invalidateMessageSize } = require("../msg-cap");
 
 // assistant usage → omp 가 쓰는 모양. 캐시 생성·읽기는 새 입력과 별도 토큰이다.
 function usageOf(u) {
@@ -48,6 +49,7 @@ function mergeAssistant(st, said, tools, ts) {
   }
   if (tools.length) msg.tools = [...new Set([...(msg.tools || []), ...tools])].slice(0, 12);
   msg.ts = ts;
+  invalidateMessageSize(msg);
 }
 
 function onAssistant(st, o, ts) {

@@ -18,17 +18,18 @@ function graphChanges(previous, next) {
   const changes = [];
   const removals = [...previous.entries.keys()].filter((key) => !next.entries.has(key));
   const order = [...next.entries.keys()];
-  const previousOrder = [...previous.entries.keys()];
+  const reordered = !sameOrder([...previous.entries.keys()], order);
+  const metadataChanged = previous.fields !== next.fields;
   for (const [key, session] of next.entries) {
     const old = previous.entries.get(key);
     const nodeOrder = [...session.nodes.keys()];
     const oldOrder = old ? [...old.nodes.keys()] : [];
     const upserts = nodeOrder.filter((id) => old?.nodes.get(id) !== session.nodes.get(id));
     const fields = old?.fields !== session.fields;
-    const reordered = !sameOrder(oldOrder, nodeOrder);
-    if (fields || reordered || upserts.length) changes.push({ key, fields, upserts, nodeOrder: reordered ? nodeOrder : undefined });
+    const nodesReordered = !sameOrder(oldOrder, nodeOrder);
+    if (fields || nodesReordered || upserts.length) changes.push({ key, fields, upserts, nodeOrder: nodesReordered ? nodeOrder : undefined });
   }
-  return { changes, removals, order, changed: changes.length > 0 || !sameOrder(previousOrder, order) || previous.fields !== next.fields };
+  return { changes, removals, order, reordered, metadataChanged, changed: changes.length > 0 || reordered || metadataChanged };
 }
 
 function sameOrder(a, b) {
@@ -51,12 +52,10 @@ function metadata(graph) {
 }
 
 function deltaFrame(previous, next, delta, version) {
-  const meta = `${metadata(next)}}`;
-  const order = JSON.stringify(delta.order);
   const remove = JSON.stringify(delta.removals);
   if (version !== 2) {
     const sessions = delta.changes.map(({ key }) => encodedSession(next.entries.get(key))).join(",");
-    return `data: {"graphDelta":{"meta":${meta},"order":${order},"remove":${remove},"upsert":[${sessions}]}}\n\n`;
+    return `data: {"graphDelta":{"meta":${metadata(next)}},"order":${JSON.stringify(delta.order)},"remove":${remove},"upsert":[${sessions}]}}\n\n`;
   }
   const changes = delta.changes.map(({ key, fields, upserts, nodeOrder }) => {
     const session = next.entries.get(key);
@@ -65,7 +64,9 @@ function deltaFrame(previous, next, delta, version) {
     const reorder = nodeOrder ? `,"order":${JSON.stringify(nodeOrder)}` : "";
     return `{"key":${JSON.stringify(key)},"upsert":[${nodes}]${props}${reorder}}`;
   }).join(",");
-  return `data: {"graphPatch":{"baseRevision":${previous.revision},"revision":${next.revision},"meta":${meta},"order":${order},"remove":${remove},"sessions":[${changes}]}}\n\n`;
+  const fullMetadata = delta.metadataChanged ? `,"meta":${next.fields}` : "";
+  const order = delta.reordered ? `,"order":${JSON.stringify(delta.order)}` : "";
+  return `data: {"graphPatch":{"baseRevision":${previous.revision},"revision":${next.revision},"generatedAt":${JSON.stringify(next.generatedAt ?? null)}${fullMetadata}${order},"remove":${remove},"sessions":[${changes}]}}\n\n`;
 }
 
 Object.assign(module.exports, { encodeGraph, graphChanges, snapshotFrame, deltaFrame });

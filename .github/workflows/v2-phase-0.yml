@@ -105,6 +105,9 @@ jobs:
             $env:OMP_BENCH_OUTPUT = Join-Path $out "$version.json"
             node --test tests/verification/graph-performance.cjs
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $env:OMP_MEMORY_OUTPUT = Join-Path $out "$version-backend-memory.json"
+            node tests/verification/backend-memory.cjs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

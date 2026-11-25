@@ -3,17 +3,35 @@
 "use strict";
 
 const { MSG_BUDGET } = require("./config");
+const sizes = new WeakMap();
+
+function messageSize(message) {
+  let size = sizes.get(message);
+  if (size === undefined) {
+    size = Buffer.byteLength(JSON.stringify(message)) + 1;
+    sizes.set(message, size);
+  }
+  return size;
+}
+
+function invalidateMessageSize(message) {
+  sizes.delete(message);
+}
 
 function capMessages(list) {
-  const all = [];
+  let total = 0;
   for (const s of list) {
     for (const n of s.nodes) {
-      if (!n.messages) continue;
-      n.messages.forEach((m, i) => all.push({ n, i, ts: m.ts || 0, size: Buffer.byteLength(JSON.stringify(m)) + 1 }));
+      for (const message of n.messages || []) total += messageSize(message);
     }
   }
-  let total = all.reduce((acc, x) => acc + x.size, 0);
   if (total <= MSG_BUDGET) return;
+  const all = [];
+  for (const { nodes } of list) {
+    for (const n of nodes) {
+      n.messages?.forEach((m, i) => all.push({ n, i, ts: m.ts || 0, size: messageSize(m) }));
+    }
+  }
   all.sort((a, b) => b.ts - a.ts || b.i - a.i);
   const keep = new Map(); // node -> Set(index)
   total = 0;
@@ -32,4 +50,4 @@ function capMessages(list) {
   }
 }
 
-module.exports = { capMessages };
+module.exports = { capMessages, invalidateMessageSize };

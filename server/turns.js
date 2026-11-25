@@ -2,6 +2,7 @@
 "use strict";
 
 const { MSG_KEEP } = require("./config");
+const { invalidateMessageSize } = require("./msg-cap");
 const { resultsOf, CALL_MAX } = require("./agent-msgs");
 
 const HOUR_MS = 3_600_000;
@@ -45,6 +46,7 @@ function recordAssistant(st, said, tools, ts, calls) {
     prev.tools = [...new Set([...prev.tools, ...tools])].slice(0, TOOL_TAGS);
     prev.ts = ts;
     if (calls && calls.length) prev.calls = [...(prev.calls || []), ...calls].slice(-CALL_MAX);
+    invalidateMessageSize(prev);
     return prev;
   }
   const msg = { role: "assistant", text: "", ts, tools: tools.slice(0, TOOL_TAGS), n: 1 };
