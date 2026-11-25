@@ -103,6 +103,22 @@
             <h4>프롬프트로 전달되는 순서</h4>
             <ol id="harness-preview-prompt"></ol>
           </div>
+          <details id="harness-trial">
+            <summary>동일 입력으로 비교 실행</summary>
+            <label>비교 기준 프로필 <select id="trial-baseline"></select></label>
+            <label>기준 버전 <select id="trial-version"></select></label>
+            <label>두 설정에 전달할 작업 지시 <textarea id="trial-instruction" rows="4" maxlength="12000"></textarea></label>
+            <div id="trial-materials"></div>
+            <div class="workflow-controls">
+              <label>실행별 예산(센트) <input id="trial-budget" type="number" min="1" max="100000" value="100"></label>
+              <label>비교 전체 제한 시간(분) <input id="trial-minutes" type="number" min="1" max="20" value="5"></label>
+              <button id="trial-start" type="button">기준 버전과 초안 실행</button>
+              <button id="trial-cancel" type="button" hidden>비교 취소</button>
+            </div>
+            <p id="trial-status" role="status"></p>
+            <div id="trial-results" class="harness-comparison" hidden></div>
+            <details id="trial-changes" hidden><summary>설정 변경 내역</summary><dl></dl></details>
+          </details>
         </fieldset>
         <pre id="definition-diff" aria-label="현재 버전과의 변경 내역" hidden></pre>
         <label id="definition-json">정의 설정 <textarea id="payload" name="payload" required spellcheck="false" rows="14"></textarea></label>

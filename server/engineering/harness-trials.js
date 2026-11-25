@@ -28,6 +28,24 @@ function profileInfo({ record, harness, model }) {
       reasoning: model.payload.reasoning } };
 }
 
+function configurationDiff(baseline, draft) {
+  const settings = ({ harness, model }) => ({
+    role: harness.role,
+    instructions: harness.instructions,
+    adapter: harness.adapter,
+    model: model.payload.model + " v" + model.version,
+    rules: harness.assets?.agents ?? "",
+    skills: (harness.assets?.skills ?? []).map(({ name, markdown }) => name + ": " + hash(markdown).slice(0, 12)),
+    files: harness.assets?.files ?? [],
+    inputs: harness.assets?.inputs ?? [],
+    result: harness.result ?? null,
+  });
+  const before = settings(baseline);
+  const after = settings(draft);
+  return Object.keys(before).flatMap((key) => JSON.stringify(before[key]) === JSON.stringify(after[key])
+    ? [] : [{ key, before: before[key], after: after[key] }]);
+}
+
 function harnessTrials(catalog, runner, workspace, budget) {
   const trials = new Map();
   const active = new Map();
@@ -40,7 +58,7 @@ function harnessTrials(catalog, runner, workspace, budget) {
 
   function view(trial) {
     return { id: trial.id, commit: trial.commit, inputHash: trial.inputHash, modelChanged: trial.modelChanged,
-      status: trial.status, results: trial.results, materialHashes: sourceReferences([...trial.materials.values()]),
+      status: trial.status, results: trial.results, changes: configurationDiff(trial.profiles.baseline, trial.profiles.draft), materialHashes: sourceReferences([...trial.materials.values()]),
       profiles: Object.fromEntries(sides.map((side) => [side, profileInfo(trial.profiles[side])])),
     };
   }
