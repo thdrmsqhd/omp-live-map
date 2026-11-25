@@ -4,8 +4,8 @@ const {ROOT}=require("../config");
 const dir=process.env.OMP_MAP_STATE||path.join(ROOT,"data"),file=path.join(dir,"claude-options.json");
 function load(){try{return JSON.parse(fs.readFileSync(file,"utf8"));}catch{return {};}}
 const key=id=>process.platform==="win32"?path.normalize(id).toLowerCase():path.normalize(id);
-function get(id){return load()[key(id)]||{permission:"default",effort:"default"};}
-function set(id,opts){const permission=String(opts.permission||"default"),effort=String(opts.effort||"default"),protocol=opts.protocol==="stream"?"stream":"turn";
+function get(id){return {permission:"default",effort:"default",protocol:"stream",...(load()[key(id)]||{})};}
+function set(id,opts){const permission=String(opts.permission||"default"),effort=String(opts.effort||"default"),protocol=opts.protocol==="turn"?"turn":"stream";
  if(!["default","acceptEdits","plan","dontAsk"].includes(permission)||!["default","low","medium","high","max"].includes(effort))return {ok:false,out:"지원하지 않는 실행 옵션"};
  try{const data=load();data[key(id)]={permission,effort,protocol};fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(file+".tmp",JSON.stringify(data));fs.renameSync(file+".tmp",file);return {ok:true,options:data[key(id)]};}catch(e){return {ok:false,out:e.message};}
 }
