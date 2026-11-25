@@ -26,26 +26,23 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - name: Build Windows installer
-        run: |
-          npm --prefix desktop pkg set version=8.2.0
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm --prefix desktop install --package-lock=false
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm --prefix desktop run build:windows -- --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - uses: actions/upload-artifact@v4
+      - name: Download the v8.2.0 installer from the first build
+        uses: actions/download-artifact@v4
         with:
           name: OMP-Live-Map-8.2.0-Windows-x64
-          path: desktop/dist/OMP-Live-Map-V3-Setup.exe
-          if-no-files-found: error
+          path: desktop/dist
+          run-id: 45572921187
+          github-token: ${{ github.token }}
       - name: Install on hosted Windows and verify local assets
         run: |
           $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
           $setup = Join-Path $PWD 'desktop/dist/OMP-Live-Map-V3-Setup.exe'
           $result = Start-Process -FilePath $setup -ArgumentList '/S',"/D=$target" -Wait -PassThru
-          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
+          if ($result.ExitCode -ne 0) {
+            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddMinutes(-3)} -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -match 'OMP-Live-Map-V3-Setup' } | Format-List TimeCreated, Message
+            throw "Installer failed: $($result.ExitCode)"
+          }
           $env:OMP_MAP_INSTALLED_EXE = Join-Path $target 'OMP Live Map V3.exe'
           if (!(Test-Path -LiteralPath $env:OMP_MAP_INSTALLED_EXE)) { throw 'Installed executable not found' }
           npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
