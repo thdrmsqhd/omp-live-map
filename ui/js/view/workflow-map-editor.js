@@ -66,8 +66,8 @@ function wfPortOptions() {
 
 function wfRenderConnections() {
   const graph = wfMap.edit.payload;
-  wfReplaceOptions(wfEditFrom, graph.nodes.filter(({ type }) => type !== "end").map(({ id, label }) => wfOption(id, label)));
-  wfReplaceOptions(wfEditTo, graph.nodes.filter(({ type }) => type !== "start").map(({ id, label }) => wfOption(id, label)));
+  wfReplaceOptions(wfEditFrom, graph.nodes.filter(({ type }) => !["end", "profile"].includes(type)).map(({ id, label }) => wfOption(id, label)));
+  wfReplaceOptions(wfEditTo, graph.nodes.filter(({ type }) => !["start", "profile"].includes(type)).map(({ id, label }) => wfOption(id, label)));
   wfPortOptions();
   const label = (id) => graph.nodes.find((node) => node.id === id)?.label ?? id;
   $("wf-edit-edges").replaceChildren(...graph.edges.map((edge, index) => {

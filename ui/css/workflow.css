@@ -130,3 +130,8 @@
 #sdlc-board section { border: 1px solid #56647b; border-radius: .5rem; padding: .65rem; }
 #sdlc-board h3, #sdlc-board h4 { overflow-wrap: anywhere; }
 #sdlc-board article { margin-bottom: .65rem; padding: .55rem; border: 1px solid #56647b; border-radius: .35rem; }
+
+.workflow-node[data-type="profile"] { --node-accent: #b8a4ff; border-color: var(--node-accent); }
+.workflow-port[data-port="profile"], .workflow-port[data-input-kind="profile"] { --port: #baa8ff; }
+#workflow-lines path[data-state="profile"] { stroke: #baa8ff; stroke-dasharray: 6 4; }
+#workflow-linked-profile { color: var(--accent); margin: .35rem 0; }

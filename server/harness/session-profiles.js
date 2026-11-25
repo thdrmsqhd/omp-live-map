@@ -19,6 +19,13 @@ function store() {
       CREATE TABLE IF NOT EXISTS profiles (
         id TEXT PRIMARY KEY, version INTEGER NOT NULL, payload TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS profile_history (
+        id TEXT NOT NULL, version INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (id, version)
+      );
+      CREATE TRIGGER IF NOT EXISTS archive_profile_update BEFORE UPDATE ON profiles
+      BEGIN INSERT INTO profile_history VALUES (OLD.id, OLD.version, OLD.payload); END;
+      CREATE TRIGGER IF NOT EXISTS archive_profile_delete BEFORE DELETE ON profiles
+      BEGIN INSERT INTO profile_history VALUES (OLD.id, OLD.version, OLD.payload); END;
       CREATE TABLE IF NOT EXISTS assignments (
         session TEXT PRIMARY KEY, payload TEXT NOT NULL
       );
@@ -43,6 +50,12 @@ function get(id, version) {
   const row = store().prepare("SELECT id, version, payload FROM profiles WHERE id=? AND version=?").get(id, version);
   if (!row) throw new Error("하네스가 변경되었거나 삭제되었습니다. 목록을 다시 열어 주세요.");
   return unpack(row);
+}
+
+function pinned(id, version) {
+  const row = store().prepare(`SELECT id, version, payload FROM profiles WHERE id=? AND version=?
+    UNION ALL SELECT id, version, payload FROM profile_history WHERE id=? AND version=?`).get(id, version, id, version);
+  return row && unpack(row);
 }
 
 function field(value, limit, label) {
@@ -105,4 +118,9 @@ function systemPrompt(profile) {
   return [profile.role && "Role: " + profile.role, profile.instructions].filter(Boolean).join("\n\n");
 }
 
-module.exports = { list, get, save, remove, assign, assigned, systemPrompt };
+function close() {
+  db?.close();
+  db = undefined;
+}
+
+module.exports = { close, list, get, pinned, save, remove, assign, assigned, systemPrompt };

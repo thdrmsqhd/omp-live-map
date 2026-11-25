@@ -19,10 +19,11 @@ function paintWorkflowMap() {
     const p = wfPoint(node), status = executions.get(node.id)?.status;
     button.style.left = p.x + "px";
     button.style.top = p.y + "px";
-    button.dataset.status = status ?? "queued";
+    button.dataset.status = node.type === "profile" ? "profile" : status ?? "queued";
     button.setAttribute("aria-pressed", String(node.id === wfMap.selected));
     button.firstChild.textContent = node.label;
-    button.lastChild.textContent = wfMap.edit ? wfEditTypes[node.type] ?? node.type : wfLabel(status);
+    button.lastChild.textContent = node.type === "profile" ? "프로필 · v" + node.profileVersion
+      : wfMap.edit ? wfEditTypes[node.type] ?? node.type : wfLabel(status);
   }
   wfPaintEdges();
   paintMinimap();

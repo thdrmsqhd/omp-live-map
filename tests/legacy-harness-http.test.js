@@ -123,6 +123,7 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
       const remaining = [...children];
       for (const { child } of remaining) child.kill();
       await Promise.all(remaining.map(({ closed }) => closed));
+      require("../server/harness/session-profiles").close();
     }
   });
 });

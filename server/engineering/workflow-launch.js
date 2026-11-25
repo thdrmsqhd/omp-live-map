@@ -4,6 +4,7 @@ const { createHash } = require("node:crypto");
 const { integer, string } = require("./definitions");
 const { buildPreset, listPresets } = require("./workflow-presets");
 const { problem } = require("./state");
+const { nodeDefinitions } = require("./workflow-node-executor");
 
 function profile(catalog, project, ref, kind) {
   const entry = catalog.versionOf(string(ref?.id, kind), integer(ref?.version, "definition version", 1, Number.MAX_SAFE_INTEGER));
@@ -36,16 +37,13 @@ function makePreset(catalog, project, source) {
   return { ...document, name: preset.name + " · " + key };
 }
 
-function prepareRuntime(catalog, runner, plan) {
+function prepareRuntime(catalog, runner, plan, project) {
   const nodes = plan.document.nodes.filter(({ type }) => ["agent", "loop", "command"].includes(type));
   const status = runner.status?.();
   if (nodes.length && status && status.status !== "ready") throw problem(409, status.detail);
-  for (const node of nodes.filter(({ definition }) => definition)) {
-    const entry = catalog.versionOf(node.definition, node.version);
-    const harness = node.type === "loop" ? catalog.dependency(entry) : entry;
-    const model = harness && catalog.dependency(harness);
-    if (!model) throw problem(409, node.label + " · 연결된 하네스나 모델이 없습니다.");
-    try { runner.requireAdapter(harness.payload, model.payload, node.type === "loop" ? entry.payload.checks : []); }
+  for (const node of nodes.filter(({ type }) => type !== "command")) {
+    const { harness, model, loop } = nodeDefinitions(catalog, project, node);
+    try { runner.requireAdapter(harness.payload, model.payload, loop?.checks ?? []); }
     catch (error) {
       if (error.status !== 409) throw error;
       throw problem(409, node.label + " · " + error.message);
@@ -65,7 +63,7 @@ function quickLaunch(catalog, workflows, flow, runner, input) {
     prepare() {
       const stored = source.workflow ? workflows.get(project, source.workflow, source.version) : null;
       const payload = stored?.payload ?? makePreset(catalog, project, source);
-      prepareRuntime(catalog, runner, workflows.executionPlan(project, payload, stored?.id));
+      prepareRuntime(catalog, runner, workflows.executionPlan(project, payload, stored?.id), project);
       return stored ?? workflows.ensurePreset(project, payload);
     },
   });

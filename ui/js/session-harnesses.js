@@ -31,6 +31,7 @@ export function bindSessionHarnesses(find) {
 
   async function load(id = list.value) {
     ({ profiles } = await request());
+    form.dispatchEvent(new CustomEvent("profileschange", { bubbles: true, detail: profiles }));
     list.replaceChildren(new Option("새 하네스", ""),
       ...profiles.map((profile) => new Option(`${profile.name} · v${profile.version}`, profile.id)));
     list.value = profiles.some((profile) => profile.id === id) ? id : "";

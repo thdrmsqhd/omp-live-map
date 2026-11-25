@@ -5,13 +5,14 @@ import { bindTemplateButtons } from "./workflow-templates.js";
 
 const types = {
   start: "Start", end: "End", agent: "Agent", command: "Command", loop: "Loop",
-  condition: "Condition", parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph",
+  condition: "Condition", parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph", profile: "에이전트 프로필",
 };
-const ports = { end: [], condition: ["true", "false"], approval: ["approved", "rejected"] };
+const ports = { end: [], profile: ["profile"], condition: ["true", "false"], approval: ["approved", "rejected"] };
 const outputOf = (type) => ports[type] ?? ["next"];
 const inputY = 54;
+const profileInputY = 76;
 const portY = (type, port) => outputOf(type).length === 1 ? inputY : 54 + 22 * outputOf(type).indexOf(port);
-const portLabels = { next: "다음", true: "참", false: "거짓", approved: "승인", rejected: "거절" };
+const portLabels = { next: "다음", true: "참", false: "거짓", approved: "승인", rejected: "거절", profile: "프로필" };
 const statusLabels = {
   queued: "대기", running: "실행 중", waiting_approval: "승인 대기", succeeded: "완료",
   failed: "실패", skipped: "건너뜀", interrupted: "중단", paused: "일시정지", canceled: "취소",
@@ -34,7 +35,24 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
   const el = (name) => find("workflow-" + name);
   const selector = el("list"), form = el("node-form");
   let project = "", workflow, selected, documentState = blank(), runDetail, workflows = [];
-  let runNode, connection, preview;
+  let runNode, connection, preview, profiles = [], refreshedProfiles = false;
+  const profileList = el("profile-list");
+  const activeProfile = () => profiles.find(({ id }) => id === profileList.value);
+  const updateProfileButton = () => { el("add-profile").disabled = !activeProfile(); };
+  profileList.onchange = updateProfileButton;
+  function showProfiles(entries) {
+    profiles = entries;
+    choices(profileList, [["", "프로필 선택"], ...entries.map(({ id, name, version }) => [id, `${name} · v${version}`])]);
+    updateProfileButton();
+    showProfileVersion();
+  }
+  find("session-harness-editor").addEventListener("profileschange", ({ detail }) => {
+    refreshedProfiles = true;
+    showProfiles(detail);
+  });
+  fetch("/api/session-harnesses").then((response) => response.json()).then((result) => {
+    if (result.ok && !refreshedProfiles) showProfiles(result.profiles);
+  }).catch(() => {});
   const graph = () => runDetail?.graph ?? documentState;
   const canvas = bindWorkflowCanvas(el, () => setConnection(null));
   let pendingFit;
@@ -66,7 +84,7 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       open(record);
     }
   } });
-  choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end"].includes(type)));
+  choices(el("type"), Object.entries(types).filter(([type]) => !["start", "end", "profile"].includes(type)));
   function draw() {
     const { nodes, edges } = graph();
     const lines = el("lines");
@@ -86,8 +104,8 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       const source = states.get(from), destination = states.get(to);
       const active = source?.status === "succeeded" && (source.outcome?.port ?? "next") === port &&
         destination && destination.status !== "skipped";
-      wire(start.x + nodeWidth, start.y + portY(start.type, port), target.x, target.y + inputY,
-        runDetail ? (active ? "active" : "inactive") : port);
+      wire(start.x + nodeWidth, start.y + portY(start.type, port), target.x, target.y + (port === "profile" ? profileInputY : inputY),
+        port === "profile" ? port : runDetail ? (active ? "active" : "inactive") : port);
     }
     const source = connection && positions.get(connection.from);
     if (source && preview) {
@@ -105,38 +123,47 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
     el("viewport").classList.toggle("is-connecting", Boolean(next));
     const source = next && documentState.nodes.find(({ id }) => id === next.from);
     el("graph-help").textContent = message ?? (source
-      ? `${source.label} · ${portLabels[next.port]} → 입력 포트를 선택하세요. Esc로 취소`
+      ? `${source.label} · ${portLabels[next.port]} → ${next.port === "profile" ? "Agent의 프로필 입력을" : "입력 포트를"} 선택하세요. Esc로 취소`
       : runDetail ? "노드를 선택하면 해당 단계의 실행 결과를 볼 수 있습니다." : graphHint);
     draw();
   }
-  function connect({ from, to, port }) {
+  function connect({ from, to, port }, input = port === "profile" ? "profile" : "flow") {
     const source = documentState.nodes.find(({ id }) => id === from);
     const target = documentState.nodes.find(({ id }) => id === to);
     if (!source || !target || from === to || target.type === "start" || !outputOf(source.type).includes(port)) {
       setConnection(connection, "서로 다른 노드의 출력과 입력을 연결하세요.");
       return;
     }
+    if (port === "profile" ? target.type !== "agent" || input !== "profile" : target.type === "profile" || input !== "flow") {
+      setConnection(connection, "프로필은 Agent의 프로필 입력에, 실행 순서는 일반 입력에 연결하세요.");
+      return;
+    }
     if (documentState.edges.some((edge) => edge.from === from && edge.to === to && edge.port === port)) {
       setConnection(null, "이미 연결된 포트입니다.");
       return;
     }
+    if (port === "profile") {
+      documentState.edges = documentState.edges.filter((edge) => edge.to !== to || edge.port !== "profile");
+    }
     documentState.edges.push({ from, to, port });
+    if (port === "profile" && selected === to) showInspector();
     setConnection(null, `${source.label} → ${target.label} 연결됨`);
     renderEdges();
   }
-  function portButton(node, port) {
+  function portButton(node, port, input = "flow") {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "workflow-port";
-    const caption = portLabels[port] ?? "입력";
+    const caption = portLabels[port] ?? (input === "profile" ? "프로필" : "입력");
     button.textContent = caption;
-    button.style.top = (port ? portY(node.type, port) : inputY) + "px";
+    button.style.top = (port ? portY(node.type, port) : input === "profile" ? profileInputY : inputY) + "px";
     button.dataset.direction = port ? "output" : "input";
-    button.setAttribute("aria-label", node.label + " · " + (port ? caption + " 출력" : caption));
+    button.setAttribute("aria-label", node.label + " · " + (port ? caption + " 출력" : input === "profile" ? "프로필 입력" : caption));
     if (!port) {
       button.dataset.input = node.id;
+      button.dataset.inputKind = input;
       button.onclick = () => {
-        if (connection) connect({ ...connection, to: node.id });
+        if (connection) connect({ ...connection, to: node.id }, input);
         else setConnection(null, "연결할 출력 포트를 먼저 선택하세요.");
       };
       return button;
@@ -160,7 +187,7 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
     button.onpointerup = (event) => {
       if (!button.hasPointerCapture(event.pointerId) || connection !== start) return;
       const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-input]");
-      if (target) connect({ ...start, to: target.dataset.input });
+      if (target) connect({ ...start, to: target.dataset.input }, target.dataset.inputKind);
       else setConnection(start);
     };
     button.onpointercancel = () => setConnection(null);
@@ -195,7 +222,8 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       showSelection();
     });
     if (runDetail) return card;
-    if (node.type !== "start") card.append(portButton(node));
+    if (!["start", "profile"].includes(node.type)) card.append(portButton(node));
+    if (node.type === "agent") card.append(portButton(node, null, "profile"));
     for (const port of outputOf(node.type)) card.append(portButton(node, port));
     button.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || !event.isPrimary) return;
@@ -226,7 +254,8 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
     for (const card of el("nodes").children) {
       const status = states.get(card.dataset.node) ?? "";
       card.dataset.status = status;
-      card.querySelector("small").textContent = [types[card.dataset.type], statusLabels[status] ?? status].filter(Boolean).join(" · ");
+      const version = graph().nodes.find(({ id }) => id === card.dataset.node)?.profileVersion;
+      card.querySelector("small").textContent = [types[card.dataset.type], version && "v" + version, statusLabels[status] ?? status].filter(Boolean).join(" · ");
     }
     draw();
   }
@@ -254,7 +283,7 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
     const nodes = documentState.nodes;
     const entries = nodes.map(({ id, label }) => [id, label]);
     choices(el("from"), entries.filter(([id]) => nodes.find((node) => node.id === id).type !== "end"));
-    choices(el("to"), entries.filter(([id]) => nodes.find((node) => node.id === id).type !== "start"));
+    choices(el("to"), entries.filter(([id]) => !["start", "profile"].includes(nodes.find((node) => node.id === id).type)));
     outputPorts();
     el("edge-summary").textContent = `연결 (${documentState.edges.length})`;
     el("edges").replaceChildren(...documentState.edges.map((edge, index) => {
@@ -263,18 +292,40 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       remove.type = "button";
       remove.textContent = "삭제";
       remove.setAttribute("aria-label", `${name(edge.from)} → ${name(edge.to)} 연결 삭제`);
-      remove.onclick = () => { documentState.edges.splice(index, 1); renderEdges(); draw(); };
+      remove.onclick = () => { documentState.edges.splice(index, 1); if (edge.port === "profile") showInspector(); renderEdges(); draw(); };
       line.append(name(edge.from) + " → " + name(edge.to) + " · " + portLabels[edge.port], remove);
       return line;
     }));
   }
+  function showProfileVersion() {
+    const item = documentState.nodes.find(({ id, type }) => id === selected && type === "profile");
+    el("profile-version").hidden = !item;
+    if (!item) return;
+    const latest = profiles.find(({ id }) => id === item.profileId);
+    el("profile-version-caption").textContent = `연결에 사용할 버전 · v${item.profileVersion}`;
+    el("update-profile").disabled = !latest?.model || latest.version <= item.profileVersion;
+  }
+  el("update-profile").onclick = () => {
+    const item = documentState.nodes.find(({ id, type }) => id === selected && type === "profile");
+    const latest = item && profiles.find(({ id }) => id === item.profileId);
+    if (!latest?.model || latest.version <= item.profileVersion) return;
+    item.profileVersion = latest.version;
+    el("status").textContent = `프로필 v${latest.version}이 초안에 적용됐습니다. Workflow를 저장하세요.`;
+    showProfileVersion();
+    showRunStates();
+  };
   function showInspector() {
     const nodes = documentState.nodes;
     const item = nodes.find(({ id }) => selected === id);
     form.hidden = Boolean(runDetail) || !item;
     el("inspector-empty").hidden = Boolean(runDetail) || Boolean(item);
     if (runDetail) return;
-    harness.show(item);
+    const linked = documentState.edges.find(({ to, port }) => to === selected && port === "profile");
+    harness.show(item, linked && nodes.find(({ id }) => id === linked.from));
+    const profile = item?.type === "profile";
+    showProfileVersion();
+    el("node-settings").hidden = profile;
+    form.elements.settings.disabled = profile;
     if (item) {
       const { id, type, x, y, label, ...settings } = item;
       form.elements.label.value = label;
@@ -322,24 +373,42 @@ export function bindWorkflow({ find, request, report, definitions, editHarness }
       condition: { source: "", field: "passed", equals: true }, approval: { prompt: "" },
       subgraph: { workflow: workflows.find((item) => item.id !== workflow?.id)?.id ?? "" },
     };
+    addNode({ id, type, label: types[type], ...config[type] });
+  });
+  el("add-profile").addEventListener("click", () => {
+    const profile = activeProfile();
+    if (!profile) return;
+    if (!profile.model) {
+      el("status").textContent = "에이전트 프로필 설정에서 Workflow에 사용할 모델을 지정하세요.";
+      return;
+    }
+    addNode({ id: crypto.randomUUID(), type: "profile", label: profile.name, profileId: profile.id, profileVersion: profile.version });
+  });
+  function addNode(node) {
     const viewport = el("viewport").getBoundingClientRect();
     const center = canvas.point(viewport.left + viewport.width / 2, viewport.top + viewport.height / 2);
     const x = bound(center.x - nodeWidth / 2), centerY = bound(center.y - nodeHeight / 2);
     let y = centerY;
     while (y < 10000 && documentState.nodes.some((node) => Math.abs(node.x - x) < nodeWidth &&
       Math.abs(node.y - y) < nodeHeight)) y = bound(y + nodeHeight + 12);
-    documentState.nodes.push({ id, type, label: types[type], x, y, ...config[type] });
-    selected = id;
+    documentState.nodes.push({ ...node, x, y });
+    selected = node.id;
     render();
     const added = el("nodes").lastElementChild.getBoundingClientRect();
     if (added.bottom > viewport.bottom || added.top < viewport.top || added.right > viewport.right || added.left < viewport.left) fit();
-  });
+  }
   el("connect").addEventListener("click", () => {
     connect({ from: el("from").value, to: el("to").value, port: el("port").value });
   });
   form.addEventListener("submit", report(async () => {
     const index = documentState.nodes.findIndex(({ id }) => selected === id);
-    const { id, type, x, y } = documentState.nodes[index];
+    const node = documentState.nodes[index];
+    const { id, type, x, y } = node;
+    if (type === "profile") {
+      node.label = form.elements.label.value;
+      render();
+      return;
+    }
     const settings = JSON.parse(form.elements.settings.value);
     if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("노드 설정은 JSON 객체여야 합니다.");
     documentState.nodes[index] = { ...harness.apply(settings), id, type, x, y, label: form.elements.label.value };

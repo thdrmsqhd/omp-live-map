@@ -26,7 +26,10 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
     if (id && ![...results.children].some((item) => item.dataset.node === id)) {
       const empty = document.createElement("li");
       empty.dataset.noResult = "";
-      empty.textContent = "이 노드의 실행 결과가 아직 없습니다.";
+      const node = selected?.graph?.nodes.find((item) => item.id === id);
+      empty.textContent = node?.type === "profile"
+        ? `${node.label} · 연결된 Agent에 적용된 프로필 v${node.profileVersion}`
+        : "이 노드의 실행 결과가 아직 없습니다.";
       results.append(empty);
     }
   }
