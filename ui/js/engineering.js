@@ -123,6 +123,15 @@ find("actions").addEventListener("click", report(async (event) => {
 }));
 const views = ["design", "workflow", "session-harnesses", "sdlc", "execution"];
 const loadSessionHarnesses = bindSessionHarnesses(find);
+const profileDialog = find("workflow-profile-dialog");
+const profileEditor = find("session-harness-editor");
+find("workflow-open-profiles").onclick = () => {
+  find("workflow-profile-host").append(profileEditor);
+  profileDialog.showModal();
+  void loadSessionHarnesses();
+};
+find("workflow-close-profiles").onclick = () => profileDialog.close();
+profileDialog.addEventListener("close", () => find("session-harness-host").append(profileEditor));
 for (const view of views) {
   find(view + "-nav").addEventListener("click", () => {
     find("engineering-context").hidden = view === "session-harnesses";

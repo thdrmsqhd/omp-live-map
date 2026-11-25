@@ -54,5 +54,16 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .harness-comparison pre { max-height: 18rem; overflow: auto; }
 @media (max-width: 620px) { .harness-comparison { grid-template-columns: 1fr; } }
 .session-harnesses { max-width: 42rem; }
-.session-harnesses > p { color: var(--muted); }
+#session-harness-editor > p { color: var(--muted); }
 #session-harness-status { color: var(--accent); margin: 0; }
+#workflow-profile-dialog {
+  width: min(40rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: .65rem;
+  padding: 1rem;
+  box-shadow: 0 10px 48px #0008;
+}
+#workflow-profile-dialog::backdrop { background: #090a10b8; }
