@@ -1,0 +1,132 @@
+name: OMP Live Map v8.1.0 Windows release
+
+on:
+  push:
+    branches: ['release/v8.1.0-windows']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omp-release-v8.1.0
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: '194636c81ff94af721d565699d3aa7de0844b1f3'
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Existing regression tests
+        run: node --test
+      - name: Windows Git Bash terminal API
+        run: node tests/verification/windows-shell.cjs
+      - name: Windows AppContainer proof
+        if: ${{ !cancelled() }}
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs) { throw 'Visual Studio C++ tools are unavailable' }
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $exe = Join-Path $env:RUNNER_TEMP 'omp-appcontainer.exe'
+          $obj = Join-Path $env:RUNNER_TEMP 'omp-appcontainer.obj'
+          $compile = 'call "' + $vcvars + '" && cl /nologo /W4 /EHsc /std:c++17 /MT /Fo:"' + $obj + '" /Fe:"' + $exe + '" tests/verification/appcontainer.cpp /link userenv.lib advapi32.lib ws2_32.lib'
+          cmd.exe /d /c $compile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/verification/appcontainer.cjs $exe
+      - name: SQLite recovery probe
+        if: ${{ !cancelled() }}
+        run: node tests/verification/sqlite.cjs
+      - name: Prepare Electron and Chromium
+        if: ${{ !cancelled() }}
+        id: prepare
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12 monaco-editor@0.52.2
+          npx playwright install --only-shell chromium
+      - name: Electron desktop lifecycle proof
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: node tests/verification/electron.cjs
+      - name: Browser regression and 10-session measurement
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: node tests/verification/browser.cjs
+      - name: Upload V4 UX screenshots
+        if: ${{ !cancelled() && github.ref_name == 'v4/ui-ux-improvements' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: V4-UX-screenshots
+          path: artifacts/v4-ux/*.png
+          if-no-files-found: error
+      - name: Product desktop UI and protected API
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: node tests/verification/engineering-desktop.cjs
+  installer:
+    needs: windows
+    permissions:
+      contents: write
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: '194636c81ff94af721d565699d3aa7de0844b1f3'
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Build Windows installer
+        run: |
+          npm --prefix desktop pkg set version=8.1.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop install --package-lock=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop run build:windows -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OMP-Live-Map-8.1.0-Windows-x64
+          path: desktop/dist/OMP-Live-Map-V3-Setup.exe
+          if-no-files-found: error
+      - name: Install on hosted Windows and verify local assets
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
+          $setup = Join-Path $PWD 'desktop/dist/OMP-Live-Map-V3-Setup.exe'
+          $result = Start-Process -FilePath $setup -ArgumentList '/S',"/D=$target" -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
+          $env:OMP_MAP_INSTALLED_EXE = Join-Path $target 'OMP Live Map V3.exe'
+          if (!(Test-Path -LiteralPath $env:OMP_MAP_INSTALLED_EXE)) { throw 'Installed executable not found' }
+          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/verification/engineering-desktop.cjs
+      - name: Verify uninstall retains workspace data
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
+          $data = Join-Path $env:APPDATA 'OMP Live Map V3'
+          $marker = Join-Path $data 'retention-test.txt'
+          New-Item -ItemType Directory -Path $data -Force | Out-Null
+          Set-Content -Path $marker -Value 'preserve'
+          $uninstall = Get-ChildItem -LiteralPath $target -Filter 'Uninstall*.exe' | Select-Object -First 1
+          if (!$uninstall) { throw 'Uninstaller not found' }
+          $result = Start-Process -FilePath $uninstall.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($result.ExitCode -ne 0 -or !(Test-Path -LiteralPath $marker)) { throw 'Uninstall retention check failed' }
+      - name: Attach verified installer to v8.1.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'v8.1.0'
+          $tagCommit = (gh api "repos/$env:GITHUB_REPOSITORY/commits/$tag" --jq .sha)
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne (git rev-parse HEAD)) {
+            throw "Tag $tag does not match the verified source commit"
+          }
+          $asset = 'OMP-Live-Map-8.1.0-Windows-x64-Setup.exe'
+          Copy-Item -LiteralPath 'desktop/dist/OMP-Live-Map-V3-Setup.exe' -Destination $asset
+          $checksum = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath SHA256SUMS.txt -Value "$checksum  $asset" -Encoding ascii
+          gh release upload $tag $asset SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
