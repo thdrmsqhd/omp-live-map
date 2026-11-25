@@ -42,7 +42,7 @@ async function boot() {
   es.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
     if (data.live) handleLiveEvent(data.live);
-    else if(data.queue){const q=data.queue;chatState(q.node).ccQueue=q;liveTouch(q.node);return;} if (data.chat) handleChatEvent(data.chat);
+    else if(data.queue){const q=data.queue;chatState(q.node).ccQueue=q;liveTouch(q.node);return;} else if (data.chat) handleChatEvent(data.chat);
     else if (data.ask) handleAskEvent(data.ask);
     else apply(data);
   };

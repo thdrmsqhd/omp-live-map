@@ -6,7 +6,7 @@ function bookmarkKey(m){return String(m.id||m.uuid||[m.role,m.ts||m.since||0,Str
 function chatBookmarks(id){const v=readJSON("omp-map-chat-bookmarks:"+id,[]);return Array.isArray(v)?v:[];}
 function highlightChatCode(code){if(!code||code.dataset.highlighted)return;const lang=String(code.dataset.lang||"").toLowerCase();if(!/^(js|javascript|ts|typescript|py|python|java|cpp|c|rust|rs|go|json|sql|bash|sh)$/.test(lang))return;const text=code.textContent;if(text.length>30000)return;const re=/("(?:\\.|[^"\\])*"|\x27(?:\\.|[^\x27\\])*\x27|\b(?:const|let|var|function|class|return|if|else|for|while|import|from|def|async|await|try|catch|throw|public|private|fn|struct|impl|match|select|where|true|false|null|None)\b|\b\d+(?:\.\d+)?\b)/gi;let pos=0;const frag=document.createDocumentFragment();for(const m of text.matchAll(re)){frag.append(document.createTextNode(text.slice(pos,m.index)));const span=document.createElement("span");span.className=/^["\x27]/.test(m[0])?"code-str":/^\d/.test(m[0])?"code-num":"code-key";span.textContent=m[0];frag.append(span);pos=m.index+m[0].length;}frag.append(document.createTextNode(text.slice(pos)));code.replaceChildren(frag);code.dataset.highlighted="1";}
 function chatViewPrefs(id){const p=readJSON("omp-map-chat-view:"+id,{});return {font:Math.max(12,Math.min(18,Number(p?.font)||14))};}
-function patchChatRows(host,html){const t=document.createElement("template");t.innerHTML=html;const old=new Map([...host.children].filter(x=>x.dataset.chatKey).map(x=>[x.dataset.chatKey,x]));let cursor=host.firstElementChild;for(const fresh of [...t.content.children]){let node=fresh;const prev=old.get(fresh.dataset.chatKey);if(prev){old.delete(fresh.dataset.chatKey);if(prev.__source===fresh.outerHTML||prev.outerHTML===fresh.outerHTML)node=prev;else if(fresh.dataset.chatKey==="stream"){const tx=prev.querySelector(".tx"),next=fresh.querySelector(".tx");if(tx&&next){tx.innerHTML=next.innerHTML;node=prev;}}}node.__source=fresh.outerHTML;if(node!==cursor)host.insertBefore(node,cursor);cursor=node.nextElementSibling;}while(cursor){const next=cursor.nextElementSibling;cursor.remove();cursor=next;}for(const pre of host.querySelectorAll(".cmsg pre")){if(pre.parentElement.classList.contains("chat-code"))continue;const wrap=document.createElement("div");wrap.className="chat-code";const bar=document.createElement("header");const lang=document.createElement("span");lang.textContent=pre.querySelector("code")?.dataset.lang||"code";const btn=document.createElement("button");btn.dataset.codeCopy="1";btn.textContent="코드 복사";bar.append(lang,btn);pre.before(wrap);wrap.append(bar,pre);highlightChatCode(pre.querySelector("code"));}}
+function patchChatRows(host,html){const t=document.createElement("template");t.innerHTML=html;const old=new Map([...host.children].filter(x=>x.dataset.chatKey).map(x=>[x.dataset.chatKey,x]));let cursor=host.firstElementChild;for(const fresh of [...t.content.children]){let node=fresh;const prev=old.get(fresh.dataset.chatKey);if(prev){old.delete(fresh.dataset.chatKey);if(prev.__source===fresh.outerHTML||prev.outerHTML===fresh.outerHTML)node=prev;else if(fresh.dataset.chatKey==="stream"){const tx=prev.querySelector(".tx"),next=fresh.querySelector(".tx");if(tx&&next){tx.innerHTML=next.innerHTML;node=prev;}}}node.__source=fresh.outerHTML;if(node!==prev&&prev){const oldDetails=[...prev.querySelectorAll("details")],newDetails=[...node.querySelectorAll("details")];newDetails.forEach((d,i)=>{if(oldDetails[i]?.querySelector("summary")?.textContent===d.querySelector("summary")?.textContent)d.open=oldDetails[i].open;});}if(node!==cursor)host.insertBefore(node,cursor);cursor=node.nextElementSibling;}while(cursor){const next=cursor.nextElementSibling;cursor.remove();cursor=next;}for(const pre of host.querySelectorAll(".cmsg pre")){if(pre.parentElement.classList.contains("chat-code"))continue;const wrap=document.createElement("div");wrap.className="chat-code";const bar=document.createElement("header");const lang=document.createElement("span");lang.textContent=pre.querySelector("code")?.dataset.lang||"code";const btn=document.createElement("button");btn.dataset.codeCopy="1";btn.textContent="코드 복사";bar.append(lang,btn);pre.before(wrap);wrap.append(bar,pre);highlightChatCode(pre.querySelector("code"));}}
 
 
 // 세션 기록의 대화 + 아직 기록에 안 올라온 로컬 표시분. 툴 칩으로 거른 상태면 그 툴을 쓴 턴만.
@@ -98,7 +98,7 @@ function fitChatInput(ta) {
   const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   const bd = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
   const st=chatState(ta.closest(".node").dataset.id);
-  const min=lh*4+pad+bd,max=st.expanded?Math.max(min,ta.closest(".chat").clientHeight*.65):Math.max(min,Math.min(260,lh*10+pad+bd));
+  const min=lh*2+pad+bd,max=st.expanded?Math.max(min,ta.closest(".chat").clientHeight*.65):Math.max(min,Math.min(260,lh*10+pad+bd));
   ta.style.height = "auto";
   const want = ta.scrollHeight + bd;
   ta.style.height = Math.max(min,Math.min(max,Math.max(want,st.manualHeight||0,st.expanded?max:0))) + "px";
@@ -177,7 +177,7 @@ function mountChat(blk, n) {
   const st = chatState(id);
   const ta = box.querySelector(".cin");
   fitChatInput(ta);
-  mountPromptComposer(box,n,st);
+  mountPromptComposer(box,n,st);void loadChatActivity(id);
   const search=box.querySelector(".chat-search");search.addEventListener("input",()=>{st.search=search.value;st.historyOffset=0;paintChat(id);});
   box.querySelector(".chat-file").addEventListener("change",e=>{const dt=new DataTransfer();for(const file of e.target.files)dt.items.add(file);box.dispatchEvent(new DragEvent("drop",{bubbles:true,cancelable:true,dataTransfer:dt}));e.target.value="";});
   wireAttach(box, () => st.files, () => paintChat(id));
@@ -199,6 +199,8 @@ function mountChat(blk, n) {
     if(b.dataset.chatSearchToggle){st.searchOpen=!st.searchOpen;if(!st.searchOpen){st.search="";search.value="";st.historyOffset=0;}paintChat(id);if(st.searchOpen)search.focus();}
     else if(b.dataset.chatBookmarks){st.bookmarksOnly=!st.bookmarksOnly;st.historyOffset=0;b.setAttribute("aria-pressed",String(st.bookmarksOnly));paintChat(id);}
     else if(b.dataset.chatBookmark!==undefined){const m=st.renderedMessages?.[+b.dataset.chatBookmark];if(m){const key=bookmarkKey(m),ids=chatBookmarks(id);st.bookmarkIds=ids.includes(key)?ids.filter(x=>x!==key):[...ids,key].slice(-200);writeJSON("omp-map-chat-bookmarks:"+id,st.bookmarkIds);paintChat(id);}}
+    else if(b.dataset.chatFile||b.dataset.chatDiff){void chatOpenFile(id,b.dataset.chatFile||b.dataset.chatDiff,!!b.dataset.chatDiff);}
+    else if(b.dataset.chatAgent){const candidates=DATA.sessions.flatMap(s=>s.nodes).filter(x=>x.parent===id&&x.name===b.dataset.chatAgent);if(candidates.length===1){openIds.add(candidates[0].id);saveOpenCards();renderMap(false,true);}else{st.error="일치하는 서브에이전트 카드 "+candidates.length+"개";paintChat(id);}}
     else if(b.dataset.chatFocus){const on=box.classList.toggle("chat-focused");b.setAttribute("aria-pressed",String(on));if(on)box.querySelector(".cin").focus();}
     else if(b.dataset.chatFont){const prefs=chatViewPrefs(id);prefs.font=prefs.font>=18?12:prefs.font+2;writeJSON("omp-map-chat-view:"+id,prefs);box.querySelector(".cmsgs").style.setProperty("--chat-font",prefs.font+"px");}
     else if(b.dataset.chatExport){const text=chatMsgs(nodeById(id),st).all.map(m=>"## "+(m.role==="user"?"나":harnessLabel(nodeById(id)))+"\n\n"+(m.text||"")).join("\n\n");const url=URL.createObjectURL(new Blob([text],{type:"text/markdown;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="conversation.md";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -258,3 +260,5 @@ document.addEventListener("selectionchange",()=>{
     if(!list || !s || s.isCollapsed || !list.contains(s.anchorNode)){CHAT_SELECTION_PENDING.delete(id);paintChat(id);}
   }
 });
+
+async function chatOpenFile(id,file,isDiff){const n=nodeById(id),st=chatState(id);if(!n?.cwd)return;try{if(isDiff){const r=await postJSON("/api/chat/diff",{node:id,file});const d=await r.json();if(!d.ok)throw Error(d.out);st.summary=d.out;paintChat(id);return;}const absolute=/^(?:[A-Za-z]:[\\/]|\/)/.test(file)?file:n.cwd.replace(/[\\/]$/,"")+"/"+file;const host=ELS.get(id);const btn=host?.querySelector("[data-card-editor]");if(btn)btn.click();await edOpenAt(id,absolute);}catch(e){st.error=e.message;paintChat(id);}}

@@ -79,7 +79,7 @@ function take(node, id) {
   const m = pending.get(keyOf(node));
   const entry = m && m.get(String(id));
   if (!entry) return null;
-  m.delete(String(id));
+  clearTimeout(entry.timer);m.delete(String(id));
   if (!m.size) pending.delete(keyOf(node));
   return entry;
 }
@@ -89,13 +89,14 @@ function drop(node) {
   const m = pending.get(keyOf(node));
   if (!m) return;
   pending.delete(keyOf(node));
-  for (const id of m.keys()) pushAsk({ node, kind: "del", id });
+  for (const [id,entry] of m){clearTimeout(entry.timer);pushAsk({ node, kind: "del", id });}
 }
 
 // omp rpc 밖에서 만든 질문(Claude AskUserQuestion): 화면에 띄우고 답은 reply(response) 로 넘긴다.
 function ask(node, request, reply) {
   if (!request || !request.id) return;
-  mapOf(node).set(request.id, { node, request, reply });
+  const entry={node,request,reply};if(request.deadline){entry.timer=setTimeout(()=>{const expired=take(node,request.id);if(expired){pushAsk({node,kind:"del",id:request.id});expired.reply({timedOut:true});}},Math.max(0,request.deadline-Date.now()));entry.timer.unref?.();}
+  mapOf(node).set(request.id,entry);
   pushAsk({ node, kind: "add", request });
 }
 

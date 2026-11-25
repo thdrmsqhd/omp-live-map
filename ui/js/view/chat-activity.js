@@ -6,7 +6,7 @@ const LIVE_RUNNING = /^(running|live|started|spawned|active|pending|queued)$/i;
 
 function liveItemHTML(it) {
   if (it.kind === "sub") {
-    return `<div class="lvitem sub"><span class="lvk">${LIVE_LABEL.sub}</span><span class="lvt">${esc(it.name)}${it.status ? " · " + esc(it.status) : ""}</span></div>`;
+    return `<div class="lvitem sub"><span class="lvk">${LIVE_LABEL.sub}</span><span class="lvt">${esc(it.name)}${it.status ? " · " + esc(it.status) : ""}</span><button data-chat-agent="${esc(it.name)}">카드 열기</button></div>`;
   }
   if (it.kind !== "tool") {
     const cls = it.kind === "text" ? "text" : "think";
@@ -17,6 +17,8 @@ function liveItemHTML(it) {
       <span class="lva">잡 ${esc(it.job)} 띄움 · 출력은 잡 카드</span></div></div>`;
   }
   const args = String(it.args || "").replace(/\s+/g, " ").trim();
+  let file="";try{const x=JSON.parse(it.args);file=String(x.file_path||x.path||"");}catch{}
+  const fileLink=file?`<button data-chat-file="${esc(file)}">파일 열기</button>${/edit|write|patch/i.test(it.name)?`<button data-chat-diff="${esc(file)}">Git Diff</button>`:""}`:"";
   const lines = it.out ? it.out.replace(/\s+$/, "").split("\n") : [];
   const more = lines.length > LIVE_TAIL;
   const shown = it.open || !more ? lines : lines.slice(-LIVE_TAIL);
@@ -24,7 +26,7 @@ function liveItemHTML(it) {
     : `<pre class="lvout${more ? " more" : ""}${it.open ? " open" : ""}" data-lvout="${esc(it.seq)}"${more ? ` title="${it.open ? `눌러서 끝 ${LIVE_TAIL}줄만 보기` : `전체 ${lines.length}줄 · 눌러서 모두 보기`}"` : ""}>${esc(shown.join("\n"))}</pre>`;
   return `<div class="lvitem tool${it.error ? " fail" : ""}">
     <div class="lvh">${it.done ? "" : '<span class="dot live" title="실행 중"></span>'}<span class="lvk">${esc(it.name)}</span>${it.error ? '<span class="lvbad">실패</span>' : it.done ? '<span class="lvok">완료</span>':""}${it.startedAt?`<span class="lvtime">${((it.endedAt||Date.now())-it.startedAt)/1000<1?"<1초":(((it.endedAt||Date.now())-it.startedAt)/1000).toFixed(1)+"초"}</span>`:""}<span class="lva" title="${esc(args)}">${esc(cut(args, 160))}</span></div>
-    ${out}
+    ${fileLink}${out}
   </div>`;
 }
 
@@ -61,7 +63,7 @@ function actSummary(items) {
 // 대화 목록 끝에 붙는 활동 묶음. 도는 중이면 펼치고, 끝난 턴은 한 줄 요약으로 접는다(펼침은 chatState 에 보관).
 function chatActivityHTML(nodeId, st) {
   const { items, running } = actItems(nodeId);
-  const history=chatTurnHistory(nodeId);const archive=history.slice(0,running?history.length:-1).filter(x=>x.items.length);const old=archive.length?`<details class="chat-old-activity"><summary>이전 작업 ${archive.length}턴</summary>${archive.map(x=>`<details><summary>${esc(new Date(x.ts).toLocaleTimeString())} · ${esc(actSummary(x.items))}</summary>${x.items.map(liveItemHTML).join("")}</details>`).join("")}</details>`:"";
+  const history=chatTurnHistory(nodeId);const archive=history.slice(0,running||!items.length?history.length:-1).filter(x=>x.items.length);const old=archive.length?`<details class="chat-old-activity"><summary>이전 작업 ${archive.length}턴</summary>${archive.map(x=>`<details><summary>${esc(new Date(x.ts).toLocaleTimeString())} · ${esc(actSummary(x.items))}</summary>${x.items.map(liveItemHTML).join("")}</details>`).join("")}</details>`:"";
   if (!items.length) return old;
   const list = items.map(liveItemHTML).join("");
   if(running){const active=items.filter(x=>x.kind==="tool"&&!x.done||x.kind==="sub"&&LIVE_RUNNING.test(x.status||""));const failed=items.filter(x=>x.error);const completed=items.filter(x=>!active.includes(x)&&!failed.includes(x));return old+`<div class="lvact">${active.map(liveItemHTML).join("")}${failed.map(liveItemHTML).join("")}${completed.length?`<details class="chat-activity-done"><summary>이전 활동 ${completed.length}건</summary>${completed.map(liveItemHTML).join("")}</details>`:""}</div>`;}

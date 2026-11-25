@@ -20,8 +20,11 @@ const ccSettings=require("./harness/claude-settings");
 const ccRun=require("./harness/claude-run");
 const ccInfo=require("./harness/claude-project-info");
 const lineage=require("./lineage");
+function snapshotNode(id){return require("./snapshot").snapshot().sessions.flatMap(s=>s.nodes).find(n=>n.id===id);}
 function ccNode(p){const n=String(p.node||"");return n&&harness.of(lineage.resolve(n))==="claude"?n:null;}
 module.exports = {
+  "POST /api/chat/diff":(req,res)=>withJson(req,res,async p=>{const n=snapshotNode(String(p.node||""));if(!n?.cwd)return json(res,{ok:false,out:"세션 작업 폴더 없음"});return json(res,await require("./chat-diff").diff(n.cwd,String(p.file||"")));}),
+  "POST /api/chat/activity":(req,res)=>withJson(req,res,p=>{const node=String(p.node||"");if(!node)return json(res,{ok:false,out:"세션 필요"});return json(res,{ok:true,turns:require("./sse").activityHistory(lineage.cardOf(node)||node)});}),
   "POST /api/claude/queue":(req,res)=>withJson(req,res,p=>{const n=ccNode(p);if(!n)return json(res,{ok:false,out:"Claude 세션 필요"});if(p.action==="enqueue"){const a=prepare(String(p.text||"").trim(),p.files,"claude");if(a.error||!a.message)return json(res,{ok:false,out:a.error||"빈 지시"});return json(res,ccRun.enqueue(n,a.message,a.images));}if(p.action==="list")return json(res,{ok:true,...ccRun.queueView(n)});return json(res,ccRun.queueChange(n,p.action,p.id,p.text));},UPLOAD_BODY),
   "POST /api/claude/project-info":(req,res)=>withJson(req,res,p=>{const n=ccNode(p);if(!n)return json(res,{ok:false,out:"Claude 세션 필요"});const loc=ccRun.locate(n);if(!loc.exists&&!loc.known)return json(res,{ok:false,out:"세션 기록 없음"});return json(res,{ok:true,cwd:loc.cwd,sources:ccInfo.inspect(loc.cwd)});}),
   "GET /api/claude/status": async(req,res)=>json(res,await ccSettings.status()),

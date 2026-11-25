@@ -7,6 +7,7 @@ const LIVE_TEXT_MAX = 8000;  // 글·생각 한 항목이 쥐는 글자 수(끝�
 const LIVE_DIRTY = new Set();
 const LIVE_HISTORY=new Map();
 function chatTurnHistory(id){return LIVE_HISTORY.get(liveKey(id))||[];}
+async function loadChatActivity(id){try{const res=await postJSON("/api/chat/activity",{node:id});const data=await res.json();if(!data.ok)return;const k=liveKey(id),merged=new Map();for(const x of [...data.turns,...chatTurnHistory(id)])merged.set(x.ts,x);LIVE_HISTORY.set(k,[...merged.values()].sort((a,b)=>a.ts-b.ts).slice(-20));liveTouch(id);}catch{}}
 let liveSeq = 0;
 
 const liveKey = (node) => String(node ?? "").replace(/\\/g, "/").toLowerCase();

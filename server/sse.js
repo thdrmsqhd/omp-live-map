@@ -6,6 +6,7 @@ const lineage = require("./lineage");
 
 const clients = new Set();
 const journal=require("./event-journal").createJournal();
+const path=require("node:path");const activity=require("./activity-store").createActivityStore(process.env.OMP_MAP_STATE||path.join(require("./config").ROOT,"data"));
 const {randomUUID}=require("node:crypto");const turns=new Map();
 function publish(payload){const frame=journal.append(payload);for(const res of clients){try{res.write(frame);}catch{clients.delete(res);}}}
 function replay(res,id){const frames=journal.replay(id);if(!frames)return false;for(const frame of frames)res.write(frame);return true;}
@@ -27,7 +28,7 @@ function removeClient(res) {
 }
 
 function pushChat(payload){const p=remap(payload);if(p.kind==="req"){turns.set(p.node,randomUUID());if(turns.size>512)turns.delete(turns.keys().next().value);}const turnId=turns.get(p.node);publish({chat:{...p,turnId,ts:Date.now()}});if(p.kind==="done")turns.delete(p.node);}
-function pushLive(payload){publish({live:remap(payload)});}
+function pushLive(payload){const ev=remap(payload);activity.record(ev);publish({live:ev});}
 function pushAsk(payload){publish({ask:remap(payload)});}
 function pushQueue(node,queue){publish({queue:remap({node,...queue})});}
 // 세션의 자원 요약: [프로세스 수, round(cpu/10), round(mb/100)].
@@ -56,4 +57,4 @@ function broadcast() {
   for (const res of clients) res.write(frame);
 }
 
-module.exports = { addClient, removeClient, pushChat, pushLive, pushAsk, pushQueue, replay, broadcast };
+module.exports = { addClient, removeClient, pushChat, pushLive, pushAsk, pushQueue, replay, broadcast, activityHistory:activity.read };

@@ -60,7 +60,7 @@ function askCardHTML(r, i) {
   const foot = r.method === "confirm" ? "" : `<div class="cask-f"><button data-ask-send="1">보내기</button><button data-ask-cancel="1">취소</button>
     ${r._err ? `<span class="cask-err">${esc(r._err)}</span>` : ""}</div>`;
   return `<div class="cask${r._sending ? " sending" : ""}" data-ask-card="${i}">
-    <div class="cask-h"><span class="cask-k">${ASK_LABEL[r.method] || "질문"}</span><span class="cask-t">${esc(title)}</span>
+    <div class="cask-h"><span class="cask-k">${ASK_LABEL[r.method] || "질문"}</span><span class="cask-t">${esc(title)}</span>${r.deadline?`<span class="ask-deadline" data-deadline="${Number(r.deadline)}"></span>`:""}
       <button class="cask-x" data-ask-cancel="1" title="질문 닫기">✕</button></div>
     ${askBodyHTML(r)}${foot}</div>`;
 }
@@ -109,7 +109,7 @@ function paintChatAsk(box, id) {
       }
     }
   }
-  syncAskFields(host, list);
+  syncAskFields(host, list);updateAskDeadlines(host);
 }
 
 function mountChatAsk(box) {
@@ -153,3 +153,6 @@ function mountChatAsk(box) {
     else if (btn.dataset.askConfirm != null) askConfirm(hit.id, hit.r.id, btn.dataset.askConfirm === "1");
   });
 }
+
+function updateAskDeadlines(host=document){for(const el of host.querySelectorAll("[data-deadline]")){const s=Math.max(0,Math.ceil((Number(el.dataset.deadline)-Date.now())/1000));el.textContent=s?"남은 "+s+"초":"만료";}}
+setInterval(()=>updateAskDeadlines(),1000);

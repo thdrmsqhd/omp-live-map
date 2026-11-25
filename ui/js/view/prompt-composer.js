@@ -35,7 +35,7 @@ function mountPromptComposer(box,n,s){
   async function choices(kind,q=""){
     const gen=++generation,query=q.toLowerCase();
     if(kind==="history"){show(promptHistory(id).map(t=>({label:cut(t,100),text:t,replace:true})));return;}
-    if(kind==="templates"){show([{label:"+ 현재 초안 템플릿 저장",run:()=>{if(!s.draft.trim())return;const name=prompt("템플릿 이름");if(name&&!savePromptTemplates([{name,text:s.draft},...promptTemplates().filter(t=>t.name!==name)])){s.error="템플릿 저장 실패";paintChat(id);}}},...promptTemplates().filter(t=>t.name.toLowerCase().includes(query)).map(t=>({label:t.name,text:t.text,replace:false}))]);return;}
+    if(kind==="templates"){show([{label:"+ 현재 초안 템플릿 저장",run:()=>{if(!s.draft.trim())return;const name=prompt("템플릿 이름");if(name&&!savePromptTemplates([{name,text:s.draft},...promptTemplates().filter(t=>t.name!==name)])){s.error="템플릿 저장 실패";paintChat(id);}}},...promptTemplates().filter(t=>t.name.toLowerCase().includes(query)).flatMap(t=>[{label:t.name,text:t.text,replace:false},{label:"수정 · "+t.name,run:()=>{const name=prompt("템플릿 이름",t.name);if(!name?.trim())return;const text=prompt("템플릿 내용",t.text);if(text===null)return;savePromptTemplates([{name:name.trim(),text},...promptTemplates().filter(x=>x.name!==t.name&&x.name!==name.trim())]);}},{label:"삭제 · "+t.name,run:()=>{if(confirm("템플릿을 삭제할까요?"))savePromptTemplates(promptTemplates().filter(x=>x.name!==t.name));}}])]);return;}
     if(kind==="commands"){show(commands.filter(c=>c.label.toLowerCase().includes(query)).filter(c=>!c.label.startsWith("/compact")||capsOf(n).compact).filter(c=>!c.label.startsWith("/clear")||capsOf(n).clear));return;}
     if(kind==="refs"){
       if(!n.cwd){show([],"작업 디렉터리 미수집");return;}
