@@ -142,8 +142,7 @@ function clusterOfCard(id) {
 }
 
 function sessionKeyOfNode(id) {
-  const s = DATA.sessions.find((x) => x.nodes.some((n) => n.id === id));
-  return s ? s.key : null;
+  return GRAPH_NODES.get(id)?.session.key ?? null;
 }
 
 // 큰 카드 하나를 접는다. 다른 열린 카드와 카드별 배치는 건드리지 않는다.

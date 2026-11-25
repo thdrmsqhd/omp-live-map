@@ -20,6 +20,9 @@ let view = { x: 40, y: 40, k: 1 };
 let geo = new Map();
 
 let NODES = [];
+let RENDERED_NODES = new Map();
+let GRAPH_NODES = new Map();
+let GRAPH_SESSIONS = new Map();
 
 let CLUSTERS = [];
 

@@ -105,7 +105,7 @@ function shiftBox(c, dx, dy) {
   if (L) { L.x += dx; L.y += dy; saveLocalsThrottled(); }
 }
 
-const nodeById = (id) => NODES.find((n) => n.id === id);
+const nodeById = (id) => RENDERED_NODES.get(id);
 
 function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;

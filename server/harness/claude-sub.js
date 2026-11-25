@@ -14,7 +14,7 @@ function metaOf(file) {
 }
 
 const {readIncremental,prune}=require("./jsonl-reader");
-function readNew(rec,sessionId,mainFile){const file=rec.st.file;readIncremental(rec,()=>makeState(file,sessionId,mainFile),ingestLine);}
+function readNew(rec,sessionId,mainFile,stat){const file=rec.st.file;readIncremental(rec,()=>makeState(file,sessionId,mainFile),ingestLine,undefined,stat);}
 
 function makeState(file, sessionId, mainFile) {
   const st = newState(file);
@@ -41,7 +41,7 @@ function scanDir(dir, sessionId, mainFile, cutoff) {
       rec = { offset: 0, pending: "", st: makeState(file, sessionId, mainFile), metaMtime: 0 };
       cache.set(file, rec);
     }
-    readNew(rec,sessionId,mainFile);
+    try { readNew(rec,sessionId,mainFile,stat); } catch { continue; }
     const st = rec.st;
     st.mainFile = mainFile;
     st.parent = mainFile;

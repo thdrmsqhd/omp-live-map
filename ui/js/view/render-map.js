@@ -61,6 +61,55 @@ function topbarStatus(sessions) {
   paintDoneSubsButton(HIDE_DONE_SUBS);
 }
 
+let renderedGraph;
+let renderedSessionKeys = [];
+
+function renderGraphPatch(previous, patch) {
+  if (previous !== renderedGraph || pendingRender || DEFER || typingNow() || patch.remove.length || JOBS.length) return false;
+  if (["env", "fx", "harness"].some((key) => JSON.stringify(previous[key]) !== JSON.stringify(DATA[key]))) return false;
+  const sessions = filteredSessions();
+  if (sessions.length !== renderedSessionKeys.length || sessions.some((session, i) => session.key !== renderedSessionKeys[i])) return false;
+  const previousSessions = new Map(previous.sessions.map((session) => [session.key, session]));
+  const updates = new Map();
+  const groups = [];
+  for (const change of patch.sessions) {
+    const old = previousSessions.get(change.key);
+    const next = GRAPH_SESSIONS.get(change.key);
+    if (!old || change.order || JSON.stringify(old.jobs) !== JSON.stringify(next.jobs)) return false;
+    if (next.nodes.some((node, i) => {
+      const before = old.nodes[i];
+      return node !== before && ["kind", "status", "parent", "file", "startedAt"].some((key) => node[key] !== before[key]);
+    })) return false;
+    if (!renderedSessionKeys.includes(change.key)) continue;
+    groups.push(next);
+    for (const node of sessionNodes(next)) {
+      if (!RENDERED_NODES.has(node.id) || (openIds.has(node.id) && (!SATS.has(node.id) || !ELS.has(node.id)))) return false;
+      updates.set(node.id, { ...node, session: next.key, sessionTitle: next.title });
+    }
+  }
+  for (const [id, node] of updates) RENDERED_NODES.set(id, node);
+  NODES = NODES.map((node) => updates.get(node.id) ?? node);
+  for (const [id, node] of updates) {
+    if (!openIds.has(id)) continue;
+    const piece = cardRenderPiece(node, true);
+    const el = patchPiece($("nodes"), piece, ELS.get(id));
+    ELS.set(id, el);
+    if (!piece.virtual) {
+      mountBlocks(node, el);
+      restoreCardScroll(id, el);
+    }
+    el.querySelectorAll("input.rename").forEach(wireRename);
+    paintBlockFocus(el);
+  }
+  patchSessionList(groups);
+  paintActiveCards();
+  paintGroupCards();
+  if (typeof paintAttention === "function") paintAttention();
+  paintMonitor(sessions);
+  renderedGraph = DATA;
+  return true;
+}
+
 function renderMap(resetView, force) {
   if (!force && (DEFER || typingNow())) { pendingRender = true; return; }
   pendingRender = false;
@@ -68,8 +117,9 @@ function renderMap(resetView, force) {
   CLUSTERS = [];
   const sessions = filteredSessions();
   NODES = [...agentNodes(sessions), ...infraNodes(), ...LOCALS.map(localNode)];
+  RENDERED_NODES = new Map(NODES.map((node) => [node.id, node]));
   for (const id of [...openIds]) {
-    if (!NODES.some((n) => n.id === id) && !SWITCH_HOLD.has(id)) closeCard(id);
+    if (!RENDERED_NODES.has(id) && !SWITCH_HOLD.has(id)) closeCard(id);
   }
 
   // HOST·인프라·로컬 배치 → 겹침 회피 → 큰 카드 → 세션 잡 → 연결선
@@ -105,4 +155,6 @@ function renderMap(resetView, force) {
   if (typeof paintAttention === "function") paintAttention();
   paintMonitor(sessions);
   if (resetView && mapMode === "map") fit(); else paintMinimap();
+  renderedGraph = DATA;
+  renderedSessionKeys = sessions.map((session) => session.key);
 }

@@ -15,6 +15,8 @@ function readNew(st, bytes) {
   const fd = fs.openSync(st.file, "r");
   let read;
   try {
+    const stat = fs.fstatSync(fd);
+    if (`${stat.dev}:${stat.ino}` !== st.identity || stat.size < st.offset) return false;
     read = fs.readSync(fd, buf, 0, bytes, st.offset);
   } finally {
     fs.closeSync(fd);
@@ -33,24 +35,28 @@ function readNew(st, bytes) {
 
 function* track(file) {
   let st = files.get(file);
-  let size;
+  let stat;
   try {
-    const stat=fs.statSync(file);if(stat.mtimeMs<Date.now()-Math.max(HOURS,24)*3600000){files.delete(file);return;}size=stat.size;
-  } catch {
+    stat = fs.statSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") files.delete(file);
     return;
   }
-  if (st && size === st.offset) return;
-  if (!st) {
+  if (!stat.isFile() || stat.mtimeMs < Date.now() - Math.max(HOURS, 24) * 3600000) {
+    files.delete(file);
+    return;
+  }
+  const { size, mtimeMs } = stat;
+  const identity = `${stat.dev}:${stat.ino}`;
+  if (!st || st.identity !== identity || size < st.offset ||
+      (size === st.offset && st.diskMtime !== mtimeMs)) {
     st = newFileState(file);
     st.parent = parentOf(file, st.depth);
     st.decoder = new StringDecoder("utf8");
+    st.identity = identity;
     files.set(file, st);
   }
-  if (size < st.offset) {
-    st.offset = 0;
-    st.pending = "";
-    st.decoder = new StringDecoder("utf8");
-  }
+  st.diskMtime = mtimeMs;
   while (size > st.offset) {
     try {
       if (!readNew(st, Math.min(READ_BYTES, size - st.offset))) break;
@@ -99,4 +105,4 @@ function allStates() {
   return files.values();
 }
 
-module.exports = { scan, scanSteps, stateOf, allStates };
+module.exports = { scan, scanSteps, stateOf, allStates, track };

@@ -3,13 +3,20 @@
 // 스냅샷을 상태에 넣는다. 서버가 변화가 있을 때만 보내므로 받은 대로 그린다.
 function setGraph(data) {
   DATA = data;
+  GRAPH_SESSIONS = new Map();
+  GRAPH_NODES = new Map();
+  for (const session of data.sessions) {
+    GRAPH_SESSIONS.set(session.key, session);
+    for (const node of session.nodes) if (!GRAPH_NODES.has(node.id)) GRAPH_NODES.set(node.id, { node, session });
+  }
   if (data.fx && data.fx.usdKrw) FX = data.fx.usdKrw;
   if (data.env) ENV = data.env;
 }
 
-function apply(data) {
+function apply(data, patch) {
+  const previous = DATA;
   setGraph(data);
-  renderMap(false);
+  if (!patch || !renderGraphPatch(previous, patch)) renderMap(false);
 }
 
 // 스냅샷을 지금 다시 받는다(새 세션 파일처럼 SSE 방송을 기다리지 않을 때).

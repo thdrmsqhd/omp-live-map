@@ -33,7 +33,7 @@ function listRows(sessions) {
 
 // 큰 카드의 "세션 컨텍스트" 막대에 쓰는 에이전트별 컨텍스트 토큰(토큰순).
 function ctxPartsOf(sessionKey) {
-  const s = DATA.sessions.find((x) => x.key === sessionKey);
+  const s = GRAPH_SESSIONS.get(sessionKey);
   if (!s) return { parts: [], total: 0 };
   const parts = sessionNodes(s).filter((n) => n.ctx && n.ctx.promptTokens)
     .map((n) => ({ id: n.id, name: displayName(n), tok: n.ctx.promptTokens }))

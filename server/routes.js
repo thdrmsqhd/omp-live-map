@@ -37,15 +37,16 @@ const ROUTES = {
   ...localfs.routes,
   "GET /api/performance": (req,res)=>json(res,{...require("./performance").read(),sse:require("./sse").metrics(),desktop:require("./performance").desktopMetrics(),sessions:require("./sessions").list().map(({node,pid,busy,state,harness})=>({node,pid,busy,state,harness,resources:require("./proc").resFor(node)}))}),
   "* /api/graph": (req, res) => json(res, snapshot()),
-  "* /api/events": (req, res) => {
+  "* /api/events": (req, res, url) => {
+    const graphVersion = url.searchParams.get("graph") === "2" ? 2 : 1;
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-store",
       Connection: "keep-alive",
     });
     const data = snapshot();
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-    if(req.headers["last-event-id"]&&replay(res,req.headers["last-event-id"])){addClient(res,data);req.on("close",()=>removeClient(res));return;}
+    res.write(`data: ${JSON.stringify(graphVersion === 2 ? { ...data, graphRevision: 0 } : data)}\n\n`);
+    if(req.headers["last-event-id"]&&replay(res,req.headers["last-event-id"])){if(!res.destroyed)addClient(res,graphVersion);req.on("close",()=>removeClient(res));return;}
     // 이미 지나간 출력도 붙자마자 보이게 한다(맵 rpc 세션의 툴 출력).
     for (const s of data.sessions) {
       for (const n of s.nodes) {
@@ -66,7 +67,7 @@ const ROUTES = {
         if (!j.done && j.toolCallId) res.write(`data: ${JSON.stringify({ live: { node: j.file, kind: "tool_job", id: j.toolCallId, job: j.id } })}\n\n`);
       }
     }
-    addClient(res,data);
+    addClient(res,graphVersion);
     req.on("close", () => removeClient(res));
   },
 };

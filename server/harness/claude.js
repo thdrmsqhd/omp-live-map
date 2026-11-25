@@ -65,19 +65,28 @@ function ingestLine(st, raw) {
 }
 
 const {readIncremental,prune}=require("./jsonl-reader");
-function readNew(rec){const file=rec.st.file;readIncremental(rec,()=>newState(file),ingestLine);}
+function readNew(rec, stat){const file=rec.st.file;readIncremental(rec,()=>newState(file),ingestLine,undefined,stat);}
 
 function track(file, cutoff) {
   let stat;
-  try { stat = fs.statSync(file); } catch { return; }
+  try { stat = fs.statSync(file); } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") files.delete(file);
+    return;
+  }
+  if (!stat.isFile()) return;
   if (stat.mtimeMs < cutoff) return; // 기간 밖 파일은 읽지 않는다(오래된 기록이 수백 MB 쌓인다)
   let rec = files.get(file);
   if (!rec) {
     rec = { offset: 0, pending: "", st: newState(file) };
     files.set(file, rec);
   }
-  if (!rec.st.lastTs) rec.st.lastTs = stat.mtimeMs;
-  readNew(rec);
+  readNew(rec, stat);
+}
+
+function trackProject(file, cutoff = Date.now() - Math.max(HOURS, 24) * 3_600_000) {
+  try { track(file, cutoff); } catch { /* file rotated mid-read */ }
+  const sessionId = path.basename(file, ".jsonl");
+  require("./claude-sub").scanDir(path.join(path.dirname(file), sessionId, "subagents"), sessionId, file, cutoff);
 }
 
 // ~/.claude/projects/<슬러그>/*.jsonl 만 읽는다(중첩 폴더의 sidechain 파일은 쓰지 않는다).
@@ -95,9 +104,7 @@ function* scanSteps() {
     for (const ent of names) {
       if (!ent.isFile() || !ent.name.endsWith(".jsonl")) continue;
       const file = path.join(CLAUDE_PROJECTS, d.name, ent.name);
-      try { track(file, cutoff); } catch { /* file rotated mid-read */ }
-      const sessionId = path.basename(file, ".jsonl");
-      require("./claude-sub").scanDir(path.join(CLAUDE_PROJECTS, d.name, sessionId, "subagents"), sessionId, file, cutoff);
+      trackProject(file, cutoff);
       yield;
     }
   }
@@ -116,5 +123,5 @@ function stateOf(file) {
   return rec ? rec.st : null;
 }
 
-module.exports = { scan, scanSteps, states, stateOf, newState, ingestLine, pendingOf: pending.of, beginPending: pending.begin,
+module.exports = { scan, scanSteps, trackProject, states, stateOf, newState, ingestLine, pendingOf: pending.of, beginPending: pending.begin,
   slug, dirOf, fileFor };

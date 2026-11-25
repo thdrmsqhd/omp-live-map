@@ -2,7 +2,7 @@ name: V3 Windows verification
 
 on:
   push:
-    branches: ['v2/phase-0-baseline', 'v2/phase-1-3', 'v3/phase-4-6', 'v4/ui-ux-improvements', 'v5/claude-harness', 'v6/chat-ux', 'v7/performance', 'main']
+    branches: ['v2/phase-0-baseline', 'v2/phase-1-3', 'v3/phase-4-6', 'v4/ui-ux-improvements', 'v5/claude-harness', 'v6/chat-ux', 'v7/performance', 'v8/incremental-performance', 'main']
     paths-ignore:
       - 'docs/**'
       - '.github/workflows/v2-windows-isolation.yml'
@@ -66,6 +66,52 @@ jobs:
       - name: Product desktop UI and protected API
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/engineering-desktop.cjs
+  graph-performance:
+    if: github.ref_name == 'v8/incremental-performance'
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Compare identical fixtures across V5, V7 and V8
+        shell: pwsh
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx playwright install --only-shell chromium
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $current = $PWD.Path
+          $out = Join-Path $current 'artifacts/graph-performance'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $versions = [ordered]@{
+            v5 = 'a92e836186b5be402112b3f7f7b513d21a4792a7'
+            v7 = 'cd8282d4a3344faa2d248bce9ab87092b9c7579a'
+            v8 = $env:GITHUB_SHA
+          }
+          foreach ($version in $versions.Keys) {
+            $repo = $current
+            if ($version -ne 'v8') {
+              $repo = Join-Path $env:RUNNER_TEMP "omp-graph-$version"
+              git worktree add --detach $repo $versions[$version]
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            $env:OMP_BENCH_REPO = $repo
+            $env:OMP_BENCH_REF = $versions[$version]
+            $env:OMP_BENCH_OUTPUT = Join-Path $out "$version.json"
+            node --test tests/verification/graph-performance.cjs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: omp-v8-comparable-performance
+          path: artifacts/graph-performance/*.json
+          if-no-files-found: ignore
   installer:
     if: github.ref_name == 'v3/phase-4-6'
     runs-on: windows-2025

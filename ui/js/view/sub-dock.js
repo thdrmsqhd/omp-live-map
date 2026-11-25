@@ -24,13 +24,12 @@ const DOCK_ROWS = 3;
 const saveDock = () => writeJSON("omp-map-subdock", { map: Object.fromEntries(SUBDOCK), off: [...DOCK_OFF], free: [...DOCK_FREE] });
 
 function sessionOf(id) {
-  return DATA.sessions.find((s) => s.nodes.some((n) => n.id === id)) || null;
+  return GRAPH_NODES.get(id)?.session || null;
 }
 
 // 화면 노드(NODES)가 아직 갱신 전일 수 있으므로 스냅샷(DATA)을 먼저 본다.
 function nodeInData(id) {
-  const s = sessionOf(id);
-  return (s && s.nodes.find((n) => n.id === id)) || nodeById(id) || null;
+  return GRAPH_NODES.get(id)?.node || nodeById(id) || null;
 }
 
 // 실행 중 판정: 스냅샷 상태(live) 또는 이 탭의 실시간 활동(마지막 턴 미종료). 서버가 끝났다고 한(done) 서브는 실시간 목록과 상관없이 끝난 것이다.
@@ -76,7 +75,10 @@ function syncSubDocks() {
     changed = true;
   }
   // 이번 렌더의 NODES 는 닫기 전에 만들어졌다 — 남겨 두면 접힌 카드가 한 번 그려진다.
-  if (closed.length) NODES = NODES.filter((n) => !closed.includes(n.id));
+  if (closed.length) {
+    NODES = NODES.filter((n) => !closed.includes(n.id));
+    for (const id of closed) RENDERED_NODES.delete(id);
+  }
   if (changed) { saveDock(); saveOpenCards(); }
 }
 

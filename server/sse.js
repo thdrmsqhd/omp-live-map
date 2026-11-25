@@ -7,14 +7,17 @@ const lineage = require("./lineage");
 const clients = new Set();
 const {writeFrame}=require("./sse-writer");
 let sentBytes=0,sentFrames=0,slowClients=0;
-function send(res,frame){if(!writeFrame(res,frame)){clients.delete(res);slowClients++;return false;}sentBytes+=Buffer.byteLength(frame);sentFrames++;return true;}
+function send(res,frame,options){if(!writeFrame(res,frame,undefined,options)){clients.delete(res);slowClients++;return false;}sentBytes+=Buffer.byteLength(frame);sentFrames++;return true;}
 function metrics(){return {clients:clients.size,sentBytes,sentFrames,slowClients};}
 const journal=require("./event-journal").createJournal();
 const path=require("node:path");const activity=require("./activity-store").createActivityStore(process.env.OMP_MAP_STATE||path.join(require("./config").ROOT,"data"));
 const {randomUUID}=require("node:crypto");const turns=new Map();
 function publish(payload){const frame=journal.append(payload);for(const res of clients)send(res,frame);}
 function replay(res,id){const frames=journal.replay(id);if(!frames)return false;for(const frame of frames)if(!send(res,frame))break;return true;}
-let lastSig = "";let lastGraph=null;const bases=new WeakMap();const {makeDelta}=require("./graph-delta");
+let lastGraph = null;
+let revision = 0;
+const bases = new WeakMap();
+const { encodeGraph, graphChanges, snapshotFrame, deltaFrame } = require("./graph-delta");
 
 // 화면은 카드 id 로만 노드를 찾는다. 실제 파일로 온 이벤트는 계보를 거쳐 카드 id 로 바꿔 보낸다.
 function remap(payload) {
@@ -23,8 +26,9 @@ function remap(payload) {
   return card && card !== payload.node ? { ...payload, node: card } : payload;
 }
 
-function addClient(res,base) {
-  clients.add(res);if(base)bases.set(res,base);
+function addClient(res, version = 1) {
+  clients.add(res);
+  bases.set(res, { version, revision: 0 });
 }
 
 function removeClient(res) {
@@ -35,31 +39,24 @@ function pushChat(payload){const p=remap(payload);if(p.kind==="req"){turns.set(p
 function pushLive(payload){const ev=remap(payload);activity.record(ev);publish({live:ev});}
 function pushAsk(payload){publish({ask:remap(payload)});}
 function pushQueue(node,queue){publish({queue:remap({node,...queue})});}
-// 세션의 자원 요약: [프로세스 수, round(cpu/10), round(mb/100)].
-// 노드마다 겹치지 않는 몫(server/attrib.js)을 가지므로 세션 값은 노드 합이다.
-function resSig(s) {
-  let proc = 0, cpu = 0, mb = 0;
-  for (const n of s.nodes) {
-    if (!n.res) continue;
-    proc += n.res.proc || 0;
-    cpu += n.res.cpu || 0;
-    mb += n.res.mb || 0;
-  }
-  return [proc, Math.round(cpu / 10), Math.round(mb / 100)];
-}
-
 function broadcast() {
-  if(!clients.size){lastSig="";lastGraph=null;return;}
-  const data = snapshot();
-  const sig = JSON.stringify(data.sessions.map((s) => [
-    s.key, s.lastTs, s.totals.tokens, s.live, ...resSig(s),
-    s.jobs.map((j) => [j.id, j.done, (j.tail || []).length, (j.tail || [])[(j.tail || []).length - 1] || ""]),
-    s.nodes.map((n) => [n.status, (n.active || []).map((a) => [a.id, a.name, a.ts])]),
-  ]));
-  if (sig === lastSig) return;
-  lastSig = sig;
-  const frame = `data: ${JSON.stringify(data)}\n\n`;const delta=lastGraph?`data: ${JSON.stringify({graphDelta:makeDelta(lastGraph,data)})}\n\n`:frame;
-  for(const res of clients){const base=bases.get(res);const out=base===lastGraph&&delta.length<frame.length?delta:frame;if(send(res,out))bases.set(res,data);}lastGraph=data;
+  if (!clients.size) { lastGraph = null; return; }
+  const next = encodeGraph(snapshot(), revision + 1);
+  const delta = lastGraph && graphChanges(lastGraph, next);
+  if (!delta || delta.changed) revision++;
+  const current = delta && !delta.changed ? lastGraph : next;
+  const frames = new Map();
+  for (const res of clients) {
+    const base = bases.get(res);
+    if (base.revision === current.revision) continue;
+    const patch = delta?.changed && base.revision === lastGraph.revision;
+    const key = `${base.version}:${patch}`;
+    if (!frames.has(key)) frames.set(key, patch
+      ? deltaFrame(lastGraph, current, delta, base.version)
+      : snapshotFrame(current, base.version));
+    if (send(res, frames.get(key), { allowLarge: true })) base.revision = current.revision;
+  }
+  lastGraph = current;
 }
 
 module.exports = { addClient, removeClient, pushChat, pushLive, pushAsk, pushQueue, replay, broadcast, activityHistory:activity.read,flushActivity:activity.flush,metrics };

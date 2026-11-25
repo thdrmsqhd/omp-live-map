@@ -12,6 +12,28 @@ async function firstGraph() {
   }
 }
 
+function applyGraphPatch(previous, patch) {
+  if (previous.graphRevision !== patch.baseRevision) return null;
+  const sessions = new Map(previous.sessions.map((session) => [session.key, session]));
+  for (const key of patch.remove) sessions.delete(key);
+  for (const change of patch.sessions) {
+    const old = sessions.get(change.key);
+    const updates = new Map(change.upsert.map((node) => [node.id, node]));
+    let nodes = old?.nodes || [];
+    if (change.order) {
+      const existing = new Map(nodes.map((node) => [node.id, node]));
+      nodes = change.order.map((id) => updates.get(id) ?? existing.get(id));
+      if (nodes.includes(undefined)) return null;
+    } else if (updates.size) nodes = nodes.map((node) => updates.get(node.id) ?? node);
+    const fields = change.fields ?? old;
+    if (!fields) return null;
+    sessions.set(change.key, { ...fields, nodes });
+  }
+  const ordered = patch.order.map((key) => sessions.get(key));
+  if (ordered.includes(undefined)) return null;
+  return { ...patch.meta, graphRevision: patch.revision, sessions: ordered };
+}
+
 async function boot() {
   bindStageInput();
   bindCardDrag();
@@ -36,17 +58,43 @@ async function boot() {
   renderMap(true, true);
   Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(!touched, true));
 
-  const es = new EventSource("/api/events");
-  es.onopen = () => setConnected(true);
-  es.onerror = () => setConnected(false);   // EventSource 가 알아서 다시 붙는다
-  es.onmessage = (ev) => {
-    const data = JSON.parse(ev.data);
-    if (data.live) handleLiveEvent(data.live);
-    else if(data.queue){const q=data.queue;chatState(q.node).ccQueue=q;liveTouch(q.node);return;} else if (data.chat) handleChatEvent(data.chat);
-    else if (data.ask) handleAskEvent(data.ask);
-    else if(data.graphDelta){const d=data.graphDelta,m=new Map(graphBase.sessions.map(s=>[s.key,s]));for(const k of d.remove)m.delete(k);for(const s of d.upsert)m.set(s.key,s);graphBase={...d.meta,sessions:d.order.map(k=>m.get(k)).filter(Boolean)};apply(graphBase);}
-    else {graphBase=data;apply(data);}
-  };
+  function connectEvents() {
+    const es = new EventSource("/api/events?graph=2");
+    es.onopen = () => setConnected(true);
+    es.onerror = () => setConnected(false);
+    es.onmessage = (ev) => {
+      const data = JSON.parse(ev.data);
+      if (data.live) handleLiveEvent(data.live);
+      else if (data.queue) {
+        const q = data.queue;
+        chatState(q.node).ccQueue = q;
+        liveTouch(q.node);
+      } else if (data.chat) handleChatEvent(data.chat);
+      else if (data.ask) handleAskEvent(data.ask);
+      else if (data.graphPatch) {
+        const next = applyGraphPatch(graphBase, data.graphPatch);
+        if (!next) {
+          es.close();
+          setConnected(false);
+          setTimeout(connectEvents, 300);
+          return;
+        }
+        graphBase = next;
+        apply(next, data.graphPatch);
+      } else if (data.graphDelta) {
+        const { meta, order, remove, upsert } = data.graphDelta;
+        const sessions = new Map(graphBase.sessions.map((session) => [session.key, session]));
+        for (const key of remove) sessions.delete(key);
+        for (const session of upsert) sessions.set(session.key, session);
+        graphBase = { ...meta, sessions: order.map((key) => sessions.get(key)).filter(Boolean) };
+        apply(graphBase);
+      } else {
+        graphBase = data;
+        apply(data);
+      }
+    };
+  }
+  connectEvents();
 
   function adaptive(fn,ms){let running=false;const tick=async()=>{if(running||document.hidden)return;running=true;try{await fn();}catch{}finally{running=false;}};setInterval(tick,ms);document.addEventListener("visibilitychange",()=>{if(!document.hidden)void tick();});}
   adaptive(loadInfra, 10000);

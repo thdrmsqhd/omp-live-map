@@ -10,20 +10,21 @@ function patchPieces(box, pieces) {
   }
   const live = new Map();
   for (const el of box.children) live.set(el.dataset.pieceKey, el);
-  for (const { key, html, keep, retain, virtual } of pieces) {
-    const old = live.get(key);
-    if (retain && old) continue;
-    if (old && old.__html === html) continue;
-    const host = document.createElement("div");
-    host.innerHTML = html;
-    const el = host.firstElementChild;
-    if (!el) { if (old) old.remove(); continue; }
-    if (old && keep && patchKeeping(old, el, keep)) { old.__html = html; continue; }
-    el.dataset.pieceKey = key;
-    el.__html = html;
-    if (old && virtual && !old.dataset.virtual) parkCard(old);
-    if (old) old.replaceWith(el); else box.appendChild(el);
-  }
+  for (const piece of pieces) patchPiece(box, piece, live.get(piece.key));
+}
+
+function patchPiece(box, { key, html, keep, retain, virtual }, old) {
+  if (old && (retain || old.__html === html)) return old;
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  const el = host.firstElementChild;
+  if (!el) { old?.remove(); return null; }
+  if (old && keep && patchKeeping(old, el, keep)) { old.__html = html; return old; }
+  el.dataset.pieceKey = key;
+  el.__html = html;
+  if (old && virtual && !old.dataset.virtual) parkCard(old);
+  if (old) old.replaceWith(el); else box.appendChild(el);
+  return el;
 }
 
 function patchKeeping(old, el, keep) {

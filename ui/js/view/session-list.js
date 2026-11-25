@@ -70,6 +70,22 @@ function renderSessionList(sessions) {
   $("slList").innerHTML = html;
 }
 
+function patchSessionList(sessions) {
+  const list = $("slList");
+  for (const row of listRows(sessions)) {
+    const key = encodeURIComponent(row.s.key);
+    const current = list.querySelector(`.sl-sess[data-key="${CSS.escape(key)}"]`);
+    const html = sessionHTML(row);
+    if (!current || current.__html === html) continue;
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const next = template.content.firstElementChild;
+    next.__html = html;
+    current.replaceWith(next);
+    slHtml = "";
+  }
+}
+
 // 검색에서 고른 세션: 목록을 펼치고 그 세션으로 스크롤해 잠깐 강조한다.
 function revealSession(key) {
   if (SL.collapsed) { SL.collapsed = false; saveSL(); paintSLFrame(); paintMinimap(); }

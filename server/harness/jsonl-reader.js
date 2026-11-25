@@ -6,6 +6,10 @@ function reset(rec,stat,makeState){
   rec.offset=0;rec.pending="";rec.decoder=new StringDecoder("utf8");rec.discard=false;
   rec.identity=String(stat.dev)+":"+String(stat.ino);rec.st=makeState();rec.metaMtime=0;
 }
+function unchanged(rec, stat) {
+  return rec.offset === stat.size && rec.diskMtime === stat.mtimeMs &&
+    rec.identity === `${stat.dev}:${stat.ino}`;
+}
 function consume(rec,text,ingest){
   let from=0;
   for(let i=0;i<text.length;i++)if(text.charCodeAt(i)===10){
@@ -15,11 +19,18 @@ function consume(rec,text,ingest){
   }
   if(!rec.discard){rec.pending+=text.slice(from);if(rec.pending.length>MAX_LINE){rec.pending="";rec.discard=true;}}
 }
-function readIncremental(rec,makeState,ingest,budget=4*1024*1024){
+function readIncremental(rec,makeState,ingest,budget=4*1024*1024,knownStat){
+  if (knownStat && unchanged(rec, knownStat)) {
+    rec.touched = Date.now();
+    return;
+  }
   let fd;try{fd=fs.openSync(rec.st.file,"r");const stat=fs.fstatSync(fd);
     const identity=String(stat.dev)+":"+String(stat.ino);
-    if(!rec.decoder||rec.identity!==identity||stat.size<rec.offset)reset(rec,stat,makeState);
-    const buf=Buffer.allocUnsafe(CHUNK);let remaining=Math.min(budget,stat.size-rec.offset);
+    if(!rec.decoder||rec.identity!==identity||stat.size<rec.offset||
+      (stat.size===rec.offset&&rec.diskMtime!==stat.mtimeMs))reset(rec,stat,makeState);
+    rec.diskMtime=stat.mtimeMs;
+    let remaining=Math.min(budget,stat.size-rec.offset);
+    const buf=remaining>0?Buffer.allocUnsafe(CHUNK):null;
     while(remaining>0){const n=fs.readSync(fd,buf,0,Math.min(CHUNK,remaining),rec.offset);if(!n)break;rec.offset+=n;remaining-=n;consume(rec,rec.decoder.write(buf.subarray(0,n)),ingest);}
     if(!rec.st.lastTs)rec.st.lastTs=stat.mtimeMs;
     rec.touched=Date.now();

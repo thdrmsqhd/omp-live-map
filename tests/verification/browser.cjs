@@ -72,7 +72,7 @@ test("existing map opens a session card, restores panel state and renders update
       assert.equal(await fs.readFile(file, "utf8"), "updated through Monaco");
 
       await page.locator("#slToggle").click();
-      const connected = page.waitForResponse((response) => response.url().endsWith("/api/events") && response.ok());
+      const connected = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/events" && response.ok());
       await page.reload();
       await connected;
       await page.waitForSelector("#sessions.collapsed", filter);
