@@ -61,10 +61,10 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
       const ant = path.join(path.dirname(installed), "resources", "runtime", "vendor", "ant", "ant.exe");
       assert.match(execFileSync(ant, ["--version"], { encoding: "utf8", timeout: 10000 }), /2\.13\.0/);
     }
-    await page.getByRole("button", { name: "실행 환경 준비" }).waitFor({ timeout: 8000 });
+    await page.getByText("실행 환경", { exact: true }).click();
+    await page.locator("#prepare-runtime").waitFor({ timeout: 8000 });
     await page.waitForFunction(() => Boolean(document.querySelector("#runtime-status")?.textContent));
     await page.locator("#project option").filter({ hasText: "CI V2 project" }).waitFor({ state: "attached" });
-    await page.getByText("실행 환경", { exact: true }).click();
     const login = page.getByRole("button", { name: "Claude Console 로그인" });
     assert.equal(await login.isVisible(), true);
     if (installed) assert.equal(await login.isEnabled(), true);
@@ -90,21 +90,24 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     const registered = page.locator("#project option").filter({ hasText: "desktop fixture" });
     await registered.waitFor({ state: "attached", timeout: 8000 });
     await page.locator("#design-nav").click();
+    await page.locator("#kind").selectOption("model");
     await page.locator("#payload").fill(JSON.stringify({ name: "test profile", provider: "fixture", model: "fake-1" }));
-    await page.getByRole("button", { name: "버전 저장" }).click();
+    await page.locator("#definition-save").click();
     await page.locator("#definition option").filter({ hasText: "test profile" }).waitFor({ state: "attached", timeout: 8000 });
     await page.getByRole("button", { name: "Workflow", exact: true }).click();
     await page.locator("#workflow-name").fill("CI workflow");
-    const start = page.locator(".workflow-node").filter({ hasText: "Start" });
-    await start.scrollIntoViewIfNeeded();
-    const bounds = await start.boundingBox();
+    const start = page.locator('.workflow-node[data-node="start"]');
+    const handle = start.locator(".workflow-node-title");
+    await handle.scrollIntoViewIfNeeded();
+    const bounds = await handle.boundingBox();
+    const originalX = await start.evaluate((node) => parseFloat(node.style.left));
     assert.ok(bounds);
     await page.mouse.move(bounds.x + 20, bounds.y + 20);
     await page.mouse.down();
     await page.mouse.move(bounds.x + 60, bounds.y + 45, { steps: 5 });
     await page.mouse.up();
     const moved = await start.evaluate((node) => node.style.left);
-    assert.ok(Number.parseInt(moved, 10) > 45);
+    assert.ok(parseFloat(moved) > originalX);
     await page.getByRole("button", { name: "Start · 다음 출력" }).click();
     await page.getByRole("button", { name: "End · 입력" }).click();
     await page.getByRole("button", { name: "실행 계획 확인" }).click();
@@ -114,7 +117,6 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await page.reload();
     await registered.waitFor({ state: "attached", timeout: 8000 });
     await page.locator("#project").selectOption({ label: "desktop fixture" });
-    await page.locator("#definition option").filter({ hasText: "test profile" }).waitFor({ state: "attached", timeout: 8000 });
     await page.getByRole("button", { name: "Workflow", exact: true }).click();
     await page.locator("#workflow-list").selectOption({ label: "CI workflow" });
     await page.waitForFunction(() => document.querySelector("#workflow-name").value === "CI workflow");
@@ -180,7 +182,7 @@ async function verifyHarnessEditor(page, repository) {
   await page.locator("#harness-preview-open").click();
   await page.getByText(/CI review rules\./).waitFor();
   await page.getByText(/현재 실행할 수 없습니다/).waitFor();
-  await page.locator("#definition-form").getByRole("button", { name: "버전 저장" }).click();
+  await page.locator("#definition-save").click();
   await page.locator("#definition option").filter({ hasText: "CI reviewer" }).waitFor({ state: "attached" });
   const harnessId = await page.locator("#definition").inputValue();
 
@@ -189,7 +191,7 @@ async function verifyHarnessEditor(page, repository) {
   await page.locator("#workflow-name").fill("CI review workflow");
   await page.locator("#workflow-type").selectOption("agent");
   await page.locator("#workflow-add").click();
-  const agent = page.locator(".workflow-node").filter({ hasText: "Agent" });
+  const agent = page.locator('.workflow-node[data-type="agent"]');
   const nodeId = await agent.getAttribute("data-node");
   await page.locator("[name=harnessDefinition]").selectOption(harnessId);
   await page.locator("[name=harnessVersion]").selectOption("1");
@@ -206,11 +208,11 @@ async function verifyHarnessEditor(page, repository) {
   const workflow = await page.locator("#workflow-list").inputValue();
   const project = await page.locator("#project").inputValue();
 
-  await agent.click();
+  await agent.locator(".workflow-node-title").click();
   await page.locator("#workflow-harness-edit").click();
   await page.locator("#harness-fields").waitFor();
   await page.locator("[name=instructions]").fill("Review changed test cases as well.");
-  await page.locator("#definition-form").getByRole("button", { name: "버전 저장" }).click();
+  await page.locator("#definition-save").click();
   await page.locator("#definition-version option[value='2']").waitFor({ state: "attached" });
   await page.locator("#harness-uses summary").click();
   page.once("dialog", (dialog) => dialog.accept());
@@ -226,7 +228,7 @@ async function verifyHarnessEditor(page, repository) {
   await page.locator("#harness-template-use").click();
   await page.locator("[name=harnessName]").fill("CI documentation");
   await page.locator('[name=harnessModel]').selectOption({ label: "test profile" });
-  await page.locator("#definition-form").getByRole("button", { name: "버전 저장" }).click();
+  await page.locator("#definition-save").click();
   await page.locator("#definition option").filter({ hasText: "CI documentation" }).waitFor({ state: "attached" });
 }
 
