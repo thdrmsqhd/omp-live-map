@@ -11,11 +11,13 @@ const { workflowTemplates } = require("./workflow-templates");
 const { sdlcTasks } = require("./sdlc-tasks");
 const { sdlcStages } = require("./sdlc-stages");
 const { workflowObservability } = require("./workflow-observability");
+const { independentEvaluation } = require("./independent-evaluation");
 const { workflowDelivery } = require("./workflow-delivery");
 const { retryOptions } = require("./workflow-retry-plan");
 const { quickLaunch } = require("./workflow-launch");
 const { addPresetDefinitions, addPresetWorkflows, ensureProfiles, buildPreset, listPresets } = require("./workflow-presets");
 const { projectBudget } = require("./project-budget");
+const { projectContext } = require("./project-context");
 const { workflowStaging } = require("./workflow-staging");
 const { runStore } = require("./run-store");
 const { loopEngine } = require("./loop");
@@ -78,6 +80,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         presetWorkflows: (project) => addPresetWorkflows(db, definitions, workflows, project),
         stages: sdlcStages(db, definitions, workflows),
         observability: workflowObservability(db, flowRuns, workspaceRoot),
+        evaluation: independentEvaluation({ db, directory, workspaceRoot, runs: flowRuns, definitions, workflows }),
         delivery, staging: workflowStaging(db, delivery),
         templates: workflowTemplates(definitions, workflows),
         flow: workflowEngine(flowRuns, workflows, definitions, runner, workspace),
@@ -91,24 +94,29 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions, presetWorkflows } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions, presetWorkflows, evaluation } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
       if (req.method === "GET") {
-        if (endpoint === "projects") result = definitions.projects();
+        if (endpoint === "projects") {
+          result = url.searchParams.get("context") === "1"
+            ? await projectContext(definitions.project(query("project")), url.searchParams.get("source"))
+            : definitions.projects();
+        }
         if (endpoint === "tasks") result = tasks.list(query("project"));
         if (endpoint === "sdlc-stages") result = stages.list(query("project"));
         if (endpoint === "workflow-approvals") result = observability.approvals(query("project"));
+        if (endpoint === "independent-evaluation") result = evaluation.inspect(query("project"), url.searchParams.get("id"));
         if (endpoint === "workflow-live-map") {
           result = observability.liveMapRuns();
           // '개입 필요' 함에서 바로 승인·반려할 수 있게 승인 단계의 안내 문구를 붙인다.
           for (const item of result.attention) {
             if (item.status !== "waiting_approval" || !item.node) continue;
             try {
-              const run = flowRuns.get(item.id);
-              const step = workflows.get(run.project, run.workflow, run.version).payload.nodes.find(({ id }) => id === item.node);
-              if (typeof step?.prompt === "string") item.prompt = step.prompt.slice(0, 1200);
+              const outcome = flowRuns.nodes(item.id).find(({ node }) => node === item.node)?.outcome;
+              if (typeof outcome?.prompt === "string") item.prompt = outcome.prompt.slice(0, 1200);
+              if (outcome?.gate) item.gate = outcome.gate;
             } catch { /* 안내가 없어도 목록은 보여 준다 */ }
           }
         }
@@ -132,8 +140,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
             delivery: delivery.get(id), staging: staging.get(id),
             labels: Object.fromEntries(graph.nodes.map(({ id, label }) => [id, label])),
             // 관제 화면이 단계 안에서 어떤 프롬프트가 어떤 정의로 실행되는지 보여 주는 데 쓴다.
-            graph: { name: display.name, nodes: display.nodes.map(({ id, label, type, x, y, profileVersion, definition, version, instruction, prompt, check, workflow }) => ({
-              id, label, type, x, y, profileVersion, definition, version, workflow,
+            graph: { name: display.name, nodes: display.nodes.map(({ id, label, type, x, y, profileVersion, definition, version, instruction, prompt, check, workflow, gate }) => ({
+              id, label, type, x, y, profileVersion, definition, version, workflow, gate,
               instruction: typeof instruction === "string" ? instruction.slice(0, 600) : undefined,
               prompt: typeof prompt === "string" ? prompt.slice(0, 600) : undefined,
               check: check ? { command: check.command, args: check.args } : undefined })),
@@ -179,6 +187,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       }
       if (req.method === "POST") {
         const input = await body(req);
+        if (endpoint === "independent-evaluation") result = await evaluation.post(input);
         if (endpoint === "runtime" && runner.prepare) {
           void runner.prepare(input.build === true);
           result = runner.status();

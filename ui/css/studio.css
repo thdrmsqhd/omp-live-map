@@ -58,6 +58,8 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-edge-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
 #studio-lines g:hover .studio-edge { stroke-width: 4.5; opacity: 1; }
 #studio-lines g.is-selected .studio-edge { stroke-width: 5; opacity: 1; filter: drop-shadow(0 0 5px var(--wire)); }
+.studio-edge-schema { fill: #d4dcef; font: 600 13px "Segoe UI", system-ui; paint-order: stroke; stroke: #10131a; stroke-width: 4px;
+  pointer-events: visiblePainted; cursor: pointer; }
 
 /* 구역 표시 */
 .studio-lanes { position: absolute; left: 0; top: 0; pointer-events: none; }

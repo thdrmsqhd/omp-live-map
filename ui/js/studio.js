@@ -4,8 +4,8 @@ import { bindStudioCanvas } from "./studio-canvas.js";
 import { bindStudioInspect } from "./studio-inspect.js";
 import { loadModelOptions } from "./engineering-model-options.js";
 import {
-  h, KIND_LABELS, STEP_TYPES, STEP_HINTS, SCOPE_LABELS, HARNESS_TEMPLATES,
-  socketsOf, widgetsOf, problemsOf, blankPayload, blankStep,
+  h, KIND_LABELS, STEP_TYPES, STEP_HINTS, SCOPE_LABELS, HARNESS_TEMPLATES, HARNESS_CATALOG,
+  socketsOf, widgetsOf, problemsOf, blankPayload, blankStep, harnessTypeOf,
 } from "./studio-nodes.js";
 
 const COLUMN = { model: 0, harness: 400, loop: 800, profile: 800 };
@@ -69,6 +69,10 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       [/^Join requires distinct predecessors$/, () => "Join 단계에는 서로 다른 두 단계 이상을 연결하세요."],
       [/^Condition source must be a compatible predecessor$/, () => "Condition의 기준 단계는 앞에 있는 단계여야 합니다(검증 통과 조건은 Command·Loop 단계만)."],
       [/^Input must reference a predecessor artifact$/, () => "산출물 입력은 앞 단계가 내는 산출물만 참조할 수 있습니다."],
+      [/^Invalid handoff schema ID$/, () => "인계 스키마 ID는 소문자로 시작하는 최대 48자의 소문자·숫자·밑줄이어야 합니다."],
+      [/^Handoff (.+) → (.+) \((.+)\): both endpoints/, (from, to, schema) => `${label(from)} → ${label(to)} (${schema}): 양쪽 단계 모두 이 프로젝트에서 쓸 수 있는 저장된 Agent·Loop 하네스를 선택하세요. 세션 프로필은 지원하지 않습니다.`],
+      [/^Handoff (.+) → (.+) \((.+)\): source must/, (from, to, schema) => `${label(from)} → ${label(to)} (${schema}): 송신 단계의 산출물 경로를 저장된 하네스의 결과 파일 경로와 일치시키세요.`],
+      [/^Handoff (.+) → (.+) \((.+)\): target must/, (from, to, schema) => `${label(from)} → ${label(to)} (${schema}): 수신 하네스가 선언한 입력 이름에 이 산출물을 연결하세요.`],
       [/^Workflow name is already in use$/, () => "같은 이름의 Workflow가 이미 있습니다."],
       [/^Definition name is already in use$/, () => "같은 저장 범위에 같은 이름의 정의가 이미 있습니다. 이름을 바꾸세요."],
       [/^(Definition|Workflow) changed\. Reload it before saving\.$/, () => "다른 화면에서 먼저 저장했습니다. Workflow를 다시 열어 최신 버전을 불러온 뒤 고치세요."],
@@ -100,6 +104,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       if (node.kind === "harness") node.ref.model = payload.model ? "def:" + payload.model : "";
       if (node.kind === "loop") node.ref.harness = payload.harness ? "def:" + payload.harness : "";
       render();
+      reinspect();
     } });
   const reinspect = () => { const node = inspect.current(); if (node && nodes.get(node.key) === node) inspect.open(node); else inspect.close(); };
 
@@ -207,6 +212,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
 
   // ---- Workflow 문서 ↔ 단계 노드 ------------------------------------------------
   function openDocument(record, payload) {
+    clearEdgeSelection();
     for (const node of steps()) nodes.delete(node.key);
     if (!payload) { wf = null; return; }
     const profileNodes = new Map(payload.nodes.filter(({ type }) => type === "profile").map((node) => [node.id, node]));
@@ -360,7 +366,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const box = socket.getBoundingClientRect();
     return canvas.point(box.left + box.width / 2, box.top + box.height / 2);
   }
-  function wire(a, b, type, id) {
+  function wire(a, b, type, id, schema) {
     const bend = Math.max(60, Math.abs(b.x - a.x) * .45);
     const d = `M${a.x} ${a.y} C${a.x + bend} ${a.y} ${b.x - bend} ${b.y} ${b.x} ${b.y}`;
     const ns = "http://www.w3.org/2000/svg";
@@ -374,6 +380,16 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       path.setAttribute("class", name);
       group.append(path);
     }
+    if (schema) {
+      group.dataset.schema = schema;
+      const text = document.createElementNS(ns, "text");
+      text.setAttribute("x", (a.x + b.x) / 2);
+      text.setAttribute("y", (a.y + b.y) / 2 - 9);
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("class", "studio-edge-schema");
+      text.textContent = schema;
+      group.append(text);
+    }
     return group;
   }
   function draw() {
@@ -381,7 +397,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const paths = [];
     for (const item of links()) {
       const a = socketPoint(item.from, "out", item.fromSlot), b = socketPoint(item.to, "in", item.toSlot);
-      if (a && b) paths.push(wire(a, b, item.type, item.id));
+      if (a && b) paths.push(wire(a, b, item.type, item.id, item.edge?.schema));
     }
     if (link?.point) {
       const anchor = socketPoint(link.origin.key, link.origin.dir, link.origin.slot);
@@ -407,8 +423,12 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       .map(({ provider, model }) => ({ provider, id: model, name: model })),
     stepChoices: (node) => steps().filter((item) => item !== node && !["start", "end"].includes(item.data.type))
       .map((item) => [item.data.id, item.data.label]),
-    changed(node, { title, rerender } = {}) {
-      if (rerender) { render(); return; }
+    changed(node, { title, rerender, refreshInspect } = {}) {
+      if (rerender) {
+        render();
+        if (refreshInspect && inspect.current() === node) reinspect();
+        return;
+      }
       refreshCard(node, title);
       if (title) renameOptions(node);
       updateToolbar();
@@ -429,10 +449,11 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       const version = node.version ? " · v" + node.version : "";
       return STEP_TYPES[node.data.type] + version;
     }
-    if (node.isNew) return KIND_LABELS[node.kind] + " · 저장 전";
+    const kind = (node.kind === "harness" ? harnessTypeOf(node.draft.role)?.label : null) ?? KIND_LABELS[node.kind];
+    if (node.isNew) return kind + " · 저장 전";
     const owner = ownerOf(node);
     const scope = node.kind === "profile" ? "" : (owner.scope === "team" ? "팀 " + owner.team : SCOPE_LABELS[owner.scope]) + " · ";
-    return KIND_LABELS[node.kind] + " · " + scope + "v" + node.record.version;
+    return kind + " · " + scope + "v" + node.record.version;
   }
   function socket(node, direction, { slot, type, label }) {
     return h("span", { class: "studio-socket", title: `${label} ${direction === "in" ? "입력" : "출력"} · 끌어서 연결`,
@@ -622,11 +643,46 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     saveLayout();
     render();
   }
+  function clearEdgeSelection() {
+    selectedEdge = "";
+    if (el("inspect").querySelector("[data-handoff-editor]")) inspect.close();
+  }
   function select(key) {
     selected = key;
-    if (key) selectedEdge = "";
+    clearEdgeSelection();
     for (const item of layer.children) item.classList.toggle("is-selected", item.dataset.key === key);
     scheduleDraw();
+  }
+  function inspectHandoff({ edge }) {
+    const source = stepById(edge.from), target = stepById(edge.to);
+    const ids = new Set();
+    const outputs = Array.isArray(source.data.outputs) ? source.data.outputs.slice(0, 16) : [];
+    const inputs = Array.isArray(target.data.inputs) ? target.data.inputs.slice(0, 16) : [];
+    for (const output of outputs) {
+      if (typeof output?.name === "string" && /^[a-z][a-z0-9_]{0,47}$/.test(output.name) &&
+          inputs.some((input) => input?.source === edge.from && input.artifact === output.name)) ids.add(output.name);
+    }
+    const choice = h("select", { "aria-label": "인계 스키마" }, h("option", { value: "" }, "없음 (실행 순서만)"),
+      ...[...ids].map((id) => h("option", { value: id }, id)));
+    if (edge.schema && !ids.has(edge.schema)) choice.append(h("option", { value: edge.schema }, edge.schema + " (입출력 불일치)"));
+    choice.value = edge.schema ?? "";
+    choice.addEventListener("change", () => {
+      if (choice.value) edge.schema = choice.value;
+      else delete edge.schema;
+      scheduleDraw();
+      updateToolbar();
+      say("인계 스키마를 변경했습니다. 검사 또는 저장 시 하네스 계약을 확인합니다.");
+    });
+    const close = h("button", { type: "button", class: "studio-mini", onclick: () => { clearEdgeSelection(); scheduleDraw(); } }, "닫기");
+    inspect.close();
+    const root = el("inspect");
+    root.append(h("section", { "data-handoff-editor": "" },
+      h("header", { class: "studio-inspect-head" }, h("span", {}, h("strong", {}, "인계 스키마"),
+        h("small", {}, `${nameOf(source)} → ${nameOf(target)}`)), close),
+      h("label", { class: "studio-inspect-row" }, "산출물 스키마 ID", choice),
+      h("p", {}, "이 간선의 송신 산출물 이름을 선택하세요. 저장된 하네스의 JSON 결과 파일을 송신 단계에 선언하고, 수신 하네스가 사용하는 입력으로 연결해야 합니다."),
+      ids.size ? null : h("p", {}, "두 단계의 ‘산출물 입출력’에서 먼저 같은 산출물을 연결하세요.")));
+    root.hidden = false;
   }
 
   // ---- 끌기: 노드 이동·연결 ------------------------------------------------------
@@ -736,6 +792,12 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       create: (at) => createLibrary("loop", at, { owner: libraryOwner() }) });
     items.push({ group: "정의", label: "새 에이전트 프로필", hint: "실행기·모델·역할", out: "profile", in: [],
       create: (at) => createLibrary("profile", at, { owner: ownerFor("personal") }) });
+    for (const family of HARNESS_CATALOG.families) {
+      for (const type of HARNESS_CATALOG.types.filter((type) => type.family === family.id)) {
+        items.push({ group: family.label, label: type.label, hint: type.output, search: `새 하네스 ${type.id} ${type.outputSchema}`,
+          out: "harness", in: ["model"], create: (at) => createLibrary("harness", at, { template: type.id, owner: libraryOwner() }) });
+      }
+    }
     if (wf) {
       for (const type of ["agent", "loop", "command", "condition", "approval", "parallel", "join", "subgraph", "end"]) {
         if (type === "end" && steps().some(({ data }) => data.type === "end")) continue;
@@ -745,8 +807,10 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     }
     const shown = new Set(visibleNodes().map(({ key }) => key));
     for (const node of libraryNodes().filter(({ key }) => !shown.has(key))) {
-      items.push({ group: "저장된 정의 불러오기", label: labelOf(node), hint: KIND_LABELS[node.kind] + " · v" + (node.record?.version ?? "-"),
-        out: node.kind, in: Object.keys(node.ref), create: (at) => { pinned.add(node.key); node.x = at.x; node.y = at.y; remember(node); saveLayout(); return node; } });
+      const type = node.kind === "harness" ? harnessTypeOf(node.draft.role) : null;
+      items.push({ group: "저장된 정의 불러오기", label: labelOf(node), hint: (type?.label ?? KIND_LABELS[node.kind]) + " · v" + (node.record?.version ?? "-"),
+        search: type ? `${type.id} ${type.outputSchema}` : "", out: node.kind, in: Object.keys(node.ref),
+        create: (at) => { pinned.add(node.key); node.x = at.x; node.y = at.y; remember(node); saveLayout(); return node; } });
     }
     if (!origin) {
       if (desktop()) items.push({ group: "빠른 시작", label: "기본 구성 추가", hint: "기본 모델·하네스·루프·프로필을 개인 범위에 추가", out: null, in: [],
@@ -771,7 +835,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   function paintMenu() {
     if (!menuState) return;
     const query = menuSearch.value.trim().toLowerCase();
-    const items = menuState.items.filter(({ label, hint, group }) => !query || (label + " " + hint + " " + group).toLowerCase().includes(query));
+    const items = menuState.items.filter(({ label, hint, group, search = "" }) => !query || `${label} ${hint} ${group} ${search}`.toLowerCase().includes(query));
     let group = "";
     const rows = [];
     items.forEach((item, index) => {
@@ -1256,17 +1320,21 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       const item = links().find((entry) => entry.id === id);
       if (item) {
         removeLink(item);
-        selectedEdge = "";
+        clearEdgeSelection();
         render();
         say("연결을 끊었습니다.");
       }
       return;
     }
     lastEdgeClick = { id, at: now };
+    clearEdgeSelection();
     selectedEdge = id;
     selected = "";
     for (const item of layer.children) item.classList.remove("is-selected");
-    say("연결을 선택했습니다. Delete로 끊거나, 한 번 더 눌러 바로 끊습니다.");
+    const item = links().find((entry) => entry.id === id);
+    if (item?.edge) inspectHandoff(item);
+    say(item?.edge ? "실행 간선을 선택했습니다. 오른쪽에서 인계 스키마를 지정하거나 Delete로 끊으세요."
+      : "연결을 선택했습니다. Delete로 끊거나, 한 번 더 눌러 바로 끊습니다.");
     viewport.focus({ preventScroll: true });
     scheduleDraw();
   });
@@ -1285,8 +1353,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     if (!viewport.contains(document.activeElement) && document.activeElement !== document.body) return;
     if (selectedEdge) {
       const item = links().find(({ id }) => id === selectedEdge);
-      selectedEdge = "";
-      if (item) { removeLink(item); render(); say("연결을 끊었습니다."); }
+      clearEdgeSelection();
+      if (item) { event.preventDefault(); removeLink(item); render(); say("연결을 끊었습니다."); }
       return;
     }
     const node = nodes.get(selected);
@@ -1331,5 +1399,12 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     },
     dirty: () => dirtyCount() > 0,
     projectId: () => project?.id ?? "",
+    currentWorkflow: () => wf?.record ?? null,
+    focusStep(id) {
+      const node = stepById(id);
+      if (!node) return false;
+      focusNode(node);
+      return true;
+    },
   };
 }

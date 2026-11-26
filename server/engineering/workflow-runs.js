@@ -105,10 +105,10 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
         setNode(id, node, status, outcome);
       });
     },
-    ask(id, node, prompt, artifacts) {
+    ask(id, node, prompt, artifacts, gate) {
       transaction(db, () => {
         setStatus(id, ["running"], "waiting_approval");
-        updatePendingNode(id, node, "waiting_approval", { prompt, artifacts });
+        updatePendingNode(id, node, "waiting_approval", { prompt, artifacts, ...(gate ? { gate } : {}) });
       });
     },
     decide(id, node, decision, reason) {

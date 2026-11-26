@@ -89,6 +89,7 @@ function wfActiveNode(detail = wfMap.run) {
   return pick("running") ?? pick("waiting_approval") ?? null;
 }
 function wfFocusNode(id, dur = 260) {
+  if (mapMode === "design") { wfMap.followTarget = id; return window.UnifiedWorkflow?.focus(id); }
   const node = wfNodes().find((item) => item.id === id);
   if (!node) return false;
   wfMap.followTarget = id;
@@ -116,7 +117,7 @@ function wfPaintFollow() {
 }
 function wfFollowActive(previous) {
   const active = wfActiveNode();
-  if (!wfMap.follow || !active || mapMode !== "map") return;
+  if (!wfMap.follow || !active || !["map", "design"].includes(mapMode)) return;
   if (active === wfMap.followTarget && active === previous) return;
   // 따라가는 동안에는 상세 패널도 지금 단계를 보여 준다.
   if (wfMap.selected === previous || wfMap.selected === wfMap.followTarget) {
@@ -158,7 +159,7 @@ function wfPaintEdges() {
     for (const [key, value] of Object.entries(attributes)) item.setAttribute(key, value);
     return item;
   };
-  svg.replaceChildren(...wfEdges().flatMap(({ from, to, port }, index) => {
+  svg.replaceChildren(...wfEdges().flatMap(({ from, to, port, schema }, index) => {
     const source = nodes.get(from), target = nodes.get(to);
     if (!source || !target) return [];
     const start = wfPoint(source), end = wfPoint(target);
@@ -180,9 +181,11 @@ function wfPaintEdges() {
         group.append(packet);
       }
     }
-    if (!["next", "profile"].includes(port)) {
+    const branch = ["next", "profile"].includes(port) ? null : wfPortNames[port] ?? port;
+    if (schema || branch) {
       const label = el("text", { x: String((x + tx) / 2), y: String((y + ty) / 2 - 9), "text-anchor": "middle" });
-      label.textContent = wfPortNames[port] ?? port;
+      label.textContent = [branch, schema].filter(Boolean).join(" · ");
+      if (schema) group.setAttribute("data-schema", schema);
       group.append(label);
     }
     return [group];
@@ -271,7 +274,13 @@ function wfPaintNodeActions(executions) {
       bar.dataset.actionsFor = id;
       const status = wfText("small", "", "wf-node-actions-status");
       status.setAttribute("role", "status");
-      if (kind === "approval") {
+      if (kind === "approval" && (wfNodes().find((node) => node.id === id)?.gate)) {
+        const row = wfText("div", "", "wf-node-actions-row");
+        for (const [decision, label] of [["approved", "직접 처리 완료"], ["rejected", "진행하지 않음"]]) {
+          row.append(wfActionButton(label, ({ currentTarget }) => wfPerform(currentTarget, "workflow-runs/approval", { node: id, decision })));
+        }
+        bar.append(wfText("p", "원래 창에서 직접 처리하세요. 이 버튼은 진행 상태만 바꿉니다."), row, status);
+      } else if (kind === "approval") {
         const memo = document.createElement("textarea");
         memo.rows = 2;
         memo.maxLength = 2000;
@@ -461,10 +470,12 @@ function wfClose() {
   wfEdgeSignature = undefined;
   wfMap.selected = null;
   wfMap.buttons.clear();
+  for (const bar of wfActionBars.values()) bar.remove();
   wfActionBars.clear();
   $("workflow-map-nodes").replaceChildren();
   $("workflow-inspector").hidden = $("workflow-layer").hidden = true;
   writeJSON("omp-workflow-map-run", null);
+  window.UnifiedWorkflow?.paint();
   if (wfMap.previousView && mapMode === "map") animateView(wfMap.previousView);
   else paintMinimap();
   wfMap.previousView = null;
@@ -493,7 +504,8 @@ function wfAccept(detail, initial, node) {
       wfMap.positions = previous?.positions ?? {};
     }
     wfMap.buttons.clear();
-  wfActionBars.clear();
+    for (const bar of wfActionBars.values()) bar.remove();
+    wfActionBars.clear();
     $("workflow-map-nodes").replaceChildren();
     const target = detail.graph.nodes.find(({ id }) => id === node)?.id;
     wfMap.selected = target ?? detail.nodes.find(({ status }) => ["failed", "waiting_approval", "running", "interrupted"].includes(status))?.node ??
@@ -514,9 +526,11 @@ async function openMapWorkflow(id, node) {
   wfMap.notice = "";
   $("workflow-inspector").hidden = false;
   $("wf-map-status").textContent = "실행을 불러오는 중입니다.";
-  setMapMode("map");
+  if (window.ompDesign) setMapMode("design"); else setMapMode("map");
   try {
     const detail = await mapWorkflowRequest("workflow-run", { id });
+    if (token !== wfMap.generation) return false;
+    if (window.ompDesign) await window.ompDesign.open({ project: detail.run.project, workflow: detail.run.workflow });
     if (token !== wfMap.generation) return false;
     wfMap.previousView ??= { ...view };
     wfMap.follow = false;
@@ -532,7 +546,7 @@ async function openMapWorkflow(id, node) {
       // 방금 만든 노드의 높이를 재려면 한 프레임 뒤에 맞춘다.
       requestAnimationFrame(() => { if (token === wfMap.generation) wfFocusNode(active, 200); });
     } else if (active && node) wfFocusNode(node, 200);
-    else wfFit();
+    else if (mapMode === "map") wfFit();
     wfPaintFollow();
     return true;
   } catch (error) {
@@ -544,7 +558,7 @@ async function openMapWorkflow(id, node) {
 }
 
 async function refreshMapWorkflow() {
-  if (!wfMap.run || wfMap.edit || wfMap.opening || wfMap.loading || wfMap.intervening || mapMode !== "map") return;
+  if (!wfMap.run || wfMap.edit || wfMap.opening || wfMap.loading || wfMap.intervening || !["map", "design"].includes(mapMode)) return;
   const id = wfMap.run.run.id, token = wfMap.generation;
   wfMap.loading = true;
   try {
@@ -556,7 +570,7 @@ async function refreshMapWorkflow() {
 }
 
 $("wf-map-close").onclick = wfClose;
-$("wf-map-fit").onclick = () => { wfStopFollow(); wfFit(); };
+$("wf-map-fit").onclick = () => { wfStopFollow(); if (mapMode === "design") $("studio-fit").click(); else wfFit(); };
 $("wf-map-follow").onclick = () => {
   wfMap.follow = !wfMap.follow;
   const active = wfActiveNode();
@@ -611,8 +625,8 @@ if (window.engineeringDesktop) {
   }, { once: true });
   const last = readJSON("omp-workflow-map-run", null);
   // 마지막으로 본 실행을 다시 연다. 주소로 설계 모드를 열었으면(design-mode.js 가 먼저 바꾼다) 모드를 빼앗지 않는다.
-  if (last && mapMode === "map") document.addEventListener("DOMContentLoaded", () => {
-    if (mapMode !== "map") return;
+  if (last && !address.get("workflow") && !address.get("project")) document.addEventListener("DOMContentLoaded", () => {
+    if (!["map", "design"].includes(mapMode)) return;
     const selected = readJSON("omp-workflow-map-selection", null);
     void openMapWorkflow(last, selected?.id === last ? selected.node : undefined);
   }, { once: true });

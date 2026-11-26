@@ -24,6 +24,13 @@ function identifier(value, label) {
   return id;
 }
 
+function handoffSchema(value) {
+  if (typeof value !== "string" || value.length > 48 || !/^[a-z][a-z0-9_]*$/.test(value)) {
+    bad("Invalid handoff schema ID");
+  }
+  return value;
+}
+
 function contract(raw) {
   const inputs = array(raw.inputs ?? [], "node inputs", 16).map((input) => ({
     name: identifier(input?.name, "input name"),
@@ -62,7 +69,10 @@ function settings(type, raw) {
     if (field === "status" && ["succeeded", "failed", "skipped"].includes(raw.equals)) return { source, field, equals: raw.equals };
     bad("Use a structured status or check-result condition");
   }
-  if (type === "approval") return { prompt: string(raw.prompt, "approval prompt", 2000) };
+  if (type === "approval") {
+    if (raw.gate !== undefined && !["browser", "payment", "consent", "password", "system", "uac"].includes(raw.gate)) bad("Invalid manual approval gate");
+    return { prompt: string(raw.prompt, "approval prompt", 2000), ...(raw.gate ? { gate: raw.gate } : {}) };
+  }
   return {};
 }
 
@@ -81,6 +91,7 @@ function compileGraph(payload, { expanded = false } = {}) {
   const edges = array(payload.edges, "graph connections", 300).map((edge) => ({
     from: identifier(edge?.from, "edge source"), to: identifier(edge?.to, "edge target"),
     port: identifier(edge?.port ?? "next", "output port"),
+    ...(edge?.schema === undefined ? {} : { schema: handoffSchema(edge.schema) }),
   }));
   const byId = new Map(nodes.map((item) => [item.id, { ...item, incoming: [], outgoing: [] }]));
   const configuration = new Map();
@@ -95,6 +106,7 @@ function compileGraph(payload, { expanded = false } = {}) {
     const from = byId.get(edge.from), to = byId.get(edge.to);
     if (!from || !to || from === to) bad("Invalid graph connection or output port");
     if (edge.port === "profile") {
+      if (edge.schema) bad("Profile connections cannot declare a handoff schema");
       if (from.type !== "profile" || to.type !== "agent" || configuration.has(to.id)) {
         bad("Connect one profile output to each Agent profile input");
       }

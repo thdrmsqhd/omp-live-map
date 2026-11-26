@@ -17,7 +17,7 @@ function setWorkflowQueueOpen(open) {
 }
 
 function paintWorkflowQueueMode() {
-  const visible = mapMode === "map";
+  const visible = mapMode === "map" || mapMode === "design";
   wfQueueButton.hidden = !visible;
   if (!visible) setWorkflowQueueOpen(false);
 }
@@ -34,78 +34,111 @@ function paintInboxButton() {
 }
 
 // ---- 에이전트 질문 -------------------------------------------------------------
-function inboxSessionId(key) { return liveNodeId(key) || key; }
+// 질문 키(소문자·슬래시 경로)를 지도 노드 id 로 바꾼다. 카드가 아직 없으면 '주의 필요' 상태(ATTN)에서 찾는다.
+function inboxSessionId(key) {
+  const id = liveNodeId(key);
+  if (id) return id;
+  for (const node of ATTN.keys()) if (askKey(node) === key) return node;
+  return key;
+}
+// 엔지니어링 런타임이 현재 RPC 에 할당한 키만 Workflow 질문의 소유권을 나타낸다.
+const isWorkflowAskSession = (key) => typeof key === "string" && /^workflow-ask:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(key);
+const workflowAskCards = new WeakMap();
+function trackWorkflowAskCards(host, id, list) {
+  for (const card of host.querySelectorAll("[data-ask-card]")) {
+    const request = list[+card.dataset.askCard];
+    if (request) workflowAskCards.set(card, { id, request });
+    for (const button of card.querySelectorAll("button")) button.type = "button";
+  }
+}
 function paintInboxAsks() {
   paintInboxButton();
   if (wfQueuePanel.hidden) return;
   const groups = [...ASKS].filter(([, list]) => list.length);
   const html = groups.map(([key, list]) => {
     const id = inboxSessionId(key), node = typeof nodeById === "function" ? nodeById(id) : null;
-    const title = node ? attnTitle(node) : key.split("/").pop();
+    const title = node ? attnTitle(node) : ATTN.get(id)?.title || (isWorkflowAskSession(key) ? "Workflow 에이전트" : key.split("/").pop());
     return `<section class="inbox-ask" data-ask-node="${esc(id)}">
       <div class="inbox-ask-h"><strong>${esc(title)}</strong>${node ? `<button type="button" class="inbox-open" data-open-node="${esc(id)}">카드 열기</button>` : ""}</div>
-      <div class="casks">${list.map(askCardHTML).join("")}</div></section>`;
+      <form class="casks">${list.map(askCardHTML).join("")}</form></section>`;
   }).join("") || `<p>답을 기다리는 질문이 없습니다.</p>`;
-  if (inboxAsks.__html !== html) {
+  const signature = JSON.stringify([html, groups.map(([key, list]) => [key, list.map(r => r.id)])]);
+  if (inboxAsks.__html !== signature) {
     const active = document.activeElement;
-    const focus = active && inboxAsks.contains(active) && active.dataset?.askField
-      ? { node: active.closest("[data-ask-node]")?.dataset.askNode, card: active.closest("[data-ask-card]")?.dataset.askCard, field: active.dataset.askField } : null;
-    inboxAsks.__html = html;
+    const previous = inboxAsks.contains(active) && workflowAskCards.get(active.closest("[data-ask-card]"));
+    const field = previous && active.dataset.askField;
+    inboxAsks.__html = signature;
     inboxAsks.innerHTML = html;
-    if (focus) inboxAsks.querySelector(`[data-ask-node="${CSS.escape(focus.node ?? "")}"] [data-ask-card="${focus.card}"] [data-ask-field="${focus.field}"]`)?.focus();
+    if (field) {
+      const index = asksOf(previous.id).indexOf(previous.request);
+      if (index >= 0) inboxAsks.querySelector(`[data-ask-node="${CSS.escape(previous.id)}"] [data-ask-card="${index}"] [data-ask-field="${field}"]`)?.focus();
+    }
   }
-  for (const section of inboxAsks.querySelectorAll("[data-ask-node]")) syncAskFields(section, asksOf(section.dataset.askNode));
-  if (typeof updateAskDeadlines === "function") updateAskDeadlines(inboxAsks);
+  for (const section of inboxAsks.querySelectorAll("[data-ask-node]")) {
+    const id = section.dataset.askNode, list = asksOf(id);
+    trackWorkflowAskCards(section, id, list);
+    syncAskFields(section, list);
+  }
+  updateAskDeadlines(inboxAsks);
 }
-const inboxHit = (element) => {
-  const section = element.closest("[data-ask-node]"), card = element.closest("[data-ask-card]");
-  const r = section && card ? asksOf(section.dataset.askNode)[+card.dataset.askCard] : null;
-  return r ? { id: section.dataset.askNode, r } : null;
-};
-// 고른 항목·오류 표시는 대화 블록만 다시 그리므로(paintChat) 함도 한 번 더 그린다.
-const inboxLater = () => setTimeout(paintInboxAsks, 0);
-inboxAsks.addEventListener("change", (event) => {
-  const hit = inboxHit(event.target);
-  if (!hit) return;
-  if (event.target.dataset.askOpt != null) askPick(hit.id, hit.r.id, +event.target.dataset.askOpt, event.target.dataset.askLabel);
-  else if (event.target.dataset.askSel != null) askSelect(hit.id, hit.r.id, +event.target.dataset.askSel);
-  inboxLater();
-});
-inboxAsks.addEventListener("input", (event) => {
-  const hit = inboxHit(event.target);
-  if (!hit) return;
-  if (event.target.dataset.askCustom != null) askCustom(hit.id, hit.r.id, +event.target.dataset.askCustom, event.target.value);
-  else if (event.target.dataset.askValue != null) askValue(hit.id, hit.r.id, event.target.value);
-});
-inboxAsks.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey)) return;
-  const hit = inboxHit(event.target);
-  if (!hit) return;
-  event.preventDefault();
-  if (hit.r.method === "confirm") askConfirm(hit.id, hit.r.id, true); else askSend(hit.id, hit.r.id);
-  inboxLater();
-});
+function bindWorkflowAskControls(host, authorized = () => true) {
+  const requestHit = (element) => {
+    const card = element.closest("[data-ask-card]"), hit = workflowAskCards.get(card);
+    return hit && host.contains(card) && authorized(hit.id) && asksOf(hit.id).includes(hit.request) ? hit : null;
+  };
+  const later = (node) => setTimeout(() => paintWorkflowAskSurfaces(node), 0);
+  host.addEventListener("submit", event => event.preventDefault());
+  host.addEventListener("change", (event) => {
+    const hit = requestHit(event.target);
+    if (!hit) return;
+    const field = event.target.dataset;
+    if (field.askOpt != null) askPick(hit.id, hit.request.id, +field.askOpt, field.askLabel);
+    else if (field.askSel != null) askSelect(hit.id, hit.request.id, +field.askSel);
+    later(hit.id);
+  });
+  host.addEventListener("input", (event) => {
+    const hit = requestHit(event.target);
+    if (!hit) return;
+    const field = event.target.dataset;
+    if (field.askCustom != null) askCustom(hit.id, hit.request.id, +field.askCustom, event.target.value);
+    else if (field.askValue != null) askValue(hit.id, hit.request.id, event.target.value);
+    // 입력 중인 두 화면을 같은 모델 상태에 맞추되, 포커스를 빼앗지 않는다.
+    later(hit.id);
+  });
+  host.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || event.isComposing) return;
+    const hit = requestHit(event.target);
+    if (!hit) return;
+    event.preventDefault();
+    if (hit.request.method === "confirm") askConfirm(hit.id, hit.request.id, true); else askSend(hit.id, hit.request.id);
+    later(hit.id);
+  });
+  host.addEventListener("click", (event) => {
+    const button = event.target.closest("button"), hit = requestHit(event.target);
+    if (!button || !hit) return;
+    if (button.dataset.askSend != null) askSend(hit.id, hit.request.id);
+    else if (button.dataset.askCancel != null) askCancel(hit.id, hit.request.id);
+    else if (button.dataset.askConfirm != null) askConfirm(hit.id, hit.request.id, button.dataset.askConfirm === "1");
+    later(hit.id);
+  });
+}
+bindWorkflowAskControls(inboxAsks);
 inboxAsks.addEventListener("click", (event) => {
   const open = event.target.closest("[data-open-node]");
-  if (open) {
-    if (typeof openNode === "function") openNode(open.dataset.openNode);
-    setWorkflowQueueOpen(false);
-    return;
-  }
-  const button = event.target.closest("button"), hit = inboxHit(event.target);
-  if (!button || !hit) return;
-  if (button.dataset.askSend != null) askSend(hit.id, hit.r.id);
-  else if (button.dataset.askCancel != null) askCancel(hit.id, hit.r.id);
-  else if (button.dataset.askConfirm != null) askConfirm(hit.id, hit.r.id, button.dataset.askConfirm === "1");
-  inboxLater();
+  if (!open) return;
+  if (typeof openNode === "function") openNode(open.dataset.openNode);
+  setWorkflowQueueOpen(false);
 });
-// 질문이 생기거나 풀리면(SSE) 함과 버튼 숫자를 바로 고친다.
+// 질문 SSE 와 응답 오류를 두 위치의 같은 질문 모델에 반영한다.
+function paintWorkflowAskSurfaces(node) {
+  paintInboxAsks();
+  if (isWorkflowAskSession(node)) window.UnifiedWorkflow?.paintAsk(node);
+}
 {
   const touched = askTouched;
-  askTouched = (node) => { touched(node); paintInboxAsks(); };
-  // 답 보내기 실패 같은 표시는 대화 블록(paintChat)만 다시 그리므로 함이 열려 있으면 함도 다시 그린다.
+  askTouched = (node) => { touched(node); paintWorkflowAskSurfaces(node); };
   const chat = paintChat;
-  paintChat = (id) => { chat(id); if (!wfQueuePanel.hidden) paintInboxAsks(); };
+  paintChat = (id) => { chat(id); if (!wfQueuePanel.hidden || isWorkflowAskSession(id)) paintWorkflowAskSurfaces(id); };
 }
 
 // ---- Workflow -----------------------------------------------------------------
@@ -132,7 +165,19 @@ function workflowItem(item, attention) {
   if (item.node) open.dataset.queueNode = item.node;
   open.append(wfText("strong", item.title), wfText("small", item.project + " · " + wfLabel(item.status)));
   article.append(open);
-  if (attention && item.status === "waiting_approval" && item.node) {
+  if (attention && item.status === "waiting_approval" && item.node && item.gate) {
+    article.append(wfText("p", "원래 창에서 직접 처리한 뒤 진행 상태만 기록하세요."));
+    const status = wfText("small", "", "inbox-run-status");
+    status.setAttribute("role", "status");
+    const row = wfText("div", "", "wf-node-actions-row");
+    for (const [decision, label] of [["approved", "직접 처리 완료"], ["rejected", "진행하지 않음"]]) {
+      const button = wfText("button", label);
+      button.type = "button";
+      button.onclick = () => void inboxDecide(button, item, decision, { value: "manual" }, status);
+      row.append(button);
+    }
+    article.append(row, status);
+  } else if (attention && item.status === "waiting_approval" && item.node && !item.gate) {
     if (item.prompt) article.append(wfText("p", item.prompt, "inbox-run-prompt"));
     const memo = document.createElement("textarea");
     memo.rows = 2;
@@ -183,7 +228,7 @@ function paintWorkflowQueue({ total, attention, recent }) {
 }
 
 async function refreshWorkflowQueue() {
-  if (!window.engineeringDesktop || mapMode !== "map" || document.hidden) return;
+  if (!window.engineeringDesktop || !["map", "design"].includes(mapMode) || document.hidden) return;
   if (wfQueueLoading) { wfQueueAgain = true; return; }
   wfQueueLoading = true;
   if (!wfQueueSignature) wfQueueStatus.textContent = "실행 목록을 불러오는 중입니다.";
@@ -216,7 +261,7 @@ wfQueueItems.addEventListener("click", async (event) => {
   }
 });
 document.addEventListener("keydown", (event) => {
-  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "i" && mapMode === "map") {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "i" && ["map", "design"].includes(mapMode)) {
     event.preventDefault();
     wfQueueButton.click();
     if (!wfQueuePanel.hidden) wfQueuePanel.querySelector("textarea, input, button")?.focus({ preventScroll: true });

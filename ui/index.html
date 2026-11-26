@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="css/workflow-map.css">
 <link rel="stylesheet" href="css/studio.css">
 <link rel="stylesheet" href="css/design.css">
+<link rel="stylesheet" href="css/unified-workflow.css">
   <link rel="stylesheet" href="css/card-readability.css">
   <link rel="stylesheet" href="css/chat-ux.css">
   <link rel="stylesheet" href="css/prompt-composer.css">
@@ -31,7 +32,7 @@
 <div id="app">
   <div id="topbar">
     <span class="brand"><b>omp</b> / live map</span>
-    <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">프로젝트</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">Live Map · 관제</button><button data-mode="design" hidden>설계 · 노드 캔버스</button></nav>
+    <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">프로젝트</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">Live Map · 관제</button><button data-mode="design" hidden>Workflow 관제</button></nav>
     <button id="workflow-new-run" hidden>＋ 새 실행</button>
     <button id="workflow-queue-toggle" aria-controls="workflow-queue" aria-expanded="false" hidden>개입 필요</button>
     <button id="new-session-action" title="새 세션">＋ 세션</button>
@@ -56,16 +57,16 @@
       <button id="zfit" title="전체 보기 (0)">fit</button>
     </div>
   </div>
-  <section id="design" hidden aria-label="설계 · 노드 캔버스">
+  <section id="design" hidden aria-label="통합 Workflow 관제">
     <div class="design-bar">
       <label>작업 프로젝트 <select id="design-project"><option value="">프로젝트 선택</option></select></label>
       <p id="design-status" role="status"></p>
       <a href="/engineering.html">프로젝트·팀·실행 환경 설정</a>
     </div>
-    <section id="studio" class="studio" aria-label="노드 캔버스">
+    <div id="unified-layout"><div id="unified-main">
+    <section id="studio" class="studio" aria-label="설계 및 실시간 관제 캔버스">
       <div class="studio-toolbar">
         <label>Workflow <select id="studio-workflow"></select></label>
-        <label id="studio-workflow-name-field" hidden>이름 <input id="studio-workflow-name" maxlength="240" placeholder="Workflow 이름"></label>
         <div id="studio-mode" class="studio-segment" role="group" aria-label="정의 표시 범위" hidden>
           <button type="button" data-mode="linked" aria-pressed="true">연결된 정의만</button>
           <button type="button" data-mode="all" aria-pressed="false">전체 정의</button>
@@ -76,7 +77,7 @@
         <input id="studio-import-file" type="file" accept=".json,application/json" hidden>
         <span class="studio-spacer"></span>
         <button id="studio-check" type="button" disabled>Workflow 검사</button>
-        <button id="studio-run" type="button" disabled>관제에서 실행</button>
+        <button id="studio-run" type="button" disabled>실행 시작</button>
         <button id="studio-save" type="button" disabled>변경 저장</button>
       </div>
       <p id="studio-status" role="status"></p>
@@ -97,6 +98,7 @@
             <button id="studio-defaults" class="workflow-primary" type="button">기본 구성 추가</button>
           </div>
         </div>
+        <article id="studio-workflow-name-field" class="studio-overlay studio-workflow-card" aria-label="Workflow 카드" hidden><strong>Workflow</strong><label>이름 <input id="studio-workflow-name" maxlength="240" placeholder="Workflow 이름"></label></article>
         <div class="studio-overlay studio-legend" aria-hidden="true">
           <span><i data-type="model"></i>모델</span>
           <span><i data-type="harness"></i>하네스</span>
@@ -119,6 +121,10 @@
       </div>
       <p class="studio-help">빈 곳 드래그: 이동 · 휠: 확대·축소 · 빈 곳 더블클릭/우클릭: 노드 추가 · 출력 소켓을 끌어 같은 색 입력에 연결(빈 곳에 놓으면 맞는 노드 추가) · 연결된 입력을 끌면 분리 · 노드 안 셀렉트로도 연결 변경 · <kbd>Delete</kbd> 선택 삭제 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 변경 저장</p>
     </section>
+    <section id="unified-run-snapshot" aria-label="실행 스냅샷" hidden><h2>실행 스냅샷</h2><p>편집본과 다른 버전입니다. 아래 단계는 이 실행에 고정된 버전입니다.</p><div id="unified-run-steps"></div></section>
+    <aside id="independent-evaluation" class="independent-evaluation" aria-label="독립 평가"></aside>
+    <section id="unified-journal" aria-label="작업 지시 수행 내역"><div class="unified-section-label"><div>실시간 실행</div><h2>작업 지시 수행 내역</h2></div><p id="unified-empty-run">실행 시작을 누르거나 ‘개입 필요’에서 기존 실행을 열면 작업 지시와 산출물을 볼 수 있습니다.</p><ol id="unified-run-timeline" aria-label="실행 단계별 상태" hidden></ol><div id="unified-inspector-host"></div></section>
+    </div><div id="unified-side"><aside id="unified-project-context" aria-label="프로젝트 문서" hidden></aside><div id="unified-queue-host"></div></div></div>
   </section>
   <dialog id="workflow-launch" aria-labelledby="workflow-launch-title">
     <form id="workflow-launch-form">
@@ -181,7 +187,7 @@
           <button id="wf-map-close" aria-label="Workflow 닫기">닫기</button>
         </div>
         <div class="wf-actions">
-          <button id="wf-map-follow" type="button" aria-pressed="false" hidden>실행 따라가기</button><button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-new">이 Workflow로 새 실행</button><a id="wf-map-engineering">설계에서 편집</a>
+          <button id="wf-map-follow" type="button" aria-pressed="false" hidden>실행 따라가기</button><button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-new">이 Workflow로 새 실행</button><a id="wf-map-engineering">통합 Workflow 관제 열기</a>
         </div>
         <p id="wf-map-status" role="status"></p>
         <div id="wf-map-run-controls"></div>
@@ -305,6 +311,9 @@
   <script src="js/engineering-scope-label.js"></script>
 <script src="js/engineering-auth.js"></script>
       <script src="js/view/workflow-queue.js"></script>
+<script src="js/view/unified-project-context.js"></script>
+<script src="js/view/unified-workflow.js"></script>
+<script src="js/view/independent-evaluation.js"></script>
 <script type="module" src="js/design-mode.js"></script>
 </body>
 </html>

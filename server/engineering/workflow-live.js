@@ -59,7 +59,7 @@ function start(run, node, { attempts = 1 } = {}) {
   return state;
 }
 
-// patch: { phase, attempt, attempts, sections, text(추가할 조각), tool(새로 쓰기 시작한 도구) }
+// askSession은 현재 OMP RPC의 임시 질문 키이며 snapshot에만 포함된다(수행 기록에 저장하지 않는다).
 function update(run, node, patch = {}) {
   const state = entry(run, node);
   if (typeof patch.phase === "string") state.phase = patch.phase.slice(0, 40);
@@ -72,7 +72,9 @@ function update(run, node, patch = {}) {
     state.sections = patch.sections.slice(0, 20).map(({ name, chars }) => ({ name: String(name).slice(0, 40), chars: Number(chars) || 0 }));
     state.chars = state.sections.reduce((sum, { chars }) => sum + chars, 0);
   }
-  if (patch.reset) state.text = "";
+  if (patch.reset) { state.text = ""; delete state.askSession; }
+  if (patch.askSession === null) delete state.askSession;
+  if (typeof patch.askSession === "string" && /^workflow-ask:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(patch.askSession)) state.askSession = patch.askSession;
   if (typeof patch.text === "string" && patch.text) {
     state.text = (state.text + patch.text).slice(-TEXT_LIMIT);
     appendLog(state.log, patch.text);

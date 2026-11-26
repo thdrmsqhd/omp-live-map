@@ -1,6 +1,8 @@
 // 노드 캔버스의 정의 상세 패널. 폼 화면에만 있던 기능을 노드에서 바로 쓴다.
 // - 버전 기록: 저장된 버전을 골라 내용을 보고, 그 버전을 초안으로 불러온다(저장하면 새 버전이 된다).
 // - 하네스: 실제 적용값(harness/preview), 사용 중인 Workflow 와 새 버전 적용(harness/uses·apply), 같은 입력 비교 실행(harness/trial).
+import { harnessContractDetails } from "./studio-nodes.js";
+
 const SECTION_NAMES = { role: "역할", instructions: "작업 지시", assets: "프로젝트 규칙과 스킬", result: "결과 형식" };
 const TRIAL_LABELS = { baseline: "기준 버전", draft: "수정 초안", running: "실행 중", finished: "실행 종료",
   queued: "대기", succeeded: "성공", failed: "실패", cancelled: "취소", timed_out: "시간 초과",
@@ -33,14 +35,20 @@ export function bindStudioInspect({ root, h, request, project, payloadOf, loadVe
       return h("option", { value: String(number) }, "v" + number + (number === record.version ? " (최신)" : ""));
     }));
     const body = text("pre", "", { class: "studio-inspect-pre" });
+    const contract = h("div", { hidden: current.kind !== "harness" });
     const load = h("button", { type: "button", class: "studio-mini" }, "이 버전을 초안으로 불러오기");
     let shown = null;
     async function show() {
       const mine = revision, number = Number(picker.value);
       body.textContent = "불러오는 중입니다.";
+      shown = null;
+      load.disabled = true;
+      contract.replaceChildren();
       const version = number === record.version ? record : await request("definitions/version", { id: record.id, version: number });
-      if (mine !== revision) return;
+      if (mine !== revision || number !== Number(picker.value)) return;
       shown = version;
+      const typeDetails = current.kind === "harness" && harnessContractDetails(version.payload.role);
+      if (typeDetails) contract.replaceChildren(typeDetails);
       body.textContent = JSON.stringify(version.payload, null, 2);
       load.disabled = number === record.version && JSON.stringify(current.draft) === JSON.stringify(version.payload);
     }
@@ -51,7 +59,8 @@ export function bindStudioInspect({ root, h, request, project, payloadOf, loadVe
       say(`v${shown.version} 내용을 초안으로 불러왔습니다. '새 버전 저장'을 누르면 v${record.version + 1}로 저장됩니다.`, "ok");
     });
     void show().catch((error) => { body.textContent = error.message; });
-    return h("details", { open: true }, h("summary", {}, "버전 기록 · 최신 v" + record.version), h("div", { class: "studio-inspect-row" }, picker, load), body);
+    return h("details", { open: true }, h("summary", {}, "버전 기록 · 최신 v" + record.version),
+      h("div", { class: "studio-inspect-row" }, picker, load), contract, body);
   }
 
   // ---- 하네스: 실제 적용값 -----------------------------------------------------
@@ -219,8 +228,8 @@ export function bindStudioInspect({ root, h, request, project, payloadOf, loadVe
     root.append(h("header", { class: "studio-inspect-head" },
       h("span", {}, h("strong", {}, name), h("small", {}, KIND_NAMES[target.kind] + (target.record ? " · v" + target.record.version : " · 저장 전"))),
       h("button", { type: "button", class: "studio-mini", onclick: close, "aria-label": "상세 닫기" }, "닫기")));
-    const parts = [versions(target)];
-    if (target.kind === "harness") parts.push(preview(target), uses(target), trial(target));
+    const parts = target.kind === "harness" ? [harnessContractDetails(target.draft.role, { open: true }), versions(target),
+      preview(target), uses(target), trial(target)] : [versions(target)];
     const shown = parts.filter(Boolean);
     root.append(...(shown.length ? shown : [text("p", target.record ? "이 노드에는 추가 상세가 없습니다." : "저장하면 버전 기록을 볼 수 있습니다.")]));
   }

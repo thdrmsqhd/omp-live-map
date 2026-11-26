@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>통합 관제 워크스페이스 · OMP Live Map</title>
+<link rel="stylesheet" href="css/workspace-prototype.css">
+<script src="js/workspace-catalog.js" defer></script>
+<script src="js/workspace-model.js" defer></script>
+<script src="js/workspace-prototype.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#canvas-title">캔버스로 건너뛰기</a>
+<header class="topbar">
+  <a class="brand" href="index.html" aria-label="기존 OMP Live Map으로 돌아가기"><span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 6h5v5H5zM14 13h5v5h-5zM10 8.5h6.5V13M7.5 11v4.5H14" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></span>OMP<span> / </span>LIVE MAP</a>
+  <span class="top-path">워크스페이스 <span> / </span> 통합 관제</span>
+  <span class="top-demo"><i></i> PROTOTYPE <b>로컬 모의 실행</b></span>
+</header>
+<main>
+  <section class="hero" aria-labelledby="page-title">
+    <div><p class="eyebrow">WORKFLOW OPERATIONS</p><h1 id="page-title">통합 관제 워크스페이스</h1><p class="hero-copy">하나의 캔버스에서 흐름을 설계하고, 실행을 살피고, 필요한 순간에 개입하세요.</p></div>
+    <div class="hero-actions"><button type="button" id="save-btn" class="button">설계 저장</button><button type="button" id="run-btn" class="button primary"><span aria-hidden="true">▷</span> 모의 실행</button></div>
+  </section>
+  <div class="toolbar" aria-label="실행 현황">
+    <div id="run-indicator" class="run-indicator"></div>
+    <div id="run-progress" class="run-progress"></div>
+    <div class="toolbar-links"><button type="button" id="jump-intervention" class="button small warning">개입 요청</button><a href="#journal-title" class="button small">수행 내역 <span aria-hidden="true">↓</span></a></div>
+  </div>
+  <p id="notice" role="status" class="notice" hidden></p>
+  <div class="workspace">
+    <div class="center">
+      <section class="panel canvas" aria-labelledby="canvas-title">
+        <div class="panel-heading"><div><p class="kicker">01 / WORKFLOW GRAPH</p><h2 id="canvas-title" tabindex="-1">워크플로우 캔버스</h2></div><div class="panel-actions"><button type="button" id="connect-btn" class="button small">노드 연결</button><button type="button" id="add-btn" class="button small accent">+ 노드 추가</button></div></div>
+        <div class="canvas-body"><div id="definitions" class="definitions" aria-label="설계 설정 노드"></div>
+          <div class="flow-heading"><h3>실행 흐름</h3><span><i></i> 일반 전달　<span class="dashed"></span> 독립 평가</span></div>
+          <div id="graph" class="graph"><svg id="edges" aria-hidden="true"></svg><div id="flow-nodes" class="flow-nodes"></div><div id="external" class="external"></div></div>
+          <details id="contracts" class="contracts"><summary>연결 계약 <span id="contract-count"></span></summary><ul id="contract-list"></ul></details>
+        </div>
+      </section>
+      <section class="panel journal" aria-labelledby="journal-title">
+        <div class="panel-heading"><div><p class="kicker">02 / EXECUTION JOURNAL</p><h2 id="journal-title" tabindex="-1">작업 지시 수행 내역</h2></div><label class="filter">보기 <select id="log-filter"><option value="all">전체</option><option value="artifact">산출물</option><option value="action">개입</option></select></label></div>
+        <div id="journal-body" class="journal-body"></div>
+      </section>
+    </div>
+    <aside class="panel context" aria-labelledby="context-title">
+      <div class="panel-heading"><div><p class="kicker">03 / PROJECT CONTEXT</p><h2 id="context-title">프로젝트 컨텍스트</h2></div><span class="context-icon" aria-hidden="true">▤</span></div>
+      <div class="context-body"><div class="context-controls"><button type="button" id="docs-link" class="button small">+ 문서 연결</button><button type="button" id="docs-refresh" class="button small" hidden>다시 읽기</button><input id="docs-input" aria-label="프로젝트 문서 파일 선택" type="file" accept=".md,.txt,text/plain,text/markdown" multiple hidden></div>
+        <p id="docs-status" class="muted docs-status" role="status"></p><div id="context-summary" class="context-summary"></div>
+        <h3 class="docs-heading">참조 문서 <span id="docs-count"></span></h3><div id="docs-list" class="docs-list"></div>
+      </div>
+    </aside>
+  </div>
+</main>
+<dialog id="drawer" aria-labelledby="drawer-title"><div class="drawer-heading"><div><p id="drawer-kicker" class="kicker"></p><h2 id="drawer-title"></h2></div><button type="button" id="drawer-close" class="button small" aria-label="패널 닫기">닫기</button></div><div id="drawer-body" class="drawer-body"></div></dialog>
+</body>
+</html>

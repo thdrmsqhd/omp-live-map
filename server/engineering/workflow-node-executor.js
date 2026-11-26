@@ -65,7 +65,7 @@ function nodeExecutor(catalog, runner) {
         try { sections = promptSections(effective, node.instruction, feedback).map(({ name, text }) => ({ name, chars: text.length })); } catch { /* 표시용 */ }
         report({ phase: "prompting", attempt: index + 1, reset: true, sections });
         const output = await adapter.run({ cwd: workspace, instruction: node.instruction, harness: effective,
-          model: model.payload, feedback, budgetCents: budget - spent, signal: timeout, capture: true, onProgress: report });
+          model: model.payload, feedback, budgetCents: budget - spent, signal: timeout, capture: true, workflowAsk: true, onProgress: report });
         if (!Number.isFinite(output.costCents) || output.costCents < 0) throw new Error("Missing valid runtime usage");
         spent += output.costCents;
         attempts.push({ costCents: output.costCents, costBasis: output.costBasis, sessionId: output.sessionId,

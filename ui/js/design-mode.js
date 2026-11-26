@@ -27,7 +27,6 @@ if (window.engineeringDesktop) {
     find, request, report,
     currentProject: () => projects.find(({ id }) => id === picker.value),
     openWorkflow(id) {
-      setMapMode("map");
       if (typeof openMapWorkflowLaunch === "function") void openMapWorkflowLaunch(picker.value, id);
     },
   });
@@ -40,6 +39,7 @@ if (window.engineeringDesktop) {
     writeJSON(PROJECT_KEY, picker.value);
     await studio.selectProject(picker.value, projects.find(({ id }) => id === picker.value));
     loaded = picker.value;
+    if (active) window.OMPIndependentEvaluation?.show(picker.value); window.UnifiedProjectContext?.show(loaded);
   }
   // 모드 전환 이벤트와 '설계에서 편집'이 동시에 부를 수 있으므로 진행 중인 준비를 함께 기다린다
   // (그렇지 않으면 캔버스 새로 고침이 방금 연 Workflow 선택을 되돌린다).
@@ -51,6 +51,7 @@ if (window.engineeringDesktop) {
       try {
         if (loaded === null) await loadProjects(readJSON(PROJECT_KEY, ""));
         await studio.activate();
+        if (active) window.UnifiedProjectContext?.show(picker.value);
       } catch (error) { status.textContent = error.message; }
     })();
     return entering;
@@ -60,18 +61,26 @@ if (window.engineeringDesktop) {
     active = false;
     entering = null;
     studio.deactivate();
+    window.UnifiedProjectContext?.hide();
   }
   picker.addEventListener("change", report(async () => {
     if (!studio.mayReplace()) { picker.value = studio.projectId(); return; }
     writeJSON(PROJECT_KEY, picker.value);
     await studio.selectProject(picker.value, projects.find(({ id }) => id === picker.value));
     loaded = picker.value;
+    if (active) window.UnifiedProjectContext?.show(loaded);
+    window.UnifiedWorkflow?.paint();
   }));
   document.addEventListener("omp-mode", (event) => { if (event.detail === "design") void enter(); else leave(); });
   addEventListener("beforeunload", (event) => { if (studio.dirty()) event.preventDefault(); });
 
   // 관제에서 부른다: 그 프로젝트의 Workflow 를 설계 모드에서 연다.
   window.ompDesign = {
+    matches(run) {
+      const current = studio.currentWorkflow?.();
+      return !!current && picker.value === run.project && current.id === run.workflow && Number(current.version) === Number(run.version);
+    },
+    focusStep(id) { return studio.focusStep?.(id); },
     async open({ project, workflow } = {}) {
       setMapMode("design");
       await enter();
@@ -79,7 +88,8 @@ if (window.engineeringDesktop) {
         if (!studio.mayReplace()) return;
         await loadProjects(project);
       }
-      if (workflow && !(await studio.showWorkflow(workflow))) status.textContent = "그 Workflow 를 이 프로젝트에서 찾지 못했습니다.";
+      if (workflow && studio.currentWorkflow?.()?.id !== workflow && !(await studio.showWorkflow(workflow))) status.textContent = "이 실행은 편집 가능한 Workflow와 연결되지 않습니다. 실행 스냅샷에서 관제할 수 있습니다.";
+      window.UnifiedWorkflow?.paint();
     },
   };
 

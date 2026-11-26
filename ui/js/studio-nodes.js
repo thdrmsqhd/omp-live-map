@@ -1,6 +1,7 @@
 // 노드 캔버스의 노드 종류: 소켓(입력·출력)과 노드 안 위젯(셀렉트·입력칸)을 만든다.
 // 상태 변경과 연결은 studio.js 가 넘겨주는 ctx 로만 한다.
 import { modelKey, showModelOptions } from "./engineering-model-options.js";
+import "./workspace-catalog.js";
 
 export function h(tag, props = {}, ...children) {
   const element = document.createElement(tag);
@@ -37,6 +38,31 @@ export const HARNESS_TEMPLATES = {
   writer: ["문서 작성자", "프로젝트 코드와 문서를 바탕으로 사용 절차와 제약을 정리합니다."],
 };
 
+export const HARNESS_CATALOG = globalThis.WORKSPACE_CATALOG;
+const ROLE_SEPARATOR = " · ";
+const CONTRACT_FIELDS = [["input", "입력"], ["output", "산출물"], ["criteria", "판단 기준"],
+  ["handoff", "인계"], ["stop", "중단 조건"], ["outputSchema", "산출물 스키마 ID"]];
+
+// 역할은 기존 정의 API가 버전별로 저장하는 필드다. 유형을 접두어에 두어 이름이나 세부 역할을 바꿔도 유지한다.
+export function harnessTypeOf(role) {
+  return HARNESS_CATALOG.types.find(({ label }) => role === label || role?.startsWith(label + ROLE_SEPARATOR));
+}
+function customRoleOf(role, type = harnessTypeOf(role)) {
+  return type ? role.slice(type.label.length + ROLE_SEPARATOR.length) : role ?? "";
+}
+function typedRole(type, role) {
+  return type ? [type.label, role.trim()].filter(Boolean).join(ROLE_SEPARATOR) : role || "개발";
+}
+export function harnessContractDetails(role, { open = false } = {}) {
+  const type = harnessTypeOf(role);
+  if (!type) return null;
+  const family = HARNESS_CATALOG.families.find(({ id }) => id === type.family);
+  return details(type.label + " · 유형 계약", open,
+    h("p", { class: "studio-note" }, family.label),
+    h("dl", {}, ...CONTRACT_FIELDS.flatMap(([key, label]) => [h("dt", {}, label),
+      h("dd", {}, key === "outputSchema" ? h("code", {}, type[key]) : type[key])])));
+}
+
 const lines = (value) => value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
 // 노드의 소켓. slot 이름은 연결 대상 정의 종류와 같다(model·harness·loop·profile), 실행 순서는 flow.
@@ -62,8 +88,11 @@ export function blankPayload(kind, catalog, template) {
     return { name: "새 모델", provider: choice?.provider ?? "anthropic", model: choice?.id ?? "", reasoning: "" };
   }
   if (kind === "harness") {
+    const type = HARNESS_CATALOG.types.find(({ id }) => id === template);
     const [role, instructions] = HARNESS_TEMPLATES[template] ?? ["", ""];
-    return { name: role ? role + " 하네스" : "새 하네스", adapter: "claude", model: "", role: role || "개발", instructions,
+    return { name: type?.label ?? (role ? role + " 하네스" : "새 하네스"), adapter: "claude", model: "",
+      role: type?.label ?? (role || "개발"),
+      instructions: type ? CONTRACT_FIELDS.map(([key, label]) => `${label}: ${type[key]}`).join("\n\n") : instructions,
       assets: { agents: "", files: [], inputs: [], skills: [], mcp: {}, hooks: {} } };
   }
   if (kind === "loop") {
@@ -200,6 +229,21 @@ function skillList(ctx, node) {
 
 function harnessWidgets(ctx, node) {
   const draft = node.draft;
+  const type = harnessTypeOf(draft.role);
+  const typePicker = h("select", { onchange: (event) => {
+    const next = HARNESS_CATALOG.types.find(({ id }) => id === event.target.value);
+    const maxLength = next ? 240 - next.label.length - ROLE_SEPARATOR.length : 240;
+    draft.role = typedRole(next, customRoleOf(draft.role, type).slice(0, maxLength));
+    ctx.changed(node, { rerender: true, refreshInspect: true });
+  } }, h("option", { value: "" }, "지정 안 함"), ...HARNESS_CATALOG.families.map((family) =>
+    h("optgroup", { label: family.label }, ...HARNESS_CATALOG.types.filter((item) => item.family === family.id)
+      .map((item) => h("option", { value: item.id }, item.label)))));
+  typePicker.value = type?.id ?? "";
+  const roleInput = type ? h("input", { value: customRoleOf(draft.role, type), placeholder: "선택 입력",
+    maxLength: 240 - type.label.length - ROLE_SEPARATOR.length, oninput: (event) => {
+      draft.role = typedRole(type, event.target.value);
+      ctx.changed(node);
+    } }) : textInput(ctx, node, draft, "role", { maxLength: 240 });
   draft.assets ??= {};
   const assets = draft.assets;
   const result = draft.result ?? { shape: "", path: "", fields: [] };
@@ -214,7 +258,9 @@ function harnessWidgets(ctx, node) {
     field("이름", textInput(ctx, node, draft, "name", { maxLength: 240, rename: true })),
     h("div", { class: "studio-row" },
       field("실행기", select([["claude", "Claude Code"], ["omp", "OMP"]], draft.adapter, (value) => { draft.adapter = value; ctx.changed(node); })),
-      field("역할", textInput(ctx, node, draft, "role", { maxLength: 240 }))),
+      field(type ? "세부 역할" : "역할", roleInput)),
+    field("하네스 유형", typePicker),
+    harnessContractDetails(draft.role),
     field("작업 지시", textArea(ctx, node, draft, "instructions", { maxLength: 12000 })),
     details(`규칙 · 자료 · 스킬 ${skillCount} · 결과 형식`, false,
       field("프로젝트 규칙 (AGENTS.md)", textArea(ctx, node, assets, "agents", { maxLength: 10000 })),
@@ -355,7 +401,7 @@ function stepWidgets(ctx, node) {
         ctx.changed(node);
       }))];
   }
-  if (type === "approval") return [label, field("승인 안내", textArea(ctx, node, data, "prompt", { maxLength: 2000 }))];
+  if (type === "approval") return [label, field("개입 유형", select([["", "일반 승인"], ["browser", "브라우저 · 직접 처리"], ["payment", "결제 · 직접 처리"], ["consent", "약관 동의 · 직접 처리"], ["password", "비밀번호 · 직접 입력"], ["system", "시스템 변경 · 직접 확인"], ["uac", "Windows UAC · 직접 승인"]], data.gate ?? "", (value) => { if (value) data.gate = value; else delete data.gate; ctx.changed(node); })), field("승인 안내", textArea(ctx, node, data, "prompt", { maxLength: 2000 })), h("p", { class: "studio-note" }, "민감한 조작은 사용자가 원래 창에서 직접 처리합니다. 이 카드에 비밀번호나 결제 정보를 입력하지 마세요.")];
   if (type === "subgraph") {
     const target = ctx.workflows().find(({ id }) => id === data.workflow);
     const versions = [["", "최신"]];

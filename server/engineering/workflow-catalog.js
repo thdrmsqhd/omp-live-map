@@ -6,6 +6,7 @@ const { event } = require("./catalog");
 const { compileGraph } = require("./graph-definition");
 const { expandSubgraphs } = require("./workflow-subgraphs");
 const { string, integer } = require("./definitions");
+const { resultContract } = require("./harness-result");
 const { problem } = require("./state");
 const profiles = require("../harness/session-profiles");
 const { listPresets } = require("./workflow-presets");
@@ -33,9 +34,41 @@ function workflowCatalog(db, catalog) {
     return profile;
   }
 
+  // A schema ID names the producer artifact validated by its pinned harness result contract.
+  // The receiver must bind that exact artifact to a name its pinned harness actually consumes.
+  function validateHandoffs(project, document, definitions) {
+    const typed = document.edges.filter(({ schema }) => schema !== undefined);
+    if (!typed.length) return;
+    const profiles = new Set(document.edges.filter(({ port }) => port === "profile").map(({ to }) => to));
+    const nodes = new Map(document.nodes.map((node) => [node.id, node]));
+    const harnesses = new Map();
+    function harness(id) {
+      if (harnesses.has(id)) return harnesses.get(id);
+      const target = profiles.has(id) ? null : definitions.get(id);
+      const pinned = target?.kind === "loop" ? catalog.dependency(target) : target;
+      const supported = pinned?.kind === "harness" && catalog.availableTo(pinned, project) ? pinned.payload : null;
+      harnesses.set(id, supported);
+      return supported;
+    }
+    for (const { from, to, schema } of typed) {
+      const source = harness(from), target = harness(to);
+      const fail = (reason) => { throw problem(400, `Handoff ${from} → ${to} (${schema}): ${reason}`); };
+      if (!source || !target) fail("both endpoints must use a pinned Agent or Loop harness available to this project");
+      const output = nodes.get(from).outputs.find(({ name }) => name === schema);
+      const result = resultContract(source.result);
+      if (!result || !output || result.path !== output.path) fail("source must declare this artifact at the harness result path");
+      const inputs = target.assets?.inputs;
+      if (!Array.isArray(inputs) || inputs.length > 5 || !nodes.get(to).inputs.some((input) =>
+        input.source === from && input.artifact === schema && inputs.includes(input.name))) {
+        fail("target must bind this artifact to a declared harness input");
+      }
+    }
+  }
+
   function plan(project, payload) {
     catalog.project(project);
     const result = compileGraph(payload);
+    const definitions = new Map();
     for (const item of result.document.nodes) {
       if (item.type === "profile") resolveProfile(item);
       if (item.type === "subgraph") item.version = get(project, item.workflow, item.version).version;
@@ -45,7 +78,9 @@ function workflowCatalog(db, catalog) {
         throw problem(400, "Workflow node references a definition of the wrong project or kind");
       }
       item.version = target.version;
+      definitions.set(item.id, target);
     }
+    validateHandoffs(project, result.document, definitions);
     return result;
   }
 

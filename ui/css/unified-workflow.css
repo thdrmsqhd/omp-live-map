@@ -1,0 +1,56 @@
+/* The desktop Workflow view: one editable canvas, real run controls and local sources. */
+#app[data-view="design"] #design { overflow:auto; padding:12px 16px 24px; scrollbar-gutter:stable; }
+#unified-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(270px,325px); align-items:start; gap:14px; }
+#unified-main,#unified-side { min-width:0; display:grid; gap:14px; }
+#unified-side { position:sticky; top:0; max-height:calc(100dvh - 92px); overflow:auto; scrollbar-width:thin; }
+#design #studio .studio-graph { flex:none; height:clamp(470px,62vh,780px); min-height:0; }
+#design .studio-node { font-size:14px; }
+#design .studio-head { padding:9px 8px; }
+#design .studio-title { font-size:15px; }
+#design .studio-badge { font-size:12px; }
+#design .studio-node[data-runtime-status="waiting_approval"] { outline:3px solid #e5b366; }
+#design .studio-node[data-runtime-status="running"] { outline:2px solid #66b4f4; }
+#design .studio-node[data-runtime-status="failed"] { outline:2px solid #e88f98; }
+#design .unified-node-state { display:grid; gap:6px; padding:9px; border-top:1px solid #465061; background:#1a212e; border-radius:0 0 8px 8px; }
+#design .unified-node-state>button { text-align:left; font-size:13px; font-weight:700; }
+#design [data-runtime-status="waiting_approval"]>.unified-node-state>button { color:#ffe0a2; border-color:#82643c; }
+#design .unified-node-state .wf-node-actions { position:static; width:auto!important; min-width:0; margin:0; }
+#design .unified-node-state .wf-node-actions textarea { width:100%; }
+.unified-node-preview { margin:0; padding:6px; font:12px/1.5 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; color:#bfd3e6; background:#111721; border-radius:4px; }
+#unified-journal,#unified-run-snapshot,#unified-project-context { padding:16px 18px; border:1px solid var(--border); border-radius:10px; background:var(--panel); overflow-wrap:anywhere; }
+#unified-journal h2,#unified-run-snapshot h2,#unified-project-context h2 { margin:0 0 8px; font-size:19px; color:var(--text); }
+.unified-section-label>div { font-size:11px; letter-spacing:.06em; color:#94daca; margin-bottom:2px; }
+#unified-empty-run,#unified-run-snapshot>p { margin:0 0 8px; color:var(--muted); }
+#unified-inspector-host #workflow-inspector,#unified-queue-host #workflow-queue { position:static; width:100%; max-height:none; min-width:0; box-shadow:none; margin:0; overflow:visible; box-sizing:border-box; }
+#unified-inspector-host #workflow-inspector { padding:12px; background:#171c26; }
+#unified-inspector-host #wf-map-engineering { display:none; }
+#unified-inspector-host #wf-map-live .wf-live-stream { max-height:none; font-size:14px; }
+#unified-inspector-host #wf-map-details pre,#unified-inspector-host #wf-map-live pre { font-size:14px; line-height:1.55; }
+#unified-run-steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:10px; }
+.unified-snapshot-card { padding:11px; background:#252a35; border:1px solid #404a5d; border-radius:8px; }
+.unified-snapshot-card h3 { margin:0 0 4px; font-size:15px; }
+.unified-snapshot-card p { margin:0 0 8px; color:var(--muted); white-space:pre-wrap; max-height:7.5em; overflow:auto; }
+#unified-project-context h3 { margin:.7em 0 .25em; font-size:14px; color:#9bd6c6; }
+#unified-project-context p { margin:.3em 0; }
+#unified-project-context pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:55vh; overflow:auto; background:#111721; padding:9px; }
+#unified-project-context ul { padding-left:20px; }
+#unified-project-context button { overflow-wrap:anywhere; white-space:normal; }
+@media (max-width:920px) {
+  #unified-layout { grid-template-columns:minmax(0,1fr); }
+  #unified-side { position:static; max-height:none; overflow:visible; }
+  #unified-side:has(#workflow-queue:not([hidden])) { grid-row:1; }
+}
+
+#design .studio-node { width:350px; }
+#design .studio-node[data-kind="step"] { width:306px; }
+#design .studio-node:is([data-type="start"],[data-type="end"]) { width:200px; }
+#design .studio-workflow-card { top:10px; right:11px; padding:7px 10px; gap:8px; max-width:75%; background:#242538; border-color:#7865a7; }
+#design .studio-workflow-card strong { color:#ddccff; }
+#design .studio-workflow-card input { width:12em; }
+#independent-evaluation:not(:empty) { padding:13px 16px; border:1px dashed #8b75bd; border-radius:10px; background:#211d30; overflow-wrap:anywhere; }
+#independent-evaluation :is(h2,h3) { margin:0 0 8px; color:#e0d2ff; }
+#independent-evaluation :is(input,select,textarea) { max-width:100%; }
+#unified-run-timeline { display:flex; flex-wrap:wrap; gap:8px; list-style:none; padding:0; margin:10px 0; }
+#unified-run-timeline button[aria-pressed="true"] { border-color:#a799e7; background:#343050; }
+#design .unified-node-ask { min-width:0; overflow-wrap:anywhere; border-top:1px solid #8c6d40; padding-top:6px; }
+#design .unified-node-ask .casks { max-height:24rem; }
