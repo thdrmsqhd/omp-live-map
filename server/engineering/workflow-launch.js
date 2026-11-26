@@ -19,9 +19,11 @@ function makePreset(catalog, project, source) {
   for (const name of ["author", "reviewer", "loop"]) {
     if (preset[name]) refs[name] = profile(catalog, project, source.refs?.[name], name === "loop" ? "loop" : "harness");
   }
+  // 점검 하네스는 선택 사항이다. 고르지 않으면 설계·문서 하네스가 대신한다.
+  if (preset.triage && source.refs?.triage) refs.triage = profile(catalog, project, source.refs.triage, "harness");
   const document = buildPreset(preset.id, Object.fromEntries(Object.entries(refs).map(([key, value]) => [key, value.id])));
   for (const node of document.nodes.filter(({ definition }) => definition)) {
-    const ref = refs[node.type === "loop" ? "loop" : node.id === "review" ? "reviewer" : "author"];
+    const ref = refs[node.type === "loop" ? "loop" : node.id === "review" ? "reviewer" : node.id === "triage" && refs.triage ? "triage" : "author"];
     node.version = ref.version;
     const harness = ref.kind === "loop" ? catalog.dependency(ref) : ref;
     const missing = (harness?.payload.assets?.inputs ?? []).filter((name) => !node.inputs?.some((input) => input.name === name));

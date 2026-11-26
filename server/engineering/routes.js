@@ -14,7 +14,7 @@ const { workflowObservability } = require("./workflow-observability");
 const { workflowDelivery } = require("./workflow-delivery");
 const { retryOptions } = require("./workflow-retry-plan");
 const { quickLaunch } = require("./workflow-launch");
-const { addPresetDefinitions, ensureProfiles, buildPreset, listPresets } = require("./workflow-presets");
+const { addPresetDefinitions, addPresetWorkflows, ensureProfiles, buildPreset, listPresets } = require("./workflow-presets");
 const { projectBudget } = require("./project-budget");
 const { workflowStaging } = require("./workflow-staging");
 const { runStore } = require("./run-store");
@@ -73,6 +73,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const budget = projectBudget(db);
       services = { definitions, workflows, runs, flowRuns, tasks, budget, trials: harnessTrials(definitions, runner, workspace, budget),
         presetDefinitions: (project) => ({ ...addPresetDefinitions(db, definitions, project), profiles: ensureProfiles() }),
+        presetWorkflows: (project) => addPresetWorkflows(db, definitions, workflows, project),
         stages: sdlcStages(db, definitions, workflows),
         observability: workflowObservability(db, flowRuns, workspaceRoot),
         delivery, staging: workflowStaging(db, delivery),
@@ -88,7 +89,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   async function route(req, res, url) {
     if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions, presetWorkflows } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       let result;
@@ -177,6 +178,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           const payload = buildPreset(input.preset, input.refs ?? {});
           result = workflows.save({ project: input.project, payload: { ...payload, name: input.name || payload.name } });
         }
+        if (endpoint === "workflows/presets/all") result = presetWorkflows(string(input.project, "project"));
         if (endpoint === "workflows/presets/defaults") {
           result = presetDefinitions(input.scope === "personal" ? null : string(input.project, "project"));
         }

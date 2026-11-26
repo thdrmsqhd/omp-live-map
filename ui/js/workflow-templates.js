@@ -2,7 +2,10 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
   const presetForm = el("preset-form");
   const defaults = el("preset-defaults");
   const hint = el("preset-hint");
-  const fields = ["author", "reviewer", "loop"];
+  const fields = ["author", "reviewer", "triage", "loop"];
+  const optional = new Set(["triage"]); // 점검 하네스를 고르지 않으면 설계·문서 하네스가 대신한다.
+  const all = el("preset-all");
+  const auto = {}; // 앱이 제안해서 채운 값. 템플릿을 바꾸면 새 템플릿의 제안으로 바뀐다. 직접 고른 값은 유지한다.
   const selectedPreset = () => presets.find(({ id }) => id === presetForm.elements.preset.value);
   let presets = [];
   let adding = false;
@@ -10,11 +13,12 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
 
   function updatePresetActions() {
     const chosen = selectedPreset();
-    const missing = fields.filter((field) => chosen?.[field] && !presetForm.elements[field].value);
+    const missing = fields.filter((field) => !optional.has(field) && chosen?.[field] && !presetForm.elements[field].value);
     const sameHarness = chosen?.author && chosen?.reviewer && !missing.length &&
       presetForm.elements.author.value === presetForm.elements.reviewer.value;
     const editable = Boolean(projectId()) && !isArchived();
     defaults.disabled = !editable || !chosen || adding;
+    all.disabled = !editable || adding;
     presetForm.elements.create.disabled = !editable || !chosen || adding || missing.length > 0 || Boolean(sameHarness);
     hint.textContent = !projectId() ? "위에서 작업 프로젝트를 선택하세요. 프로젝트가 없으면 ‘프로젝트 설정’에서 등록할 수 있습니다."
       : isArchived() ? "보관된 프로젝트에는 Workflow를 추가할 수 없습니다."
@@ -30,10 +34,13 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
       const options = definitions().filter(({ kind }) => kind === (field === "loop" ? "loop" : "harness"));
       const placeholder = !selected?.[field] ? "사용 안 함" : options.length ? "선택" : "등록된 항목 없음";
       select.replaceChildren(new Option(placeholder, ""), ...options.map((entry) => new Option(engineeringDefinitionLabel(entry), entry.id)));
-      const wanted = field === "loop" ? (preferred.loops?.[selected?.id] ?? preferred.loop) : preferred[field];
-      const previous = current || (selected?.[field] ? wanted : "");
+      const suggested = options.find(({ name }) => name === selected?.suggest?.[field])?.id;
+      const wanted = suggested ?? (field === "loop" ? (preferred.loops?.[selected?.id] ?? preferred.loop) : preferred[field]);
+      const manual = current && current !== auto[field] ? current : "";
+      const previous = manual || (selected?.[field] ? wanted : "");
+      auto[field] = !manual && previous && previous === wanted ? previous : "";
       if (options.some(({ id }) => id === previous)) select.value = previous;
-      select.required = Boolean(selected?.[field]);
+      select.required = Boolean(selected?.[field]) && !optional.has(field);
       select.disabled = !selected?.[field] || !projectId() || isArchived();
     }
     updatePresetActions();
@@ -46,12 +53,7 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     }
     showPreset();
   }));
-  presetForm.elements.preset.onchange = () => {
-    // 앱이 제안한 루프를 그대로 두었다면 새 템플릿에 맞는 루프로 바꾼다. 직접 고른 루프는 유지한다.
-    const loop = presetForm.elements.loop;
-    if ([preferred.loop, ...Object.values(preferred.loops ?? {})].includes(loop.value)) loop.value = "";
-    showPreset();
-  };
+  presetForm.elements.preset.onchange = showPreset;
   for (const field of fields) presetForm.elements[field].onchange = updatePresetActions;
   defaults.onclick = report(async () => {
     const project = projectId();
@@ -66,11 +68,25 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
       updatePresetActions();
     }
   });
+  all.onclick = report(async () => {
+    const project = projectId();
+    adding = true;
+    updatePresetActions();
+    try {
+      const { created, skipped } = await request("workflows/presets/all", {}, { project });
+      if (project !== projectId()) return;
+      if (created.length) await imported(created.at(-1));
+      el("status").textContent = `기본 Workflow ${created.length}개를 추가했습니다.` + (skipped.length ? ` 이미 있는 ${skipped.length}개는 건너뛰었습니다.` : "");
+    } finally {
+      adding = false;
+      updatePresetActions();
+    }
+  });
   presetForm.addEventListener("submit", report(async (event) => {
     if (presetForm.elements.create.disabled) return;
-    const { preset, name, author, reviewer, loop } = Object.fromEntries(new FormData(event.currentTarget));
+    const { preset, name, author, reviewer, triage, loop } = Object.fromEntries(new FormData(event.currentTarget));
     if (!projectId()) throw new Error("프로젝트를 선택해 주세요.");
-    const record = await request("workflows/presets", {}, { project: projectId(), preset, name, refs: { author, reviewer, loop } });
+    const record = await request("workflows/presets", {}, { project: projectId(), preset, name, refs: { author, reviewer, triage, loop } });
     await imported(record);
   }));
   el("export").addEventListener("click", report(async () => {

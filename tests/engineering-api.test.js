@@ -81,6 +81,9 @@ test("engineering API requires its desktop token and preserves the original grap
       const saved = await send("workflows/presets", { project, preset: "refactor", name: "부분수정", refs });
       assert.deepEqual(saved.payload.nodes.filter(({ definition }) => definition).map(({ definition }) => definition),
         [refs.author, refs.loop, refs.reviewer]);
+      const bulk = await send("workflows/presets/all", { project });
+      assert.equal(bulk.created.length, 8);
+      assert.equal((await send("workflows/presets/all", { project })).skipped.length, 8);
       const sharedNode = shared.payload.nodes.find(({ type }) => type === "loop");
       const edited = await send("workflows/save-canvas", { project, id: shared.id, version: shared.version,
         payload: shared.payload, loops: [{ node: sharedNode.id, attempts: 2 }] });
