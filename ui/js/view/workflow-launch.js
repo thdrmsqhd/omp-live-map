@@ -19,6 +19,7 @@ function bindMapWorkflowLaunch() {
     const warning = engineeringLoginWarning(runtime, timeoutOf());
     if (warning) status.textContent = warning;
     status.dataset.tone = warning ? "warn" : "";
+    engineeringApplyBudgetWording(runtime, dialog);
   }
   const option = ({ id, name, version }) => new Option(name + (version ? " · v" + version : ""), id);
   function usePreset() { return presets.find(({ id }) => source.value === "preset:" + id); }

@@ -263,7 +263,7 @@ function loopWidgets(ctx, node) {
     h("div", { class: "studio-row studio-row-3" },
       field("최대 시도", numberInput(ctx, node, draft, "attempts", { min: 1, max: 8 })),
       field("제한(초)", numberInput(ctx, node, draft, "timeoutMs", { min: .1, max: 3600, step: .001, scale: 1000 })),
-      field("예산(센트)", numberInput(ctx, node, draft, "budgetCents", { min: 0, max: 100000 }))),
+      field(typeof engineeringBudgetLabel === "function" ? engineeringBudgetLabel("loop") : "예산(센트)", numberInput(ctx, node, draft, "budgetCents", { min: 0, max: 100000 }))),
     details("검증 명령 · " + draft.checks.map(commandLine).join(", "), false, checkEditor(ctx, node, draft.checks)),
   ];
 }

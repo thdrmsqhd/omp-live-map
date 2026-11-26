@@ -8,6 +8,7 @@ export function bindRuntimeControls({ find, request, report, status, formValues 
     signingIn = current.signingIn;
     find("runtime-status").textContent = current.detail + engineeringLoginExpiry(current);
     find("runtime-status").dataset.tone = current.status === "login-expired" || engineeringLoginWarning(current, 30 * 60000) ? "warn" : "";
+    engineeringApplyBudgetWording(current);
     find("prepare-runtime").disabled = busy || current.status === "ready";
     find("check-runtime").disabled = busy;
     find("console-login-status").textContent = current.loginStatus;
