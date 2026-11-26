@@ -129,8 +129,8 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     await page.getByText("버전 1 저장됨", { exact: true }).waitFor();
     await page.reload();
     await registered.waitFor({ state: "attached", timeout: 8000 });
-    await page.locator("#project").selectOption({ label: "desktop fixture" });
     await page.getByRole("button", { name: "Workflow", exact: true }).click();
+    await page.locator("#project").selectOption({ label: "desktop fixture" });
     await page.locator("#workflow-list").selectOption({ label: "CI workflow" });
     await page.waitForFunction(() => document.querySelector("#workflow-name").value === "CI workflow");
     assert.equal(await start.evaluate((node) => node.style.left), moved);
