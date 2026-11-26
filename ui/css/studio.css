@@ -67,6 +67,10 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-lane small { display: block; font-weight: 400; font-size: 12px; color: #5c6276; }
 .studio-lane-line { position: absolute; top: -70px; height: 9000px; border-left: 1px dashed #2f3442; }
 .studio-lane-library { left: 0; }
+.studio-lane-external, .studio-lane-external-line { pointer-events: none; }
+.studio-lane-external { color: #d7c8ff; z-index: 2; }
+.studio-lane-external small { color: #a898d0; }
+.studio-lane-external-line { border-left-color: #6d5c93; border-left-style: dashed; }
 
 /* 노드 */
 .studio-node {
@@ -77,6 +81,24 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 }
 .studio-node[data-kind="model"] { --kind: var(--c-model); }
 .studio-node[data-kind="harness"] { --kind: var(--c-harness); }
+.studio-node.is-external {
+  border-style: dashed; border-color: #8d74c4; background: #261f33;
+}
+.studio-external-label {
+  margin: 0; padding: 5px 10px; background: #3a2d55; color: #f0e7ff;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .01em;
+}
+.studio-contract {
+  display: grid; gap: 4px; margin: 6px 8px 2px; padding: 7px 8px;
+  border: 1px solid #4a4160; border-radius: 7px; background: #1b1822;
+}
+.studio-contract-title { font-size: 11.5px; color: #efe8ff; }
+.studio-contract-list {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 8px; margin: 0;
+}
+.studio-contract-list dt { color: #b7a8d8; font-size: 11px; font-weight: 700; }
+.studio-contract-list dd { margin: 0; color: #e7e4f2; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.studio-contract-list code { font: 600 11px/1.4 ui-monospace, Consolas, monospace; color: #f3e8ff; }
 .studio-node[data-kind="loop"] { --kind: var(--c-loop); }
 .studio-node[data-kind="profile"] { --kind: var(--c-profile); }
 .studio-node[data-kind="step"] { width: 240px; }
@@ -127,6 +149,12 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-out .studio-socket { right: 0; transform: translate(50%, -50%); }
 .studio-socket:hover { background: var(--sock); transform: translate(var(--sx, -50%), -50%) scale(1.25); }
 .studio-out .studio-socket:hover { --sx: 50%; }
+.studio-socket.is-definition { cursor: not-allowed; opacity: .72; }
+.studio-out .studio-socket.is-definition:hover { background: #14161c; transform: translate(50%, -50%); }
+.studio-viewport[data-link-origin="step"] .studio-node.is-external .studio-socket[data-dir="out"],
+.studio-viewport[data-link-origin="evaluation"] .studio-node[data-kind="step"] .studio-socket {
+  pointer-events: none; opacity: .3;
+}
 .studio-viewport[data-linking="model"] .studio-socket[data-type="model"],
 .studio-viewport[data-linking="harness"] .studio-socket[data-type="harness"],
 .studio-viewport[data-linking="loop"] .studio-socket[data-type="loop"],

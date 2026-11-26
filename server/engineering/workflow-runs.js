@@ -111,6 +111,16 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
         updatePendingNode(id, node, "waiting_approval", { prompt, artifacts, ...(gate ? { gate } : {}) });
       });
     },
+    hold(id, node, prompt, gate) {
+      transaction(db, () => {
+        setStatus(id, ["running"], "waiting_approval");
+        updatePendingNode(id, node, "waiting_approval", { prompt, gate, hold: true, artifacts: [] });
+      });
+    },
+    gateCleared(id, node) {
+      return Boolean(db.prepare(`SELECT 1 FROM event WHERE kind='workflow.gate' AND json_extract(payload,'$.id')=?
+        AND json_extract(payload,'$.node')=? AND json_extract(payload,'$.decision')='approved'`).get(id, node));
+    },
     decide(id, node, decision, reason) {
       transaction(db, () => {
         const waiting = db.prepare("SELECT status,outcome FROM workflow_node WHERE run=? AND node=?").get(id, node);
@@ -118,9 +128,18 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
           throw problem(409, "Approval is not pending");
         }
         if (!["approved", "rejected"].includes(decision)) throw problem(400, "Invalid approval decision");
-        setStatus(id, ["waiting_approval"], "queued");
-        const explanation = (reason || decision === "rejected") ? string(reason, "approval reason", 2000) : "";
         const previous = JSON.parse(waiting.outcome ?? "null");
+        setStatus(id, ["waiting_approval"], "queued");
+        if (previous?.hold) {
+          if (decision === "approved") {
+            db.prepare("DELETE FROM workflow_node WHERE run=? AND node=?").run(id, node);
+            event(db, "workflow.gate", { id, node, decision, gate: previous.gate });
+            return;
+          }
+          setNode(id, node, "failed", { ...previous, port: "rejected", reason: "사용자가 수동 작업을 진행하지 않음" });
+          return;
+        }
+        const explanation = (reason || decision === "rejected") ? string(reason, "approval reason", 2000) : "";
         setNode(id, node, "succeeded", { ...previous, port: decision, reason: redact(explanation) });
       });
     },

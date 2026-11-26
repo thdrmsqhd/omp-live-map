@@ -11,7 +11,7 @@ const manualGateText = Object.freeze({
 
 const { graphScheduler } = require("./graph-scheduler");
 const { retryPlan } = require("./workflow-retry-plan");
-const { nodeExecutor } = require("./workflow-node-executor");
+const { nodeExecutor, nodeDefinitions } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
 const { runParallel } = require("./workflow-parallel");
 const live = require("./workflow-live");
@@ -82,6 +82,20 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       store.change(id, ["queued", "paused", "interrupted"], "running");
       const approved = [...results.values()].filter((result) => result.port === "approved");
       for (const decision of approved) await validateArtifacts(workspace, decision.artifacts ?? [], signal);
+      const harnessGate = (node) => {
+        if (!["agent", "loop"].includes(node.type) || store.gateCleared(id, node.id)) return null;
+        let role = "";
+        try { role = nodeDefinitions(catalog, run.project, node).harness.payload.role || ""; } catch { return null; }
+        if (role === "브라우저·데스크톱 조작 하네스" || role.startsWith("브라우저·데스크톱 조작 하네스 · ")) return "browser";
+        if (role === "시스템 운영 하네스" || role.startsWith("시스템 운영 하네스 · ")) return "uac";
+        return null;
+      };
+      const holdForHarness = (node) => {
+        const gate = harnessGate(node);
+        if (!gate) return false;
+        store.hold(id, node.id, manualGateText[gate], gate);
+        return true;
+      };
       for (;;) {
         signal.throwIfAborted();
         if (control.pause) { store.change(id, ["running"], "paused"); return; }
@@ -98,6 +112,8 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
         const batch = external(node) ? ready.filter(external).slice(0, 2) : [];
         let outcomes;
         if (batch.length > 1) {
+          const blocked = batch.find((item) => harnessGate(item));
+          if (blocked) { store.hold(id, blocked.id, manualGateText[harnessGate(blocked)], harnessGate(blocked)); return; }
           await ensureWorkspace();
           const references = new Map();
           for (const branch of batch) references.set(branch.id, await verifyInputs(workspace, branch, results, signal));
@@ -115,6 +131,7 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
             store.ask(id, node.id, instruction ? node.prompt + "\n\n" + instruction : node.prompt, artifacts, node.gate);
             return;
           }
+          if (holdForHarness(node)) return;
           begin(node);
           let result = { status: "succeeded" };
           if (node.type === "condition") result.port = scheduler.conditionPort(node, results);

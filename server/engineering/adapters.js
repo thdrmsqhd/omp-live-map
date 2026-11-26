@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const { once } = require("node:events");
 const { createInterface } = require("node:readline");
 const { open } = require("../rpc");
+const { ask: registerWorkflowAsk, drop: dropWorkflowAsk, asksFor } = require("../ui-requests");
 const { resultInstruction } = require("./harness-result");
 const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
@@ -17,6 +18,96 @@ function throwBrokerFailure(child) {
 }
 
 const claudeTools = ["Read", "Edit", "Write", "Glob", "Grep"];
+const interactiveMethods = ["ask", "select", "confirm", "input", "editor"];
+const workflowAskMethods = new Set(["ask", "select", "confirm"]);
+// 암호·결제 정보·OS 승인 문구는 질문 카드에 담지 않는다. 일치 문구는 오류문에도 남기지 않는다.
+const blockedAsk = /(?:\b(?:password|passwd|passphrase|cvv|cvc|uac|sudo)\b|credit\s*card|card\s*number|payment\s*(?:data|info|details|card)|os\s+approval|administrator\s+approval|admin(?:istrator)?\s+privileges?|비밀번호|패스워드|카드\s*번호|결제\s*정보|관리자\s*권한|사용자\s*계정\s*컨트롤)/i;
+
+function blockedInteractive(frame) {
+  if (!frame || frame.secret === true) return true;
+  const parts = [];
+  const push = (value) => { if (typeof value === "string" && value) parts.push(value); };
+  push(frame.title);
+  push(frame.message);
+  push(frame.placeholder);
+  push(frame.prefill);
+  if (Array.isArray(frame.options)) for (const option of frame.options) push(typeof option === "string" ? option : option && option.label);
+  if (Array.isArray(frame.questions)) for (const question of frame.questions) {
+    if (!question || typeof question !== "object") continue;
+    push(question.question);
+    push(question.header);
+    if (!Array.isArray(question.options)) continue;
+    for (const option of question.options) {
+      if (!option || typeof option !== "object") continue;
+      push(option.label);
+      push(option.description);
+      push(option.preview);
+    }
+  }
+  return blockedAsk.test(parts.join("\n"));
+}
+
+function askQuestion(question) {
+  return {
+    id: String(question.id ?? ""),
+    question: String(question.question ?? ""),
+    header: question.header ? String(question.header) : "",
+    multi: !!question.multi,
+    recommended: Number.isInteger(question.recommended) ? question.recommended : -1,
+    options: (Array.isArray(question.options) ? question.options : []).map((option) => ({
+      label: String((option && option.label) ?? ""),
+      description: option && option.description ? String(option.description) : "",
+      preview: option && option.preview ? String(option.preview) : "",
+    })),
+  };
+}
+
+// 화면 카드가 이미 그리는 필드만 남긴다. input·editor 는 여기까지 오지 않는다.
+function workflowAskRequest(frame) {
+  const request = { id: String(frame.id ?? ""), method: frame.method, timeout: Number(frame.timeout) || 0 };
+  const timeout = request.timeout;
+  if (timeout > 0) request.deadline = Date.now() + timeout;
+  if (frame.method === "ask") {
+    request.questions = (Array.isArray(frame.questions) ? frame.questions : []).map(askQuestion);
+    return request;
+  }
+  if (frame.method === "select") {
+    return {
+      ...request,
+      title: String(frame.title ?? ""),
+      options: (Array.isArray(frame.options) ? frame.options : []).map(String),
+      optionDetails: (Array.isArray(frame.optionDetails) ? frame.optionDetails : []).map((detail) => ({
+        description: detail && detail.description ? String(detail.description) : "",
+      })),
+      initialIndex: Number.isInteger(frame.initialIndex) ? frame.initialIndex : 0,
+      selectionMarker: frame.selectionMarker === "checkbox" ? "checkbox" : "radio",
+      checkedIndices: (Array.isArray(frame.checkedIndices) ? frame.checkedIndices : []).filter(Number.isInteger),
+      markableCount: Number.isInteger(frame.markableCount) ? frame.markableCount : 0,
+    };
+  }
+  return { ...request, title: String(frame.title ?? ""), message: String(frame.message ?? "") };
+}
+
+function workflowAskResponse(method, response) {
+  const source = response && typeof response === "object" ? response : {};
+  if (source.cancelled) return { cancelled: true };
+  if (source.timedOut) return { timedOut: true };
+  if (method === "ask") {
+    return {
+      answers: (Array.isArray(source.answers) ? source.answers : []).map((answer) => {
+        const out = {
+          id: String((answer && answer.id) ?? ""),
+          selectedOptions: (Array.isArray(answer && answer.selectedOptions) ? answer.selectedOptions : []).map(String),
+        };
+        const custom = answer && typeof answer.customInput === "string" ? answer.customInput : "";
+        if (custom) out.customInput = custom;
+        return out;
+      }),
+    };
+  }
+  if (method === "confirm") return { confirmed: !!(response && response.confirmed) };
+  return { value: String((response && response.value) ?? "") };
+}
 
 function promptSections(harness, instruction = "", feedback = []) {
   return [
@@ -70,7 +161,7 @@ function execution(backend, name, run) {
 async function omp(backend, context) {
   const { cwd, model, signal, budgetCents, capture } = context;
   const rpc = open({
-    cwd, launch: (program, args, options) => backend.launch(program, args, options, { budgetCents, signal, model }),
+    cwd, launch: (program, args, options) => backend.launch(program, args, options, { budgetCents, signal, model, workflowAsk: context.workflowAsk === true }),
     terminate: (child) => backend.terminate(child),
     mainPrompt: backend.ompPrompt,
   });
@@ -85,6 +176,8 @@ async function omp(backend, context) {
   let output = "";
   const tools = new Set();
   const progress = progressOf(context);
+  // 한 턴의 질문 카드는 같은 키를 쓴다. 진행 이벤트는 첫 질문 대기 직전에 한 번만 낸다.
+  let askSession = null;
   const done = new Promise((resolve, reject) => {
     rpc.onEvent((frame) => {
       if (frame.type === "message_update" && frame.assistantMessageEvent?.type === "text_delta" &&
@@ -106,8 +199,32 @@ async function omp(backend, context) {
         if (!Number.isFinite(usd) || usd < 0) reject(new Error("OMP returned no valid cost"));
         else { costCents += usd * 100; turns++; }
       }
-      if (frame.type === "extension_ui_request" && ["ask", "select", "confirm", "input", "editor"].includes(frame.method)) {
-        reject(new Error("Interactive OMP request is unsupported in a Loop: " + frame.method));
+      if (frame.type === "extension_ui_request") {
+        const method = frame.method;
+        if (method === "cancel" && context.workflowAsk === true) {
+          const target = String(frame.targetId ?? "");
+          if (askSession && asksFor(askSession).some((item) => item.id === target)) dropWorkflowAsk(askSession);
+          return;
+        }
+        if (interactiveMethods.includes(method)) {
+          const id = String(frame.id ?? "");
+          // 질문은 턴 실패가 아니다. input·editor·암호·결제·OS 승인은 여전히 거절한다.
+          if (context.workflowAsk !== true || !workflowAskMethods.has(method) || !id || blockedInteractive(frame)) {
+            reject(new Error("Interactive OMP request is unsupported in a Loop: " + method));
+            return;
+          }
+          if (!askSession) {
+            askSession = "workflow-ask:" + randomUUID();
+            progress({ askSession });
+          }
+          if (asksFor(askSession).some((item) => item.id === id)) return;
+          const request = workflowAskRequest(frame);
+          registerWorkflowAsk(askSession, request, (response) => {
+            const sent = rpc.sendRaw({ type: "extension_ui_response", id: request.id, ...workflowAskResponse(method, response) });
+            return sent ? { ok: true } : { ok: false, out: "omp 프로세스에 답을 보내지 못했습니다" };
+          });
+          return;
+        }
       }
       if (frame.type === "agent_end") resolve();
     });
@@ -123,6 +240,11 @@ async function omp(backend, context) {
     const session = await call({ type: "get_state" });
     await call({ type: "set_model", provider: backend.protocol ? "omp-bridge" : model.provider, modelId: model.model });
     if (model.reasoning) await call({ type: "set_thinking_level", level: model.reasoning });
+    // 핀된 omp 는 set_ask_dialog 이후에만 method ask 를 낸다. 실패해도 select·confirm 대기는 유지한다.
+    if (context.workflowAsk === true) {
+      const dialog = await rpc.send({ type: "set_ask_dialog", enabled: true });
+      if (!dialog.success) { /* 이 빌드는 select·confirm 으로만 묻는다 */ }
+    }
     await call({ type: "prompt", message: prompt(context) });
     await done;
     signal.throwIfAborted();
@@ -133,6 +255,7 @@ async function omp(backend, context) {
     if (diagnostics) throw new Error(error.message + ": " + redact(diagnostics));
     throw error;
   } finally {
+    if (askSession) dropWorkflowAsk(askSession);
     signal.removeEventListener("abort", onAbort);
     rpc.close();
     await closed.catch(() => {});
