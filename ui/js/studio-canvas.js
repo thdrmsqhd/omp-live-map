@@ -1,5 +1,11 @@
 // 노드 캔버스의 이동·확대. 빈 곳 드래그(또는 가운데 버튼)로 이동, 휠로 확대·축소한다.
 // 노드 안의 textarea·목록처럼 스스로 스크롤되는 곳에서는 휠을 가로채지 않는다(Ctrl+휠은 항상 확대).
+function bounds(boxes) {
+  const left = Math.min(...boxes.map((box) => box.x)), top = Math.min(...boxes.map((box) => box.y));
+  return { left, top, width: Math.max(...boxes.map((box) => box.x + box.width)) - left,
+    height: Math.max(...boxes.map((box) => box.y + box.height)) - top };
+}
+
 export function bindStudioCanvas({ viewport, surface, scaleOutput, onBackground, onChange }) {
   let scale = 1, x = 60, y = 60, pan;
 
@@ -68,14 +74,19 @@ export function bindStudioCanvas({ viewport, surface, scaleOutput, onBackground,
       return this.point(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
     },
     // 주어진 사각형(캔버스 좌표)들이 모두 보이게 맞춘다.
-    fit(boxes) {
+    // min 을 주면 그보다 작게 줄이지 않는다. 그때 다 들어가지 않으면 focus 후보(앞쪽이 우선) 중 이 배율에
+    // 들어가는 첫 묶음을 가운데에 두고, 어느 것도 들어가지 않으면 마지막 묶음의 왼쪽 위부터 보여 준다.
+    fit(boxes, { min = .15, max = 1, focus = [] } = {}) {
       if (!boxes.length || !viewport.clientWidth || !viewport.clientHeight) return false;
-      const left = Math.min(...boxes.map((box) => box.x)), top = Math.min(...boxes.map((box) => box.y));
-      const width = Math.max(...boxes.map((box) => box.x + box.width)) - left;
-      const height = Math.max(...boxes.map((box) => box.y + box.height)) - top;
-      scale = Math.min(1, Math.max(.15, Math.min((viewport.clientWidth - 80) / width, (viewport.clientHeight - 80) / height)));
-      x = (viewport.clientWidth - width * scale) / 2 - left * scale;
-      y = (viewport.clientHeight - height * scale) / 2 - top * scale;
+      const width = viewport.clientWidth - 80, height = viewport.clientHeight - 80;
+      const all = bounds(boxes);
+      const fits = (box, k) => box.width * k <= width + 1 && box.height * k <= height + 1;
+      scale = Math.min(2, Math.max(.15, Math.min(max, Math.max(min, Math.min(width / all.width, height / all.height)))));
+      const sets = [all, ...focus.filter((list) => list.length).map(bounds)];
+      const target = sets.find((box) => fits(box, scale));
+      const box = target ?? sets.at(-1);
+      x = target ? (viewport.clientWidth - box.width * scale) / 2 - box.left * scale : 40 - box.left * scale;
+      y = target || box.height * scale <= height ? (viewport.clientHeight - box.height * scale) / 2 - box.top * scale : 40 - box.top * scale;
       paint();
       return true;
     },

@@ -10,7 +10,13 @@ import {
 const COLUMN = { model: 0, harness: 400, loop: 800, profile: 800 };
 const KIND_ORDER = { model: 0, harness: 1, loop: 2, profile: 3 };
 const WORKFLOW_X = 1220, SX = 2, SY = 2.6, GAP = 28;
-const LAYOUT_KEY = "omp-studio-layout";
+// 단계에 연결되지 않은 프로필은 여러 열 격자로 둔다. 정의만 볼 때는 비어 있는 Workflow 구역(오른쪽)에,
+// Workflow 를 열었을 때는 단계와 겹치지 않게 라이브러리 아래에 놓는다.
+const GRID_LIBRARY = [WORKFLOW_X - 20, WORKFLOW_X + 320], GRID_WORKFLOW = [0, 400, 800];
+// 자동 맞춤의 최소 배율. 글자를 읽을 수 있어야 한다. '전체 보기' 버튼만 이보다 작게 줄인다.
+const READABLE = { workflow: .7, library: .6 };
+// v2: 프로필 격자와 기본 접힘을 도입하면서 한 열로 쌓인 이전 위치를 한 번 버린다.
+const LAYOUT_KEY = "omp-studio-layout-v2";
 const TYPE_LABELS = { model: "모델", harness: "하네스", loop: "루프", profile: "프로필", flow: "실행 순서" };
 const PORT_NAMES = { next: "다음", true: "참", false: "거짓", approved: "승인", rejected: "거절" };
 const clamp = (value) => Math.min(10000, Math.max(0, Math.round(value)));
@@ -140,7 +146,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     if (kind === "harness") ref.model = draft.model ? "def:" + draft.model : "";
     if (kind === "loop") ref.harness = draft.harness ? "def:" + draft.harness : "";
     const spot = spots()[key];
-    const node = { key, kind, record, draft, ref, x: spot?.x, y: spot?.y, collapsed: Boolean(spot?.c) };
+    const node = { key, kind, record, draft, ref, x: spot?.x, y: spot?.y };
+    node.collapsed = spot ? Boolean(spot.c) : collapsedByDefault(node);
     node.initial = fingerprint(node);
     return node;
   }
@@ -528,8 +535,10 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       const users = [...nodes.values()].filter((other) => other.el && other.y !== undefined && Object.values(other.ref).includes(node.key));
       return users.length ? Math.min(...users.map(({ y }) => y)) : Infinity;
     };
+    const grid = list.filter((node) => node.kind === "profile" && !linkedProfile(node));
     for (const kinds of [["loop", "profile"], ["harness"], ["model"]]) {
-      const column = list.filter(({ kind }) => kinds.includes(kind));
+      const column = list.filter((node) => kinds.includes(node.kind) && !grid.includes(node));
+      if (!column.length) continue;
       for (const node of column) node.anchor = anchor(node);
       column.sort((a, b) => a.anchor - b.anchor || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || nameOf(a).localeCompare(nameOf(b), "ko"));
       const x = COLUMN[column[0]?.kind];
@@ -550,7 +559,22 @@ export function bindStudio({ find, request, report, currentProject, changed: not
         remember(node);
       }
     }
+    placeGrid(grid.sort((a, b) => nameOf(a).localeCompare(nameOf(b), "ko")));
     saveLayout();
+  }
+  // 연결되지 않은 프로필을 이미 놓인 정의 노드 아래에 여러 열로 놓는다(한 열로 길게 쌓여 화면이 작아지지 않게).
+  function placeGrid(list) {
+    if (!list.length) return;
+    const pending = new Set(list);
+    const placed = [...nodes.values()].filter((other) => other.el && other.kind !== "step" && !pending.has(other) && other.x !== undefined);
+    let top = !placed.length ? 0 : wf ? Math.max(...placed.map((other) => other.y + other.el.offsetHeight)) + GAP * 2
+      : Math.min(...placed.map((other) => other.y));
+    const columns = wf ? GRID_WORKFLOW : GRID_LIBRARY;
+    for (let start = 0; start < list.length; start += columns.length) {
+      const row = list.slice(start, start + columns.length);
+      row.forEach((node, index) => { node.x = columns[index]; node.y = top; place(node); remember(node); });
+      top += Math.max(...row.map((node) => node.el.offsetHeight)) + GAP;
+    }
   }
   // 정의 노드 위치는 보는 맥락(Workflow별, 또는 Workflow 없이 정의만)마다 따로 기억한다.
   function spots() {
@@ -562,9 +586,17 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const table = spots();
     for (const node of libraryNodes()) {
       const spot = table[node.key];
-      Object.assign(node, { x: spot?.x, y: spot?.y, collapsed: Boolean(spot?.c) });
+      Object.assign(node, { x: spot?.x, y: spot?.y, collapsed: spot ? Boolean(spot.c) : collapsedByDefault(node) });
     }
   }
+  // 처음 보는 정의 노드의 접힘 상태. 정의만 볼 때는 모두 접어 목록처럼 훑어 보게 하고,
+  // Workflow 를 열었을 때는 단계에 연결되지 않은 프로필만 접는다(연결된 정의는 바로 고칠 수 있게 펼친다).
+  function collapsedByDefault(node) {
+    if (node.isNew) return false;
+    if (!wf) return true;
+    return node.kind === "profile" && !linkedProfile(node);
+  }
+  function linkedProfile(node) { return steps().some((step) => step.ref.profile === node.key); }
   function remember(node) {
     if (node.kind === "step") {
       layout.steps ??= {};
@@ -1044,10 +1076,17 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   function boxes(list) {
     return list.filter((node) => node.el && node.x !== undefined).map((node) => ({ x: node.x, y: node.y, width: node.el.offsetWidth, height: node.el.offsetHeight }));
   }
-  function fit() {
+  // 자동 맞춤은 읽을 수 있는 배율(READABLE) 아래로 줄이지 않는다. Workflow 를 열었으면 단계와 단계에 직접 연결된 정의,
+  // 그것도 안 되면 단계만 화면에 넣는다. full(전체 보기 버튼)은 배율과 관계없이 모두 넣는다.
+  function fit({ full = false } = {}) {
     requestAnimationFrame(() => {
       const visible = visibleNodes();
-      if (!canvas.fit(boxes(visible))) canvas.fit([{ x: 0, y: 0, width: 800, height: 400 }]);
+      const stepNodes = visible.filter(({ kind }) => kind === "step");
+      const direct = new Set(stepNodes.flatMap(({ ref }) => Object.values(ref)));
+      const options = full ? {} : wf
+        ? { min: READABLE.workflow, focus: [boxes(visible.filter((node) => node.kind === "step" || direct.has(node.key))), boxes(stepNodes)] }
+        : { min: READABLE.library };
+      if (!canvas.fit(boxes(visible), options)) canvas.fit([{ x: 0, y: 0, width: 800, height: 400 }]);
     });
   }
   // 왼쪽부터 모델 → 하네스 → 루프·프로필 → Workflow 순서로 다시 놓는다. 쓰는 쪽(오른쪽) 높이에 맞춰 줄을 세운다.
@@ -1104,7 +1143,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     event.stopPropagation();
   });
   el("arrange").addEventListener("click", arrange);
-  el("fit").addEventListener("click", fit);
+  el("fit").addEventListener("click", () => fit({ full: true }));
   el("zoom-in").addEventListener("click", () => canvas.zoom(canvas.scale * 1.2));
   el("zoom-out").addEventListener("click", () => canvas.zoom(canvas.scale / 1.2));
   el("save").addEventListener("click", guard(saveAll));
