@@ -3,7 +3,14 @@
 // 최신 모델을 앞에 둔다(모델 선택 목록이 이 순서로 나온다). 이전 모델은 이미 저장된 정의가 계속 실행되도록 남긴다.
 const models = new Set(["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
   "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]);
-const { LOGIN_EXPIRED, AUTH_REJECTED } = require("./claude-code-oauth");
+const { LOGIN_EXPIRED, AUTH_REJECTED, authError } = require("./claude-code-oauth");
+const BUDGET_EXHAUSTED = "budget-exhausted";
+// 브로커가 호출을 막은 이유를 실행 실패 사유로 바꾼다(CLI 에는 일반 거부로만 보인다).
+function brokerFailure(code) {
+  if (code !== BUDGET_EXHAUSTED) return authError(code);
+  return Object.assign(new Error("실행 예산 소진 · 다음 모델 호출에 필요한 예약(호출 전에 토큰 수로 잡는 상한)이 남은 예산보다 큽니다. " +
+    "예산(구독 로그인이면 '호출 예약 상한')을 늘려 다시 실행하세요."), { code });
+}
 const endpoint = "https://api.anthropic.com";
 const inputCap = 100000;
 const countFields = new Set(["model", "messages", "system", "tools", "tool_choice", "thinking"]);
@@ -45,10 +52,10 @@ function allowedBetas(value) {
 
 function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstream = fetch }) {
   let remaining = budgetCents;
-  // 인증 때문에 호출을 못 한 이유. CLI 에는 일반 거부로만 보이므로 실행기가 이 값으로 실패 사유를 남긴다.
-  let authFailure = null;
+  // 인증·예산 때문에 호출을 못 한 이유. CLI 에는 일반 거부로만 보이므로 실행기가 이 값으로 실패 사유를 남긴다.
+  let failure = null;
   const rejected = (response) => {
-    if (response.status === 401 && !key) authFailure ??= oauth?.subscription ? LOGIN_EXPIRED : AUTH_REJECTED;
+    if (response.status === 401 && !key) failure ??= oauth?.subscription ? LOGIN_EXPIRED : AUTH_REJECTED;
     return response;
   };
   async function call(path, body, headers) {
@@ -66,7 +73,7 @@ function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstrea
       if (key) headers["x-api-key"] = key;
       else {
         try { headers.authorization = "Bearer " + await oauth(signal); } catch (error) {
-          if (error.code === LOGIN_EXPIRED) authFailure ??= LOGIN_EXPIRED;
+          if (error.code === LOGIN_EXPIRED) failure ??= LOGIN_EXPIRED;
           throw error;
         }
       }
@@ -84,13 +91,16 @@ function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstrea
       // Reserve an intentionally conservative allowance before dispatching the billable call.
       // Rates in USD per million tokens, including a margin for provider-added input/cache costs.
       const reserve = ((count + 1024) * 50 + body.max_tokens * 150) / 10000;
-      if (!Number.isFinite(remaining) || reserve > remaining) throw new Error("Loop model budget exhausted");
+      if (!Number.isFinite(remaining) || reserve > remaining) {
+        failure ??= BUDGET_EXHAUSTED;
+        throw new Error("Loop model budget exhausted");
+      }
       remaining -= reserve;
       return call(path, body, headers);
     },
     spent: () => budgetCents - remaining,
-    authFailure: () => authFailure,
+    failure: () => failure,
   };
 }
 
-module.exports = { createAnthropicBroker, models, allowedBetas };
+module.exports = { createAnthropicBroker, models, allowedBetas, brokerFailure, BUDGET_EXHAUSTED };

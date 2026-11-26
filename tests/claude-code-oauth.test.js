@@ -91,23 +91,23 @@ test("an expired subscription login is reported as a login expiry by the broker 
   const broker = createAnthropicBroker({ model, budgetCents: 1000, oauth: claudeCodeLogin({ directory: expired }).accessToken,
     upstream: async () => assert.fail("expired login must not reach Anthropic") });
   await assert.rejects(broker.request({ path: "/v1/messages", method: "POST", body }), (error) => error.code === LOGIN_EXPIRED);
-  assert.equal(broker.authFailure(), LOGIN_EXPIRED);
+  assert.equal(broker.failure(), LOGIN_EXPIRED);
   // 만료 시각 전이라도 Anthropic 이 구독 토큰을 거부(401)하면 만료로 본다. API 키는 구독 만료로 보지 않는다.
   const refused = createAnthropicBroker({ model, budgetCents: 1000, oauth: savedToken(token),
     upstream: async () => Response.json({ type: "error", error: { type: "authentication_error" } }, { status: 401 }) });
   await assert.rejects(refused.request({ path: "/v1/messages", method: "POST", body }), /HTTP 401/);
-  assert.equal(refused.authFailure(), LOGIN_EXPIRED);
+  assert.equal(refused.failure(), LOGIN_EXPIRED);
   const keyed = createAnthropicBroker({ model, budgetCents: 1000, key: "sk-ant-api03-" + "b".repeat(40),
     upstream: async () => new Response("{}", { status: 401 }) });
   await assert.rejects(keyed.request({ path: "/v1/messages", method: "POST", body }));
-  assert.equal(keyed.authFailure(), null);
+  assert.equal(keyed.failure(), null);
 
   // 실행기는 CLI 의 일반 실패 대신 'Claude Code 로그인 만료'로 실패한다.
   const { spawn } = require("node:child_process");
   const { adaptersFor } = require("../server/engineering/adapters");
   const backend = { enforced: true, supports: () => true, terminate: (child) => child.kill(),
     launch: (program, args, options) => Object.assign(spawn(process.execPath, ["-e", "process.stdin.resume();process.stdin.on('end',()=>process.exit(1))"], options),
-      { authFailure: () => LOGIN_EXPIRED }) };
+      { failure: () => LOGIN_EXPIRED }) };
   await assert.rejects(adaptersFor(backend).get("claude").run({ model: { provider: "anthropic", model }, cwd: expired,
     harness: { adapter: "claude", role: "reviewer" }, instruction: "fixture", feedback: [], budgetCents: 4, signal: AbortSignal.timeout(5000) }),
   /^Error: Claude Code 로그인 만료/);
@@ -133,4 +133,14 @@ test("the runtime status re-reads the Claude Code login and reports its expiry",
   // 다른 인증 수단이나 준비되지 않은 상태는 건드리지 않는다.
   assert.equal(liveAuthState("ready", { kind: "api-key", billing: "api" }, claudeCode), null);
   assert.equal(liveAuthState("missing-key", auth, claudeCode), null);
+});
+test("a call refused by the reservation budget is reported as budget exhaustion, not a generic broker denial", async () => {
+  const { brokerFailure, BUDGET_EXHAUSTED } = require("../server/engineering/anthropic");
+  const model = "claude-sonnet-5-5";
+  const broker = createAnthropicBroker({ model, budgetCents: 1, oauth: savedToken(token),
+    upstream: async (url) => url.endsWith("count_tokens") ? Response.json({ input_tokens: 10 }) : assert.fail("must not dispatch") });
+  await assert.rejects(broker.request({ path: "/v1/messages", method: "POST",
+    body: JSON.stringify({ model, max_tokens: 8192, messages: [{ role: "user", content: "hi" }] }) }), /budget exhausted/);
+  assert.equal(broker.failure(), BUDGET_EXHAUSTED);
+  assert.match(brokerFailure(BUDGET_EXHAUSTED).message, /^실행 예산 소진/);
 });
