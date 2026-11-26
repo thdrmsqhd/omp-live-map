@@ -114,7 +114,13 @@ async function boot() {
   addEventListener("resize", paintMinimap);
 }
 
-boot().catch((e) => {
-  $("spath").textContent = "시작 실패: " + e.message;
-  console.error(e);
-});
+// index.html 은 app.js 뒤에도 스크립트(workflow-*.js 등)를 적재한다. 첫 스냅샷이 그보다 먼저 도착하면
+// 아직 없는 전역(wfMap)을 읽어 "시작 실패"가 나므로, 모든 스크립트가 실행된 뒤에 시작한다.
+function startBoot() {
+  boot().catch((e) => {
+    $("spath").textContent = "시작 실패: " + e.message;
+    console.error(e);
+  });
+}
+if (document.readyState === "loading") addEventListener("DOMContentLoaded", startBoot, { once: true });
+else startBoot();
