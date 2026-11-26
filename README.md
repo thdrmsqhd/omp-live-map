@@ -3,18 +3,17 @@
 > OMP와 Claude Code 에이전트를 지도 한 장에서 관제하고, 같은 앱에서 개발 업무를 Workflow로 맡기는 Windows 로컬 워크스테이션입니다.
 
 [![Windows CI](https://github.com/thdrmsqhd/omp-live-map/actions/workflows/v2-phase-0.yml/badge.svg?branch=main)](https://github.com/thdrmsqhd/omp-live-map/actions/workflows/v2-phase-0.yml)
-[![Release](https://img.shields.io/github/v/release/thdrmsqhd/omp-live-map?display_name=tag)](https://github.com/thdrmsqhd/omp-live-map/releases/latest)
 
-[주요 화면](#주요-화면) · [시작하기](#시작하기) · [Engineering](docs/guide/engineering.md) · [문서](#문서)
+[주요 화면](#주요-화면) · [시작하기](#시작하기) · [Engineering](docs/guide/engineering.md) · [문서](#문서) · [최신 릴리스](https://github.com/thdrmsqhd/omp-live-map/releases/latest)
 
 ## 한눈에 보기
 
 | | 관제 (Live Map) | Engineering |
 |---|---|---|
-| **무엇을 하나** | 이 PC에서 도는 세션·서브에이전트의 상태, 토큰·비용·컨텍스트, 프로세스 자원을 실시간으로 보고 프롬프트 전송·셸 명령·프로세스 정리를 합니다. | 프로필 → 하네스 → 루프 → Workflow → 개발 Task로 업무를 정의하고, 승인·개입 지점을 두고 에이전트에게 실행시킵니다. |
+| **역할** | 이 PC에서 도는 세션·서브에이전트의 상태, 토큰·비용·컨텍스트, 프로세스 자원을 실시간으로 보고 프롬프트 전송·셸 명령·프로세스 정리를 합니다. | 프로필 → 하네스 → 루프 → Workflow → 개발 Task로 업무를 정의하고, 승인·개입 지점을 두고 에이전트에게 실행시킵니다. |
 | **대상** | omp 세션, Claude Code 세션 | omp, Claude Code (컨테이너에서 격리 실행) |
-| **쓰는 곳** | 웹 모드와 데스크톱 앱 | 데스크톱 앱 |
-| **원본 데이터** | 세션 기록(JSONL)을 읽기만 함. 서버가 상태를 따로 저장하지 않음 | 앱 사용자 데이터 폴더의 SQLite. 버전·실행·승인·감사 이벤트 |
+| **사용처** | 웹 모드와 데스크톱 앱 | 데스크톱 앱 |
+| **데이터** | 세션 기록(JSONL)을 읽기만 함. 서버가 상태를 따로 저장하지 않음 | 앱 사용자 데이터 폴더의 SQLite. 버전·실행·승인·감사 이벤트 |
 
 - **한 지도에 모든 세션**: 프로젝트별로 묶어 비교하고, 열어 둔 카드를 자유롭게 배치합니다. 실행 중인 서브에이전트는 메인 카드에 자동으로 붙었다가 끝나면 닫힙니다.
 - **업무를 Workflow로**: 계획 → 설계 승인 → 작업 및 검증 → 리뷰 → 최종 승인 같은 흐름을 그래프로 그리고 버전으로 고정합니다. 과거 실행은 시작한 버전을 유지합니다.
