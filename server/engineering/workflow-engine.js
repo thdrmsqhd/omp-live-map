@@ -1,15 +1,7 @@
 "use strict";
 
-const manualGateText = Object.freeze({
-  browser: "브라우저의 결제·동의·비밀번호 화면은 그 창에서 직접 처리하세요. 관제에는 그 정보를 입력하지 마세요.",
-  payment: "결제는 원래 결제 창에서 직접 확인하고 처리하세요. 관제에는 결제 정보를 입력하지 마세요.",
-  consent: "약관 원문을 직접 읽고 원래 창에서 동의 여부를 선택하세요.",
-  password: "비밀번호는 원래 로그인 창에서만 입력하세요. 관제의 입력란에 비밀번호를 쓰지 마세요.",
-  system: "시스템 변경은 해당 설치·설정 화면에서 직접 확인하세요. 이 버튼은 관리자 권한을 부여하지 않습니다.",
-  uac: "Windows UAC 프롬프트가 표시된 경우 해당 시스템 화면에서만 처리하세요. 이 승인으로 관리자 권한을 얻지 않습니다.",
-});
-
 const { graphScheduler } = require("./graph-scheduler");
+const { instructionFor, manualHold } = require("../application/workflow-gates");
 const { retryPlan } = require("./workflow-retry-plan");
 const { nodeExecutor, nodeDefinitions } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
@@ -82,20 +74,10 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       store.change(id, ["queued", "paused", "interrupted"], "running");
       const approved = [...results.values()].filter((result) => result.port === "approved");
       for (const decision of approved) await validateArtifacts(workspace, decision.artifacts ?? [], signal);
-      const harnessGate = (node) => {
-        if (!["agent", "loop"].includes(node.type) || store.gateCleared(id, node.id)) return null;
-        let role = "";
-        try { role = nodeDefinitions(catalog, run.project, node).harness.payload.role || ""; } catch { return null; }
-        if (role === "브라우저·데스크톱 조작 하네스" || role.startsWith("브라우저·데스크톱 조작 하네스 · ")) return "browser";
-        if (role === "시스템 운영 하네스" || role.startsWith("시스템 운영 하네스 · ")) return "uac";
-        return null;
+      const roleOf = (node) => {
+        try { return nodeDefinitions(catalog, run.project, node).harness.payload.role || ""; } catch { return ""; }
       };
-      const holdForHarness = (node) => {
-        const gate = harnessGate(node);
-        if (!gate) return false;
-        store.hold(id, node.id, manualGateText[gate], gate);
-        return true;
-      };
+      const pendingHold = (node) => store.gateCleared(id, node.id) ? null : manualHold(node, roleOf(node));
       for (;;) {
         signal.throwIfAborted();
         if (control.pause) { store.change(id, ["running"], "paused"); return; }
@@ -112,8 +94,12 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
         const batch = external(node) ? ready.filter(external).slice(0, 2) : [];
         let outcomes;
         if (batch.length > 1) {
-          const blocked = batch.find((item) => harnessGate(item));
-          if (blocked) { store.hold(id, blocked.id, manualGateText[harnessGate(blocked)], harnessGate(blocked)); return; }
+          const blocked = batch.find((item) => pendingHold(item));
+          if (blocked) {
+            const gate = pendingHold(blocked);
+            store.hold(id, blocked.id, gate.text, gate.gate);
+            return;
+          }
           await ensureWorkspace();
           const references = new Map();
           for (const branch of batch) references.set(branch.id, await verifyInputs(workspace, branch, results, signal));
@@ -127,11 +113,12 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
           const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
           signal.throwIfAborted();
           if (node.type === "approval") {
-            const instruction = manualGateText[node.gate];
+            const instruction = instructionFor(node.gate);
             store.ask(id, node.id, instruction ? node.prompt + "\n\n" + instruction : node.prompt, artifacts, node.gate);
             return;
           }
-          if (holdForHarness(node)) return;
+          const gate = pendingHold(node);
+          if (gate) { store.hold(id, node.id, gate.text, gate.gate); return; }
           begin(node);
           let result = { status: "succeeded" };
           if (node.type === "condition") result.port = scheduler.conditionPort(node, results);

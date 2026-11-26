@@ -5,7 +5,7 @@ const { mkdirSync } = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
 const { artifactText } = require("./workflow-artifact");
-const { transaction } = require("./database");
+const { transaction } = require("../infrastructure/sqlite");
 const { string } = require("./definitions");
 const { problem, redact } = require("./state");
 

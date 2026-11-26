@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const { migrateFromV2 } = require("../server/engineering/v2-migration");
-const { openDatabase } = require("../server/engineering/database");
+const { openDatabase } = require("../server/infrastructure/sqlite");
 
 test("V3 snapshots live V2 SQLite data and preserves existing V3 state on a later launch", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "omp-v2-migrate-"));

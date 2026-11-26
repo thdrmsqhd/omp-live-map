@@ -1,7 +1,7 @@
 // HTTP 공용 헬퍼: JSON 응답, 요청 가드(Host·Origin·Sec-Fetch-Site·Content-Type), 본문 읽기·JSON 파싱(기본 1MB 상한).
 "use strict";
 
-const { PORT } = require("./config");
+const { PORT } = require("../config");
 
 const MAX_BODY = 1024 * 1024;
 const BAD_JSON = { ok: false, code: 1, out: "bad json" };

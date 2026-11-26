@@ -74,7 +74,7 @@
 | 판단 (3) | 평가, 비교·추천, 진단 |
 | 대화 (2) | 인터뷰·코칭, 학습 |
 
-각 유형의 원본 계약과 스키마 키는 `ui/js/workspace-catalog.js`에 선언했다. 예: 검색은 `evidence_list`를 넘기고 답변을 생성하지 않는다. 답변은 `cited_answer`를 생성하고 출처 문제를 검색에 되돌린다. 이 되돌림은 별도 정책이며 스스로 순환하는 실행 Edge를 만들지 않는다.
+각 유형의 원본 계약과 스키마 키는 `server/engineering/harness-kinds.js`에 선언했다. 예: 검색은 `evidence_list`를 넘기고 답변을 생성하지 않는다. 답변은 `cited_answer`를 생성하고 출처 문제를 검색에 되돌린다. 이 되돌림은 별도 정책이며 스스로 순환하는 실행 Edge를 만들지 않는다.
 
 ## 5. 진입 방법 및 검증
 
@@ -85,7 +85,7 @@
 ### 코드 위치
 
 - `ui/workspace-prototype.html`, `ui/css/workspace-prototype.css`: 화면 구조, 반응형 레이아웃.
-- `ui/js/workspace-catalog.js`, `ui/js/workspace-model.js`: 선언형 계약, 설계 검증 및 모의 실행 데이터.
+- `server/engineering/harness-kinds.js`, `ui/js/workspace-model.js`: 선언형 계약, 설계 검증 및 모의 실행 데이터.
 - `ui/js/workspace-prototype.js`: 캔버스와 계약선, 편집, 실행/개입, 로그, 문서 연동.
 - `ui/index.html`: 기존 화면에서 새 프로토타입으로 가는 링크만 추가.
 

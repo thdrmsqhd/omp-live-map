@@ -7,11 +7,11 @@ const { randomUUID } = require("node:crypto");
 const { EventEmitter, once } = require("node:events");
 const { PassThrough, Writable } = require("node:stream");
 const { createInterface } = require("node:readline");
-const { createAnthropicBroker, models } = require("./anthropic");
-const { adaptersFor } = require("./adapters");
-const { commandRunner } = require("./command-runner");
-const { secureRunner } = require("./runner");
-const { problem } = require("./state");
+const { createAnthropicBroker, models } = require("../engineering/anthropic");
+const { adaptersFor } = require("../engineering/adapters");
+const { commandRunner } = require("../engineering/command-runner");
+const { secureRunner } = require("../engineering/runner");
+const { problem } = require("../engineering/state");
 
 const permitted = [
   { command: "npm", args: ["test"] }, { command: "node", args: ["--test"] },

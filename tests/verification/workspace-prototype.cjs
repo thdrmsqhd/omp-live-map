@@ -5,7 +5,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 const { chromium } = require("playwright");
 const { withLegacyHttp } = require("../helpers/legacy-http");
-require("../../ui/js/workspace-catalog");
+require("../../server/engineering/harness-kinds");
 require("../../ui/js/workspace-model");
 const M = globalThis.WORKSPACE_MODEL;
 

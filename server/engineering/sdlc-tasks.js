@@ -1,7 +1,7 @@
 "use strict";
 
 const { randomUUID } = require("node:crypto");
-const { transaction } = require("./database");
+const { transaction } = require("../infrastructure/sqlite");
 const { event } = require("./catalog");
 const { string, integer } = require("./definitions");
 const { problem } = require("./state");

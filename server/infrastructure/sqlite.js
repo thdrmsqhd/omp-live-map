@@ -5,18 +5,18 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
 const version = 12;
-const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
-const graphSchema = fs.readFileSync(path.join(__dirname, "schema-v2.sql"), "utf8");
-const runSchema = fs.readFileSync(path.join(__dirname, "schema-v3.sql"), "utf8");
-const retrySchema = fs.readFileSync(path.join(__dirname, "schema-v4.sql"), "utf8");
-const subgraphSchema = fs.readFileSync(path.join(__dirname, "schema-v5.sql"), "utf8");
-const sdlcSchema = fs.readFileSync(path.join(__dirname, "schema-v6.sql"), "utf8");
-const stageSchema = fs.readFileSync(path.join(__dirname, "schema-v7.sql"), "utf8");
-const deliverySchema = fs.readFileSync(path.join(__dirname, "schema-v8.sql"), "utf8");
-const budgetSchema = fs.readFileSync(path.join(__dirname, "schema-v9.sql"), "utf8");
-const stagingSchema = fs.readFileSync(path.join(__dirname, "schema-v10.sql"), "utf8");
-const scopeSchema = fs.readFileSync(path.join(__dirname, "schema-v11.sql"), "utf8");
-const reusableSchema = fs.readFileSync(path.join(__dirname, "schema-v12.sql"), "utf8");
+const schema = fs.readFileSync(path.join(__dirname, "../engineering/schema.sql"), "utf8");
+const graphSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v2.sql"), "utf8");
+const runSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v3.sql"), "utf8");
+const retrySchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v4.sql"), "utf8");
+const subgraphSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v5.sql"), "utf8");
+const sdlcSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v6.sql"), "utf8");
+const stageSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v7.sql"), "utf8");
+const deliverySchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v8.sql"), "utf8");
+const budgetSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v9.sql"), "utf8");
+const stagingSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v10.sql"), "utf8");
+const scopeSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v11.sql"), "utf8");
+const reusableSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v12.sql"), "utf8");
 
 function transaction(db, fn) {
   db.exec("BEGIN IMMEDIATE");

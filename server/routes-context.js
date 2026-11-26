@@ -1,7 +1,7 @@
 // 컨텍스트 API: 지금 컨텍스트 보기, 작업 가이드·압축으로 편집.
 "use strict";
 
-const { json, withJson } = require("./http");
+const { json, withJson } = require("./edge/http");
 const { view, guide, compact, clear } = require("./session-context");
 
 module.exports = {

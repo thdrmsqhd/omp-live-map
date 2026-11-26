@@ -2,32 +2,33 @@
 
 const { timingSafeEqual } = require("node:crypto");
 const path = require("node:path");
-const { openDatabase } = require("./database");
-const { catalog } = require("./catalog");
-const { workflowCatalog } = require("./workflow-catalog");
-const { workflowRuns } = require("./workflow-runs");
-const { workflowEngine } = require("./workflow-engine");
-const { workflowTemplates } = require("./workflow-templates");
-const { sdlcTasks } = require("./sdlc-tasks");
-const { sdlcStages } = require("./sdlc-stages");
-const { workflowObservability } = require("./workflow-observability");
-const { independentEvaluation } = require("./independent-evaluation");
-const { workflowDelivery } = require("./workflow-delivery");
-const { retryOptions } = require("./workflow-retry-plan");
-const { quickLaunch } = require("./workflow-launch");
-const { addPresetDefinitions, addPresetWorkflows, ensureProfiles, buildPreset, listPresets } = require("./workflow-presets");
-const { projectBudget } = require("./project-budget");
-const { projectContext } = require("./project-context");
-const { workflowStaging } = require("./workflow-staging");
-const { runStore } = require("./run-store");
-const { loopEngine } = require("./loop");
-const { secureRunner } = require("./runner");
-const { worktrees } = require("./worktree");
-const { harnessTrials } = require("./harness-trials");
-const { previewHarness } = require("./harness-preview");
-const { integer, string } = require("./definitions");
-const { problem } = require("./state");
-const workflowLive = require("./workflow-live");
+const { openDatabase } = require("../infrastructure/sqlite");
+const { catalog } = require("../engineering/catalog");
+const { workflowCatalog } = require("../engineering/workflow-catalog");
+const { workflowRuns } = require("../engineering/workflow-runs");
+const { workflowEngine } = require("../engineering/workflow-engine");
+const { workflowTemplates } = require("../engineering/workflow-templates");
+const { sdlcTasks } = require("../engineering/sdlc-tasks");
+const { sdlcStages } = require("../engineering/sdlc-stages");
+const { workflowObservability } = require("../engineering/workflow-observability");
+const { independentEvaluation } = require("../engineering/independent-evaluation");
+const { workflowDelivery } = require("../engineering/workflow-delivery");
+const { retryOptions } = require("../engineering/workflow-retry-plan");
+const { quickLaunch } = require("../engineering/workflow-launch");
+const { addPresetDefinitions, addPresetWorkflows, ensureProfiles, buildPreset, listPresets } = require("../engineering/workflow-presets");
+const { projectBudget } = require("../engineering/project-budget");
+const { projectContext } = require("../engineering/project-context");
+const { workflowStaging } = require("../engineering/workflow-staging");
+const { runStore } = require("../engineering/run-store");
+const { loopEngine } = require("../engineering/loop");
+const { secureRunner } = require("../engineering/runner");
+const { worktrees } = require("../engineering/worktree");
+const { harnessTrials } = require("../engineering/harness-trials");
+const { previewHarness } = require("../engineering/harness-preview");
+const { integer, string } = require("../engineering/definitions");
+const { problem } = require("../engineering/state");
+const workflowLive = require("../engineering/workflow-live");
+const { createObservationReads } = require("../application/observations");
 
 const prefix = "/api/engineering/";
 const limit = 64 * 1024;
@@ -97,17 +98,14 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions, presetWorkflows, evaluation } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
+      const observations = createObservationReads({ definitions, flowRuns, evaluation, observability, projectContext, workflowLive });
       let result;
       if (req.method === "GET") {
-        if (endpoint === "projects") {
-          result = url.searchParams.get("context") === "1"
-            ? await projectContext(definitions.project(query("project")), url.searchParams.get("source"))
-            : definitions.projects();
-        }
+        const observed = await observations.get(endpoint, url);
+        if (observed) result = observed.value;
+        else if (endpoint === "projects") result = definitions.projects();
         if (endpoint === "tasks") result = tasks.list(query("project"));
         if (endpoint === "sdlc-stages") result = stages.list(query("project"));
-        if (endpoint === "workflow-approvals") result = observability.approvals(query("project"));
-        if (endpoint === "independent-evaluation") result = evaluation.inspect(query("project"), url.searchParams.get("id"));
         if (endpoint === "workflow-live-map") {
           result = observability.liveMapRuns();
           // '개입 필요' 함에서 바로 승인·반려할 수 있게 승인 단계의 안내 문구를 붙인다.
@@ -120,16 +118,10 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
             } catch { /* 안내가 없어도 목록은 보여 준다 */ }
           }
         }
-        if (endpoint === "workflow-dashboard") result = observability.dashboard(query("project"),
-          integer(Number(url.searchParams.get("days") ?? 30), "metrics period", 1, 90));
         if (endpoint === "project-budget") result = { current: budget.get(query("project")) ?? null };
-        if (endpoint === "workflow-review") result = await observability.review(query("id"));
-        if (endpoint === "workflow-artifact") result = await observability.artifact(query("id"), query("node"), query("path"));
         if (endpoint === "workflows") result = workflows.list(query("project"));
         if (endpoint === "workflows/presets") result = listPresets();
         if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
-        // 단계의 전체 수행 기록(실행 중·완료 후). 실행이 있는지 먼저 확인해 없는 id 로 파일을 찾지 않는다.
-        if (endpoint === "workflow-transcript") { flowRuns.get(query("id")); result = workflowLive.transcript(query("id"), query("node")); }
         if (endpoint === "workflow-run") {
           const id = query("id");
           const run = flowRuns.get(id);
@@ -146,7 +138,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
               prompt: typeof prompt === "string" ? prompt.slice(0, 600) : undefined,
               check: check ? { command: check.command, args: check.args } : undefined })),
               edges: display.edges },
-            live: workflowLive.snapshot(id) };
+            live: observations.live(id) };
         }
         if (endpoint === "workflow") {
           const version = url.searchParams.get("version");

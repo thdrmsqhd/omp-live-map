@@ -6,7 +6,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { randomUUID } = require("node:crypto");
 const { test } = require("node:test");
-const { dockerRunner } = require("../../server/engineering/docker-runner");
+const { dockerRunner } = require("../../server/infrastructure/docker");
 
 function providerFixture(url, options, calls) {
   const body = JSON.parse(options.body);
@@ -68,7 +68,7 @@ for (const adapter of ["claude", "omp"]) {
 async function repairFixture(adapter) {
   const { execFileSync } = require("node:child_process");
   const { setTimeout: delay } = require("node:timers/promises");
-  const { openDatabase } = require("../../server/engineering/database");
+  const { openDatabase } = require("../../server/infrastructure/sqlite");
   const { catalog } = require("../../server/engineering/catalog");
   const { runStore } = require("../../server/engineering/run-store");
   const { loopEngine } = require("../../server/engineering/loop");

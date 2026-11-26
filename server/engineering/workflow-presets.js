@@ -1,7 +1,7 @@
 "use strict";
 
 const { problem } = require("./state");
-const { transaction } = require("./database");
+const { transaction } = require("../infrastructure/sqlite");
 const { MODELS, HARNESSES, PROFILES, LOOPS, PRESET_LOOPS, assetsOf } = require("./default-definitions");
 
 function addPresetDefinitions(db, catalog, project) {

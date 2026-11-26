@@ -4,7 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const { UI_DIR, MIME } = require("./config");
-const { json, fail, guardStatus } = require("./http");
+const { json, fail, guardStatus } = require("./edge/http");
 const { snapshot } = require("./snapshot");
 const { outsFor } = require("./live");
 const { asksFor } = require("./ui-requests");
@@ -12,7 +12,7 @@ const { recentFor } = require("./ext-live");
 const { addClient, removeClient, replay } = require("./sse");
 const localfs = require("./routes-localfs");
 const images = require("./routes-images");
-const { prefix, createEngineeringRoutes } = require("./engineering/routes");
+const { prefix, createEngineeringRoutes } = require("./edge/engineering-routes");
 const { runtime } = require("./engineering/runtime");
 const engineeringRuntime = process.env.OMP_MAP_ENGINEERING_DATA
   ? runtime(process.env.OMP_MAP_ENGINEERING_DATA, process.env.ANTHROPIC_API_KEY) : undefined;
@@ -72,6 +72,19 @@ const ROUTES = {
   },
 };
 
+const SHELLS = { workflow: "workflow.html", "session-map": "session-map.html", settings: "settings.html" };
+const SHARED_SCRIPTS = {
+  "js/harness-kinds.js": path.join(__dirname, "engineering", "harness-kinds.js"),
+};
+
+function composeIndex() {
+  const shell = fs.readFileSync(path.join(UI_DIR, "index.html"), "utf8");
+  return shell.replace(/<!-- shell:([a-z-]+) -->/g, (_, name) => {
+    const file = SHELLS[name];
+    return file ? fs.readFileSync(path.join(UI_DIR, "shell", file), "utf8").trimEnd() : "";
+  });
+}
+
 function serveStatic(res, pathname) {
   let rel;
   try {
@@ -79,8 +92,14 @@ function serveStatic(res, pathname) {
   } catch {
     return fail(res, 400, "bad path");
   }
-  const file = path.resolve(UI_DIR, rel);
-  if (!file.startsWith(UI_DIR + path.sep)) return fail(res, 403, "forbidden");
+  if (rel === "index.html") {
+    const buf = Buffer.from(composeIndex());
+    res.writeHead(200, { "Content-Type": MIME[".html"], "Cache-Control": "no-store" });
+    return res.end(buf);
+  }
+  const shared = SHARED_SCRIPTS[rel];
+  const file = shared || path.resolve(UI_DIR, rel);
+  if (!shared && !file.startsWith(UI_DIR + path.sep)) return fail(res, 403, "forbidden");
   fs.readFile(file, (err, buf) => {
     if (err) return fail(res, 404, "not found");
     res.writeHead(200, {

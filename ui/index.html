@@ -57,160 +57,12 @@
       <button id="zfit" title="전체 보기 (0)">fit</button>
     </div>
   </div>
-  <section id="design" hidden aria-label="통합 Workflow 관제">
-    <div class="design-bar">
-      <label>작업 프로젝트 <select id="design-project"><option value="">프로젝트 선택</option></select></label>
-      <p id="design-status" role="status"></p>
-      <a href="/engineering.html">프로젝트·팀·실행 환경 설정</a>
-    </div>
-    <div id="unified-layout"><div id="unified-main">
-    <section id="studio" class="studio" aria-label="설계 및 실시간 관제 캔버스">
-      <div class="studio-toolbar">
-        <label>Workflow <select id="studio-workflow"></select></label>
-        <div id="studio-mode" class="studio-segment" role="group" aria-label="정의 표시 범위" hidden>
-          <button type="button" data-mode="linked" aria-pressed="true">연결된 정의만</button>
-          <button type="button" data-mode="all" aria-pressed="false">전체 정의</button>
-        </div>
-        <button id="studio-add" type="button">+ 노드</button>
-        <button id="studio-arrange" type="button">자동 정렬</button>
-        <button id="studio-wf-more" type="button" aria-haspopup="menu">Workflow ⋯</button>
-        <input id="studio-import-file" type="file" accept=".json,application/json" hidden>
-        <span class="studio-spacer"></span>
-        <button id="studio-check" type="button" disabled>Workflow 검사</button>
-        <button id="studio-run" type="button" disabled>실행 시작</button>
-        <button id="studio-save" type="button" disabled>변경 저장</button>
-      </div>
-      <p id="studio-status" role="status"></p>
-      <div id="studio-graph" class="studio-graph">
-        <div id="studio-viewport" class="studio-viewport" tabindex="0" aria-label="노드 캔버스. 빈 곳을 더블클릭하면 노드를 추가합니다.">
-          <div id="studio-surface">
-            <div id="studio-lanes" class="studio-lanes" hidden>
-              <div class="studio-lane studio-lane-library">정의 라이브러리<small>모델 → 하네스 → 루프 · 프로필</small></div>
-              <div id="studio-lane-workflow" class="studio-lane">Workflow<small>실행 순서와 단계</small></div>
-              <div id="studio-lane-line" class="studio-lane-line"></div>
-            </div>
-            <svg id="studio-lines" aria-hidden="true"></svg>
-            <div id="studio-nodes"></div>
-          </div>
-          <div id="studio-empty" class="studio-empty" hidden>
-            <h3>빈 캔버스</h3>
-            <p>빈 곳을 더블클릭하거나 ‘+ 노드’로 모델·하네스·루프·프로필을 추가하세요. 처음이라면 기본 구성부터 만드는 편이 빠릅니다.</p>
-            <button id="studio-defaults" class="workflow-primary" type="button">기본 구성 추가</button>
-          </div>
-        </div>
-        <article id="studio-workflow-name-field" class="studio-overlay studio-workflow-card" aria-label="Workflow 카드" hidden><strong>Workflow</strong><label>이름 <input id="studio-workflow-name" maxlength="240" placeholder="Workflow 이름"></label></article>
-        <div class="studio-overlay studio-legend" aria-hidden="true">
-          <span><i data-type="model"></i>모델</span>
-          <span><i data-type="harness"></i>하네스</span>
-          <span><i data-type="loop"></i>루프</span>
-          <span><i data-type="profile"></i>프로필</span>
-          <span><i data-type="flow"></i>실행 순서</span>
-        </div>
-        <div class="studio-overlay studio-zoom" aria-label="확대·축소">
-          <button id="studio-zoom-out" type="button" aria-label="축소">−</button>
-          <output id="studio-scale">100%</output>
-          <button id="studio-zoom-in" type="button" aria-label="확대">+</button>
-          <button id="studio-fit" type="button">전체 보기</button>
-        </div>
-        <aside id="studio-inspect" class="studio-inspect" aria-label="노드 상세" hidden></aside>
-      <div id="studio-menu" class="studio-menu" role="menu" hidden>
-          <h4 id="studio-menu-title">노드 추가</h4>
-          <input id="studio-menu-search" type="search" placeholder="검색 (Enter로 첫 항목)" aria-label="노드 검색">
-          <ul id="studio-menu-list" class="studio-menu-list"></ul>
-        </div>
-      </div>
-      <p class="studio-help">빈 곳 드래그: 이동 · 휠: 확대·축소 · 빈 곳 더블클릭/우클릭: 노드 추가 · 출력 소켓을 끌어 같은 색 입력에 연결(빈 곳에 놓으면 맞는 노드 추가) · 연결된 입력을 끌면 분리 · 노드 안 셀렉트로도 연결 변경 · <kbd>Delete</kbd> 선택 삭제 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 변경 저장</p>
-    </section>
-    <section id="unified-run-snapshot" aria-label="실행 스냅샷" hidden><h2>실행 스냅샷</h2><p>편집본과 다른 버전입니다. 아래 단계는 이 실행에 고정된 버전입니다.</p><div id="unified-run-steps"></div></section>
-    <aside id="independent-evaluation" class="independent-evaluation" aria-label="독립 평가"></aside>
-    <section id="unified-journal" aria-label="작업 지시 수행 내역"><div class="unified-section-label"><div>실시간 실행</div><h2>작업 지시 수행 내역</h2></div><p id="unified-empty-run">실행 시작을 누르거나 ‘개입 필요’에서 기존 실행을 열면 작업 지시와 산출물을 볼 수 있습니다.</p><ol id="unified-run-timeline" aria-label="실행 단계별 상태" hidden></ol><div id="unified-inspector-host"></div></section>
-    </div><div id="unified-side"><aside id="unified-project-context" aria-label="프로젝트 문서" hidden></aside><section id="unified-sessions" aria-label="세션 관제"></section><div id="unified-queue-host"></div></div></div>
-  </section>
-  <dialog id="workflow-launch" aria-labelledby="workflow-launch-title">
-    <form id="workflow-launch-form">
-      <h2 id="workflow-launch-title">새 Workflow 실행</h2>
-      <label>프로젝트 <select name="project" required></select></label>
-      <label>Workflow <select name="source" required></select></label>
-      <label>실행 이름 <input name="title" maxlength="240" placeholder="미입력 시 작업 목표 사용"></label>
-      <label>작업 목표 <textarea name="goal" required maxlength="8000" rows="3"></textarea></label>
-      <label>완료 조건 <textarea name="acceptance" required maxlength="3500" rows="3"></textarea></label>
-      <details id="workflow-launch-settings">
-        <summary>실행 설정</summary>
-        <label data-role="author">설계·문서 하네스 <select name="author"></select></label>
-        <label data-role="reviewer">리뷰 하네스 <select name="reviewer"></select></label>
-        <label data-role="triage">점검 하네스 <select name="triage"></select></label>
-        <label data-role="loop">작업·검증 Loop <select name="loop"></select></label>
-        <label>시간 제한(분) <input name="minutes" type="number" min="1" max="60" value="20" required></label>
-        <label><span data-budget="run">실행 예산(센트)</span> <input name="budget" type="number" min="1" max="100000" value="6000" required><small class="budget-hint" data-budget-hint hidden></small></label>
-      </details>
-      <p id="workflow-launch-status" role="status"></p>
-      <a id="workflow-launch-engineering" href="/engineering.html">프로젝트·실행 환경 설정</a>
-      <div class="wf-actions"><button type="submit">실행 시작</button><button type="button" id="workflow-launch-close">닫기</button></div>
-    </form>
-  </dialog>
-  <dialog id="wf-transcript" aria-labelledby="wf-transcript-title" data-workflow-controls>
-    <div class="wf-transcript-head">
-      <h2 id="wf-transcript-title"></h2>
-      <select id="wf-transcript-entry" aria-label="실행 기록 선택" hidden></select>
-      <button id="wf-transcript-close" type="button">닫기</button>
-    </div>
-    <p id="wf-transcript-meta"></p>
-    <p id="wf-transcript-tools" class="wf-tools" aria-label="도구 호출 순서"></p>
-    <pre id="wf-transcript-text" tabindex="0"></pre>
-  </dialog>  <div id="ctxmenu"></div>
+<!-- shell:workflow -->
+  <div id="ctxmenu"></div>
   <div id="minimap"><svg id="mmsvg" width="204" height="142"></svg></div>
   <div id="workarea">
-    <aside id="sessions">
-      <div id="slHead"><b>세션</b><span id="slCount"></span><button id="slToggle" title="세션 목록 접기">‹</button></div>
-      <div id="slList"></div>
-      <div id="slGrip" title="끌어서 폭 조절"></div>
-    </aside>
-    <div id="stage">
-      <div id="workspace-empty" hidden>왼쪽 세션 목록에서 작업할 카드를 선택하세요.</div>
-      <div id="wrapper">
-        <svg id="edges"></svg>
-        <svg id="guides"></svg>
-        <div id="nodes"></div>
-        <div id="workflow-layer" hidden>
-          <svg id="workflow-map-edges" aria-hidden="true"></svg>
-          <div id="workflow-map-nodes" aria-label="Workflow 단계"></div>
-        </div>
-      </div>
-      <aside id="workflow-queue" data-workflow-controls hidden aria-label="개입 필요">
-        <h2>개입 필요<small>Alt+I</small></h2>
-        <section><h3>에이전트 질문</h3><div id="inbox-asks"></div></section>
-        <section id="workflow-queue-workflows"><p id="workflow-queue-status" role="status"></p><div id="workflow-queue-items"></div></section>
-      </aside>
-      <aside id="workflow-inspector" data-workflow-controls hidden aria-label="Workflow 실행 상세">
-        <div class="wf-inspector-header">
-          <div><small id="wf-map-version"></small><h2 id="wf-map-title" tabindex="-1"></h2></div>
-          <button id="wf-map-close" aria-label="Workflow 닫기">닫기</button>
-        </div>
-        <div class="wf-actions">
-          <button id="wf-map-follow" type="button" aria-pressed="false" hidden>실행 따라가기</button><button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-new">이 Workflow로 새 실행</button><a id="wf-map-engineering">통합 Workflow 관제 열기</a>
-        </div>
-        <p id="wf-map-status" role="status"></p>
-        <div id="wf-map-run-controls"></div>
-        <section id="wf-map-live" aria-live="off" aria-label="실행 중인 프롬프트" hidden></section>
-        <div id="wf-map-details"></div>
-      </aside>
-    </div>
-    <section id="overview" hidden aria-label="프로젝트 관제">
-      <div class="overview-toolbar">
-        <h1>프로젝트 관제 <small id="mon-total"></small></h1><button id="mon-sidebar" aria-pressed="false">세션 목록</button><label class="mon-search"><input id="mon-search" type="search" placeholder="세션·프로젝트 검색" aria-label="관제 검색"></label><button id="mon-settings" aria-expanded="false">설정</button>
-        <label>표시 밀도 <select id="overview-density"><option value="compact">Compact</option><option value="standard">Standard</option><option value="detailed">Detailed</option></select></label>
-        <label>정렬 <select id="overview-sort"><option value="stable">고정 순서</option><option value="attention">주의 우선</option><option value="memory">메모리</option><option value="recent">최근 활동</option><option value="name">이름</option></select></label>
-        <div id="mon-settings-panel" hidden><label title="세션에 귀속된 프로세스의 메모리 경고 기준">RAM 경고(MB) <input id="overview-memory" type="number" min="128" max="1048576" step="128"></label>
-        <label title="해제된 브라우저 블록은 다시 열 때 페이지를 재로드합니다"><input id="suspend-frames" type="checkbox">비활성 브라우저 해제</label>
-        </div>
-      </div>
-      <div id="mon-summary" aria-label="관제 상태 필터"></div>
-      <div id="mon-batch"><button id="overview-select-all">표시 항목 선택</button><span id="mon-selected"></span><button id="overview-close-selected">카드 닫기</button><button id="overview-pin-selected">세션 고정</button><button id="mon-clear">선택 해제</button>
-      </div>
-      <div id="overview-attention" aria-label="주의 필요"></div>
-      <div id="overview-projects"></div>
-      <p id="overview-source" role="status"></p>
-    </section>
+<!-- shell:session-map -->
+<!-- shell:settings -->
   </div>
 </div>
 
@@ -240,6 +92,8 @@
   <script src="js/viewmodel/chat-ask.js"></script>
   <script src="js/viewmodel/attention.js"></script>
   <script src="js/viewmodel/session-rows.js"></script>
+  <script src="js/viewmodel/workflow-monitor.js"></script>
+  <script src="js/viewmodel/session-strip.js"></script>
   <script src="js/view/charts.js"></script>
   <script src="js/view/card-metrics.js"></script>
   <script src="js/view/card-session.js"></script>

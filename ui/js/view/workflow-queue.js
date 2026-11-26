@@ -34,15 +34,6 @@ function paintInboxButton() {
 }
 
 // ---- 에이전트 질문 -------------------------------------------------------------
-// 질문 키(소문자·슬래시 경로)를 지도 노드 id 로 바꾼다. 카드가 아직 없으면 '주의 필요' 상태(ATTN)에서 찾는다.
-function inboxSessionId(key) {
-  const id = liveNodeId(key);
-  if (id) return id;
-  for (const node of ATTN.keys()) if (askKey(node) === key) return node;
-  return key;
-}
-// 엔지니어링 런타임이 현재 RPC 에 할당한 키만 Workflow 질문의 소유권을 나타낸다.
-const isWorkflowAskSession = (key) => typeof key === "string" && /^workflow-ask:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(key);
 const workflowAskCards = new WeakMap();
 function trackWorkflowAskCards(host, id, list) {
   for (const card of host.querySelectorAll("[data-ask-card]")) {
@@ -54,15 +45,11 @@ function trackWorkflowAskCards(host, id, list) {
 function paintInboxAsks() {
   paintInboxButton();
   if (wfQueuePanel.hidden) return;
-  const groups = [...ASKS].filter(([, list]) => list.length);
-  const html = groups.map(([key, list]) => {
-    const id = inboxSessionId(key), node = typeof nodeById === "function" ? nodeById(id) : null;
-    const title = node ? attnTitle(node) : ATTN.get(id)?.title || (isWorkflowAskSession(key) ? "Workflow 에이전트" : key.split("/").pop());
-    return `<section class="inbox-ask" data-ask-node="${esc(id)}">
+  const groups = inboxAskGroups();
+  const html = groups.map(({ id, list, node, title }) => `<section class="inbox-ask" data-ask-node="${esc(id)}">
       <div class="inbox-ask-h"><strong>${esc(title)}</strong>${node ? `<button type="button" class="inbox-open" data-open-node="${esc(id)}">카드 열기</button>` : ""}</div>
-      <form class="casks">${list.map(askCardHTML).join("")}</form></section>`;
-  }).join("") || `<p>답을 기다리는 질문이 없습니다.</p>`;
-  const signature = JSON.stringify([html, groups.map(([key, list]) => [key, list.map(r => r.id)])]);
+      <form class="casks">${list.map(askCardHTML).join("")}</form></section>`).join("") || `<p>답을 기다리는 질문이 없습니다.</p>`;
+  const signature = JSON.stringify([html, groups.map(({ key, list }) => [key, list.map(r => r.id)])]);
   if (inboxAsks.__html !== signature) {
     const active = document.activeElement;
     const previous = inboxAsks.contains(active) && workflowAskCards.get(active.closest("[data-ask-card]"));

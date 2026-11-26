@@ -4,7 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { json, withJson } = require("./http");
+const { json, withJson } = require("./edge/http");
 const lsp = require("./lsp");
 const lspJava = require("./lsp-java");
 
