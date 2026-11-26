@@ -583,18 +583,17 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     return layout.contexts[context] ??= {};
   }
   function applySpots() {
-    const table = spots();
+    const table = spots(), linked = wf ? closure() : null;
     for (const node of libraryNodes()) {
       const spot = table[node.key];
-      Object.assign(node, { x: spot?.x, y: spot?.y, collapsed: spot ? Boolean(spot.c) : collapsedByDefault(node) });
+      Object.assign(node, { x: spot?.x, y: spot?.y, collapsed: spot ? Boolean(spot.c) : collapsedByDefault(node, linked) });
     }
   }
   // 처음 보는 정의 노드의 접힘 상태. 정의만 볼 때는 모두 접어 목록처럼 훑어 보게 하고,
-  // Workflow 를 열었을 때는 단계에 연결되지 않은 프로필만 접는다(연결된 정의는 바로 고칠 수 있게 펼친다).
-  function collapsedByDefault(node) {
+  // Workflow 를 열었을 때는 그 Workflow 에 연결되지 않은 정의('전체 정의'에서만 보임)만 접는다(연결된 정의는 바로 고칠 수 있게 펼친다).
+  function collapsedByDefault(node, linked = wf ? closure() : null) {
     if (node.isNew) return false;
-    if (!wf) return true;
-    return node.kind === "profile" && !linkedProfile(node);
+    return !linked || !linked.has(node.key);
   }
   function linkedProfile(node) { return steps().some((step) => step.ref.profile === node.key); }
   function remember(node) {
