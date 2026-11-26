@@ -1,5 +1,7 @@
 # 개발과 검증
 
+**앞으로 할 일**: [관심사별 리팩토링 계획](plans/2026-11-26-concern-refactor.md). 화면, 정의, 실행, 개입, 관찰을 나누는 순서와 확인 항목이 있다. 아직 코드를 옮기지 않았다.
+
 **로컬 회귀 테스트**: `node --test`는 2026-11-26에 Node 26.5(Windows)에서 모두 통과했습니다.
 
 **Windows CI**: `main`에 push하면 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다.
