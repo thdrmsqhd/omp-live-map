@@ -3,9 +3,7 @@ function paintWorkflowMap() {
   $("workflow-layer").hidden = $("workflow-inspector").hidden = false;
   $("wf-map-title").textContent = detail.run.title;
   $("wf-map-version").textContent = wfMap.edit ? "Workflow 편집 · v" + wfMap.edit.record.version + " 기준" : graph.name + " · v" + detail.run.version;
-  $("wf-map-engineering").href = "/engineering.html?" + new URLSearchParams({
-    project: detail.run.project, view: "studio", workflow: detail.run.workflow,
-  });
+  $("wf-map-engineering").href = "/?" + new URLSearchParams({ mode: "design", project: detail.run.project, workflow: detail.run.workflow });
   if (!wfMap.edit) $("wf-map-status").textContent = [wfLabel(detail.run.status), detail.run.error, wfMap.notice].filter(Boolean).join(" · ");
   const executions = new Map((wfMap.edit ? [] : detail.nodes).map((item) => [item.node, item]));
   const live = wfMap.edit ? {} : detail.live ?? {};

@@ -1,10 +1,8 @@
-// Engineering 페이지: 노드 캔버스(모델·하네스·루프·프로필·Workflow 를 노드로 편집), 개발 Task, Loop 실행,
-// 그리고 프로젝트·팀·실행 환경 설정. 정의를 폼으로 고치는 화면은 없다(노드와 노드 상세 패널에서 한다).
-// Workflow 실행·승인·결과·배포는 관제(Live Map) 화면에서 한다.
+// Engineering 설정 페이지: 프로젝트·팀·실행 환경 설정, 개발 Task, Loop 실행.
+// 정의·Workflow 편집(노드 캔버스)과 Workflow 실행·승인·결과·배포는 모두 관제 화면(/)에서 한다(설계 모드와 Live Map).
 import { harnessProvenance } from "./harness-provenance.js";
 import { bindRuntimeControls } from "./engineering-runtime.js";
 import { bindSdlc } from "./sdlc.js";
-import { bindStudio } from "./studio.js";
 
 const find = (id) => document.getElementById(id);
 const status = find("status");
@@ -15,7 +13,6 @@ let projects = [];
 let projectRequest = 0;
 let currentRunRequest = null;
 let sdlc;
-let studio;
 
 async function request(endpoint, params, payload) {
   if (!window.engineeringDesktop) throw new Error("데스크톱 앱에서 Engineering을 열어 주세요.");
@@ -42,7 +39,7 @@ function formValues(event) {
   return Object.fromEntries(new FormData(event.currentTarget));
 }
 
-// 관제(Live Map) 화면으로 넘긴다. 실행을 열거나(run) 새 실행 대화상자를 연다(launch).
+// 관제 화면으로 넘긴다. 실행을 열거나(run), 새 실행 대화상자(launch), 설계 모드(mode=design, workflow)를 연다.
 function openLiveMap(params) {
   location.href = "/?" + new URLSearchParams(params);
 }
@@ -73,7 +70,6 @@ async function refreshProjects(chosen, editSelected = false) {
   find("archive").disabled = !selected || selected.archived;
   await Promise.all([
     showAvailable(selected?.id ?? ""),
-    studio?.selectProject(selected?.id ?? "", selected),
     sdlc?.selectProject(selected?.id ?? ""),
     refreshRuns(),
   ]);
@@ -104,19 +100,11 @@ find("project-form").addEventListener("input", (event) => {
   if (event.target.name === "root") event.currentTarget.dataset.project = "";
 });
 find("project-form").addEventListener("submit", report(async (event) => {
-  if (studio && !studio.mayReplace()) return;
   const saved = await request("projects", {}, { ...formValues(event), id: event.currentTarget.dataset.project || undefined });
   await refreshProjects(saved.id, true);
 }));
-project.addEventListener("change", report(async () => {
-  if (studio && !studio.mayReplace()) {
-    project.value = studio.projectId();
-    return;
-  }
-  await refreshProjects(project.value, true);
-}));
+project.addEventListener("change", report(async () => refreshProjects(project.value, true)));
 find("archive").addEventListener("click", report(async () => {
-  if (studio && !studio.mayReplace()) return;
   await request("projects/archive", {}, { id: project.value });
   await refreshProjects(project.value, true);
 }));
@@ -144,10 +132,8 @@ find("actions").addEventListener("click", report(async (event) => {
   }
 }));
 
-const views = ["studio", "sdlc", "execution"];
+const views = ["sdlc", "execution"];
 function showView(view) {
-  if (view === "studio") void studio?.activate().catch((error) => { status.textContent = error.message; });
-  else studio?.deactivate();
   for (const name of views) {
     find(name).hidden = view !== name;
     find(name + "-nav").setAttribute("aria-pressed", String(view === name));
@@ -155,25 +141,20 @@ function showView(view) {
 }
 for (const view of views) find(view + "-nav").onclick = () => showView(view);
 
-studio = bindStudio({
-  find, request, report,
-  currentProject: () => projects.find(({ id }) => id === project.value),
-  async changed() { await showAvailable(project.value).catch(() => {}); },
-  openWorkflow: (id) => openLiveMap({ launch: id, project: project.value }),
-});
-
-// 예전 주소(view=design·loop·session-harnesses·setup·workflow)는 노드 캔버스로, 실행(run)은 관제로 보낸다.
+// 예전 주소: 실행(run)은 관제로, 노드 캔버스·폼 화면(view=studio·design·loop·session-harnesses·setup·workflow)은 관제의 설계 모드로 보낸다.
 const params = new URLSearchParams(location.search);
-const requested = params.get("view") ?? "studio";
-if (requested === "workflow" && params.get("run")) openLiveMap({ run: params.get("run") });
-showView(views.includes(requested) ? requested : "studio");
+const requested = params.get("view") ?? "sdlc";
+if (params.get("run")) openLiveMap({ run: params.get("run") });
+else if (!views.includes(requested) || params.get("workflow")) {
+  openLiveMap({ mode: "design", ...(params.get("project") ? { project: params.get("project") } : {}), ...(params.get("workflow") ? { workflow: params.get("workflow") } : {}) });
+}
+showView(views.includes(requested) ? requested : "sdlc");
 
 if (window.engineeringDesktop) {
   sdlc = bindSdlc({ find, request, report, showRun: async (id) => openLiveMap({ run: id }) });
   const runtimeStatus = bindRuntimeControls({ find, request, report, status, formValues });
   report(async () => {
     await Promise.all([refreshProjects(params.get("project") || undefined, true), runtimeStatus()]);
-    if (params.get("workflow") && project.value) await studio.showWorkflow(params.get("workflow"));
   })();
   setInterval(() => {
     if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {});

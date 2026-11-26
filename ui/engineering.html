@@ -4,10 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Engineering · OMP Live Map</title>
+  <title>Engineering 설정 · OMP Live Map</title>
   <link rel="stylesheet" href="/css/engineering.css">
   <link rel="stylesheet" href="/css/workflow.css">
-  <link rel="stylesheet" href="/css/studio.css">
   <script src="/js/engineering-scope-label.js"></script>
 <script src="/js/engineering-auth.js"></script>
   <script type="module" src="/js/engineering.js"></script>
@@ -16,10 +15,10 @@
   <header>
     <strong>OMP Live Map</strong>
     <nav aria-label="워크스페이스">
-      <button id="studio-nav" aria-pressed="true">노드 캔버스</button>
-      <button id="sdlc-nav" aria-pressed="false">개발 Task</button>
+      <a href="/?mode=design">설계 · 노드 캔버스</a>
+      <button id="sdlc-nav" aria-pressed="true">개발 Task</button>
       <button id="execution-nav" aria-pressed="false">Loop 실행</button>
-      <a href="/">관측</a>
+      <a href="/?mode=map">관제 · Live Map</a>
     </nav>
   </header>
   <main>
@@ -62,63 +61,6 @@
         </form>
       </details>
     </div>
-    <section id="studio" class="studio" aria-label="노드 캔버스" hidden>
-      <div class="studio-toolbar">
-        <label>Workflow <select id="studio-workflow"></select></label>
-        <label id="studio-workflow-name-field" hidden>이름 <input id="studio-workflow-name" maxlength="240" placeholder="Workflow 이름"></label>
-        <div id="studio-mode" class="studio-segment" role="group" aria-label="정의 표시 범위" hidden>
-          <button type="button" data-mode="linked" aria-pressed="true">연결된 정의만</button>
-          <button type="button" data-mode="all" aria-pressed="false">전체 정의</button>
-        </div>
-        <button id="studio-add" type="button">+ 노드</button>
-        <button id="studio-arrange" type="button">자동 정렬</button>
-        <button id="studio-wf-more" type="button" aria-haspopup="menu">Workflow ⋯</button>
-        <input id="studio-import-file" type="file" accept=".json,application/json" hidden>
-        <span class="studio-spacer"></span>
-        <button id="studio-check" type="button" disabled>Workflow 검사</button>
-        <button id="studio-run" type="button" disabled>관제에서 실행</button>
-        <button id="studio-save" type="button" disabled>변경 저장</button>
-      </div>
-      <p id="studio-status" role="status"></p>
-      <div id="studio-graph" class="studio-graph">
-        <div id="studio-viewport" class="studio-viewport" tabindex="0" aria-label="노드 캔버스. 빈 곳을 더블클릭하면 노드를 추가합니다.">
-          <div id="studio-surface">
-            <div id="studio-lanes" class="studio-lanes" hidden>
-              <div class="studio-lane studio-lane-library">정의 라이브러리<small>모델 → 하네스 → 루프 · 프로필</small></div>
-              <div id="studio-lane-workflow" class="studio-lane">Workflow<small>실행 순서와 단계</small></div>
-              <div id="studio-lane-line" class="studio-lane-line"></div>
-            </div>
-            <svg id="studio-lines" aria-hidden="true"></svg>
-            <div id="studio-nodes"></div>
-          </div>
-          <div id="studio-empty" class="studio-empty" hidden>
-            <h3>빈 캔버스</h3>
-            <p>빈 곳을 더블클릭하거나 ‘+ 노드’로 모델·하네스·루프·프로필을 추가하세요. 처음이라면 기본 구성부터 만드는 편이 빠릅니다.</p>
-            <button id="studio-defaults" class="workflow-primary" type="button">기본 구성 추가</button>
-          </div>
-        </div>
-        <div class="studio-overlay studio-legend" aria-hidden="true">
-          <span><i data-type="model"></i>모델</span>
-          <span><i data-type="harness"></i>하네스</span>
-          <span><i data-type="loop"></i>루프</span>
-          <span><i data-type="profile"></i>프로필</span>
-          <span><i data-type="flow"></i>실행 순서</span>
-        </div>
-        <div class="studio-overlay studio-zoom" aria-label="확대·축소">
-          <button id="studio-zoom-out" type="button" aria-label="축소">−</button>
-          <output id="studio-scale">100%</output>
-          <button id="studio-zoom-in" type="button" aria-label="확대">+</button>
-          <button id="studio-fit" type="button">전체 보기</button>
-        </div>
-        <aside id="studio-inspect" class="studio-inspect" aria-label="노드 상세" hidden></aside>
-      <div id="studio-menu" class="studio-menu" role="menu" hidden>
-          <h4 id="studio-menu-title">노드 추가</h4>
-          <input id="studio-menu-search" type="search" placeholder="검색 (Enter로 첫 항목)" aria-label="노드 검색">
-          <ul id="studio-menu-list" class="studio-menu-list"></ul>
-        </div>
-      </div>
-      <p class="studio-help">빈 곳 드래그: 이동 · 휠: 확대·축소 · 빈 곳 더블클릭/우클릭: 노드 추가 · 출력 소켓을 끌어 같은 색 입력에 연결(빈 곳에 놓으면 맞는 노드 추가) · 연결된 입력을 끌면 분리 · 노드 안 셀렉트로도 연결 변경 · <kbd>Delete</kbd> 선택 삭제 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 변경 저장</p>
-    </section>
     <section id="sdlc" hidden>
       <h2>개발 Task</h2>
       <details><summary>칸반 단계 설정</summary>

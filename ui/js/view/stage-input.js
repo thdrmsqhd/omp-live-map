@@ -109,7 +109,8 @@ function bindStageInput() {
     }
     if (typing || e.target.closest?.("[data-workflow-controls]")) return;
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase()==="z") { if(redoLayout())e.preventDefault();return; }
-    if (e.altKey && ["1","2","3"].includes(e.key)) { e.preventDefault();setMapMode({1:"overview",2:"workspace",3:"map"}[e.key]);return; }
+    if (e.altKey && ["1","2","3","4"].includes(e.key)) { e.preventDefault();setMapMode({1:"overview",2:"workspace",3:"map",4:"design"}[e.key]);return; }
+    if (mapMode === "design") return;   // 설계(노드 캔버스) 모드의 키는 캔버스가 처리한다(지도 되돌리기·줌 키를 막는다).
     if (e.altKey && e.key.toLowerCase()==="n") { e.preventDefault();$("new-session-action").click();return; }
     if (e.altKey && e.key.toLowerCase()==="f" && activeCardId) {e.preventDefault();toggleCardFocus(activeCardId);return;}
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) {

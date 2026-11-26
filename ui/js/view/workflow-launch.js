@@ -57,7 +57,7 @@ function bindMapWorkflowLaunch() {
     definitions = [];
     saved = [];
     source.replaceChildren();
-    $("workflow-launch-engineering").href = "/engineering.html?" + new URLSearchParams({ project: value, view: "studio" });
+    $("workflow-launch-engineering").href = "/engineering.html?" + new URLSearchParams({ project: value });
     if (!value) return refreshControls();
     try {
       const data = await Promise.all(["definitions", "workflows"].map((endpoint) => mapWorkflowRequest(endpoint, { project: value })));

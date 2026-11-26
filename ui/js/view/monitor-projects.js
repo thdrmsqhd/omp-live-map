@@ -69,7 +69,8 @@ async function refreshMonitorProjects() {
 }
 const monStatus = {live:"실행 중",idle:"유휴",done:"완료",running:"실행 중",waiting_approval:"승인 대기",blocked:"차단",failed:"실패",interrupted:"확인 필요",completed:"완료",backlog:"백로그",ready:"준비"};
 // 실행은 관제(Live Map)에서 열고, 정의·Workflow 는 노드 캔버스에서 고친다(폼 화면은 없다).
-const monEngLink = (project,view,run) => view==="workflow"&&run ? "/?"+new URLSearchParams({run}).toString() : "/engineering.html?"+new URLSearchParams({project:project.id,view:["sdlc","execution"].includes(view)?view:"studio"}).toString();
+const monEngLink = (project,view,run) => view==="workflow"&&run ? "/?"+new URLSearchParams({run}).toString()
+  : ["sdlc","execution"].includes(view) ? "/engineering.html?"+new URLSearchParams({project:project.id,view}).toString() : "/?"+new URLSearchParams({mode:"design",project:project.id}).toString();
 function monitorTaskHTML(g) {
   if (!g.project) return '<p class="mon-muted">등록 프로젝트와 연결되지 않음 · SDLC 진행률 미수집</p>';
   const detail=MON_DETAILS.get(g.project.id);

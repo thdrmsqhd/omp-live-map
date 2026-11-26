@@ -613,3 +613,10 @@ if (window.engineeringDesktop) {
     void openMapWorkflow(last, selected?.id === last ? selected.node : undefined);
   }, { once: true });
 }
+
+// '설계에서 편집': 같은 화면의 설계 모드에서 이 실행의 Workflow 를 연다(데스크톱 앱).
+$("wf-map-engineering").addEventListener("click", (event) => {
+  if (!window.ompDesign || !wfMap.run) return;
+  event.preventDefault();
+  void window.ompDesign.open({ project: wfMap.run.run.project, workflow: wfMap.run.run.workflow });
+});
