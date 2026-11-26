@@ -79,6 +79,8 @@ function wfFit() {
 // 실행 중(없으면 승인 대기)인 단계를 읽을 수 있는 배율로 화면 가운데(상세 패널 왼쪽)에 둔다.
 // 켜 두면 다음 단계로 넘어갈 때 따라가고, 사용자가 화면을 움직이면(끌기·휠·확대 키) 멈춘다.
 const WF_READABLE = 0.9;
+// 그래프 전체를 보여 줘도 단계 이름·상태를 읽을 수 있는 배율(노드 캔버스의 자동 맞춤 하한과 비슷하게 둔다).
+const WF_WHOLE_READABLE = 0.75;
 function wfActiveNode(detail = wfMap.run) {
   if (!detail || wfMap.edit) return null;
   const order = new Map(detail.graph.nodes.map(({ id }, index) => [id, index]));
@@ -90,9 +92,9 @@ function wfFocusNode(id, dur = 260) {
   const node = wfNodes().find((item) => item.id === id);
   if (!node) return false;
   wfMap.followTarget = id;
-  // 그래프 전체가 읽을 수 있는 배율로 들어가면(단계가 적은 Workflow) 전체를 보여 주고 움직이지 않는다.
+  // 그래프 전체가 읽을 수 있는 배율(75% 이상)로 들어가면(단계가 적은 Workflow) 전체를 보여 주고 움직이지 않는다.
   const fitted = wfFitView();
-  if (fitted && fitted.k >= WF_READABLE) {
+  if (fitted && fitted.k >= WF_WHOLE_READABLE) {
     if (Math.abs(fitted.k - view.k) > .01 || Math.abs(fitted.x - view.x) > 2 || Math.abs(fitted.y - view.y) > 2) animateView(fitted, dur);
     return true;
   }
