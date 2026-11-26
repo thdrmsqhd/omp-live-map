@@ -32,6 +32,16 @@ function checkedRequest(request, model) {
   return { path, body: clean };
 }
 
+// 컨테이너 안 CLI 가 보낸 베타 기능 이름 중 형식이 맞고 원격 도구·외부 자료를 열지 않는 것만 넘긴다.
+// (본문의 원격 도구 타입은 checkedRequest 가 따로 막는다.)
+const betaName = /^[a-z0-9][a-z0-9.-]{2,80}$/;
+const deniedBetas = /^(mcp|files-api|code-execution|web-|computer-use|skills|container)/;
+function allowedBetas(value) {
+  if (typeof value !== "string" || value.length > 2000) return [];
+  return [...new Set(value.split(",").map((name) => name.trim().toLowerCase())
+    .filter((name) => betaName.test(name) && !deniedBetas.test(name)))].slice(0, 24);
+}
+
 function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstream = fetch }) {
   let remaining = budgetCents;
   function call(path, body, headers) {
@@ -43,9 +53,13 @@ function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstrea
       if (!key && !oauth) throw new Error("Anthropic authentication is required on the desktop host");
       if (typeof input.body !== "string" || input.body.length > 1024 * 1024) throw new Error("Model request is too large");
       const { path, body } = checkedRequest(input, model);
-      const headers = { "content-type": "application/json", "anthropic-version": key ? "2023-06-01" : "2026-10-21" };
+      // Claude Code 구독 OAuth(claude-code-oauth.js)는 자기 API 버전을 달고 온다. Console OAuth 는 기존 버전을 쓴다.
+      const headers = { "content-type": "application/json",
+        "anthropic-version": key ? "2023-06-01" : oauth.apiVersion ?? "2026-10-21" };
       if (key) headers["x-api-key"] = key;
       else headers.authorization = "Bearer " + await oauth(signal);
+      const betas = allowedBetas(input.beta);
+      if (betas.length) headers["anthropic-beta"] = betas.join(",");
       const countBody = Object.fromEntries(Object.entries(body).filter(([key]) => countFields.has(key)));
       const counted = await call("/v1/messages/count_tokens", countBody, headers);
       if (!counted.ok) {
@@ -66,4 +80,4 @@ function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstrea
   };
 }
 
-module.exports = { createAnthropicBroker, models };
+module.exports = { createAnthropicBroker, models, allowedBetas };

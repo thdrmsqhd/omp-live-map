@@ -122,7 +122,9 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemo
     if (agent) flags.push("--env", "ANTHROPIC_BASE_URL=http://127.0.0.1:7351",
       "--env", "ANTHROPIC_API_KEY=omp-local-gateway", "--env", "PI_CODING_AGENT_DIR=/tmp/agent",
       "--env", "BUN_INSTALL_CACHE_DIR=/tmp/bun-cache", "--env", "DISABLE_NONESSENTIAL_TRAFFIC=1",
-      "--env", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "--env", "OMP_BRIDGE_MODEL=" + model.model);
+      "--env", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "--env", "OMP_BRIDGE_MODEL=" + model.model,
+      // 도구 입력(예: Write 가 쓰는 리뷰 본문)을 다 만든 뒤 한꺼번에 받지 않고 만들어지는 대로 받아 관제 화면에 흘려 보낸다.
+      "--env", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING=1");
     const command = agent ? ["--entrypoint", "node", image, bridgeFile, program, ...args] :
       ["--entrypoint", program, image, ...args];
     const raw = launchProcess(binary, [...prefix, ...flags, ...command], {

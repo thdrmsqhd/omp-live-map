@@ -6,10 +6,11 @@ const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const { dockerRunner } = require("./docker-runner");
 const { consoleOAuth } = require("./anthropic-oauth");
+const { claudeCodeLogin, savedToken } = require("./claude-code-oauth");
 const { secureRunner } = require("./runner");
 const { problem } = require("./state");
 
-const tag = "omp-live-map-runtime:v2.1";
+const tag = "omp-live-map-runtime:v2.2";
 const execute = promisify(execFile);
 const isolatedEnv = { ...process.env };
 for (const name of Object.keys(isolatedEnv)) {
@@ -24,7 +25,9 @@ function localDocker() {
   return { binary, context: windows ? "desktop-linux" : "default" };
 }
 
-function runtime(directory, key, auth = consoleOAuth()) {
+// 인증 우선순위: Claude Console OAuth → 저장한 Claude Code 토큰(setup-token) → Claude Code 로그인(구독) → Anthropic API 키.
+// claudeCode 에 null 을 넘기면 Claude Code 로그인을 보지 않는다(테스트·다른 사용자 데이터 격리용).
+function runtime(directory, key, auth = consoleOAuth(), claudeCode = process.env.OMP_MAP_CLAUDE_CODE_AUTH === "0" ? null : claudeCodeLogin()) {
   let status = "unchecked";
   let detail = "런타임 확인이 필요합니다.";
   let delegate = secureRunner();
@@ -42,20 +45,30 @@ function runtime(directory, key, auth = consoleOAuth()) {
     if (build) await run(["--host", expected], ["build", "--tag", tag, path.join(__dirname, "docker")], 900000);
     const inspected = await run(["--host", expected], ["image", "inspect", tag, "--format", '{{.Id}} {{index .Config.Labels "dev.omplivemap.runtime"}}']);
     const [image, label] = inspected.stdout.trim().split(/\s+/);
-    if (label !== "engine-v2.1") throw problem(409, "The approved runtime image could not be identified");
+    if (label !== "engine-v2.2") throw problem(409, "The approved runtime image could not be identified");
     const workspaceRoot = path.join(directory, "worktrees");
     fs.mkdirSync(workspaceRoot, { recursive: true, mode: 0o700 });
-    const apiKey = key;
-    let oauth;
+    const token = savedToken(key);
+    const apiKey = token ? null : key;
+    let oauth, source = "", claudeCodeNote = "";
     if (auth) {
-      try { await auth.accessToken(); oauth = auth.accessToken; } catch {}
+      try { await auth.accessToken(); oauth = auth.accessToken; source = "Claude Console OAuth"; } catch {}
+    }
+    if (!oauth && token) { oauth = token; source = "Claude Code 토큰(setup-token)"; }
+    if (!oauth && claudeCode) {
+      try {
+        const { plan } = claudeCode.describe();
+        oauth = claudeCode.accessToken;
+        source = "Claude Code 로그인" + (plan ? " (" + plan + " 구독)" : "");
+      } catch (error) { claudeCodeNote = error.message; }
     }
     delegate = dockerRunner({ image, context, binary, workspaceRoot, key: oauth ? null : apiKey, oauth, daemon: expected });
     runners.add(delegate);
     status = apiKey || oauth ? "ready" : "missing-key";
-    detail = oauth ? "격리 런타임 사용 가능 · Claude Console OAuth" : apiKey
+    detail = oauth ? "격리 런타임 사용 가능 · " + source : apiKey
       ? "격리 런타임 사용 가능 · Anthropic API 키"
-      : "Claude Console에 로그인하거나 Anthropic API 키를 저장해 주세요.";
+      : "Claude Code에 로그인하거나, Claude Console에 로그인하거나, Anthropic API 키나 Claude Code 토큰을 저장해 주세요." +
+        (claudeCodeNote ? " (" + claudeCodeNote + ")" : "");
   }
   function prepare(build = false) {
     if (pending) return pending;
