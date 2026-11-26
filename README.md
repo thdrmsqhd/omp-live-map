@@ -41,6 +41,10 @@
 
 ### Engineering: 업무를 정의하고 맡기기
 
+![노드 캔버스](docs/media/v8/18-engineering-studio.png)
+
+**노드 캔버스.** ComfyUI처럼 모델 → 하네스 → 루프 → Workflow 단계, 에이전트 프로필 → Agent를 색이 다른 소켓과 선으로 잇고, 노드 안의 셀렉트·입력칸으로 바로 고칩니다. 바뀐 노드는 한 번에 저장되고(<kbd>Ctrl</kbd>+<kbd>S</kbd>), 저장 형식은 기존 폼 화면과 같습니다. [사용법](docs/guide/engineering.md#노드-캔버스-기본-화면)
+
 ![Workflow 캔버스](docs/media/v8/13-engineering-workflow.png)
 
 **Workflow 캔버스.** 기본 제공 8종(신규 기능, 버그 수정, 리팩토링, 코드 리뷰, 테스트 작성, 기술 문서, 릴리스, 장애 분석) 중 하나로 시작하거나 노드와 연결을 직접 그립니다. 위 화면은 **버그 수정** 템플릿입니다. 계획 → 설계 승인 → 작업 및 검증(Loop) → 코드 리뷰 → 최종 승인으로 이어집니다.

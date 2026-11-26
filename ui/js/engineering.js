@@ -5,6 +5,7 @@ import { bindRuntimeControls } from "./engineering-runtime.js";
 import { bindWorkflow } from "./workflow-editor.js";
 import { bindSdlc } from "./sdlc.js";
 import { loadModelOptions } from "./engineering-model-options.js";
+import { bindStudio } from "./studio.js";
 
 const find = (id) => document.getElementById(id);
 const status = find("status");
@@ -26,7 +27,8 @@ let modelOptions = [];
 let currentRunRequest = null;
 let workflow;
 let sdlc;
-let activeView = "setup";
+let studio;
+let activeView = "studio";
 let starterRefs;
 const starter = find("setup-defaults");
 const starterStatus = find("setup-starter-status");
@@ -72,7 +74,7 @@ function setScope(value) {
 }
 
 function updateProjectContext() {
-  find("engineering-context").hidden = !["workflow", "sdlc", "execution"].includes(activeView) &&
+  find("engineering-context").hidden = !["studio", "workflow", "sdlc", "execution"].includes(activeView) &&
     !(scope === "project" && ["design", "loop"].includes(activeView));
 }
 
@@ -180,6 +182,7 @@ async function refreshProjects(chosen, editSelected = false) {
   showAvailable(available);
   await Promise.all([
     refreshEditor(),
+    studio?.selectProject(selected?.id ?? "", selected),
     workflow?.selectProject(selected?.id ?? "", Boolean(selected?.archived)),
     sdlc?.selectProject(selected?.id ?? ""),
     refreshRuns(),
@@ -242,7 +245,13 @@ find("project-form").addEventListener("submit", report(async (event) => {
   const saved = await request("projects", {}, { ...values, id: event.currentTarget.dataset.project || undefined });
   await refreshProjects(saved.id, true);
 }));
-project.addEventListener("change", report(async () => { if (editor.mayReplace(project)) await refreshProjects(project.value, true); }));
+project.addEventListener("change", report(async () => {
+  if (studio && !studio.mayReplace()) {
+    project.value = studio.projectId();
+    return;
+  }
+  if (editor.mayReplace(project)) await refreshProjects(project.value, true);
+}));
 find("archive").addEventListener("click", report(async () => {
   if (!editor.mayReplace()) return;
   await request("projects/archive", {}, { id: project.value });
@@ -263,7 +272,7 @@ find("actions").addEventListener("click", report(async (event) => {
     await refreshRuns();
   }
 }));
-const views = ["setup", "design", "workflow", "session-harnesses", "sdlc", "execution"];
+const views = ["studio", "setup", "design", "workflow", "session-harnesses", "sdlc", "execution"];
 const loadSessionHarnesses = bindSessionHarnesses(find);
 const profileDialog = find("workflow-profile-dialog");
 const profileEditor = find("session-harness-editor");
@@ -277,6 +286,8 @@ profileDialog.addEventListener("close", () => find("session-harness-host").appen
 function showView(view, freshProfile = false) {
   activeView = view;
   updateProjectContext();
+  if (view === "studio") void studio?.activate().catch((error) => { status.textContent = error.message; });
+  else studio?.deactivate();
   if (view === "session-harnesses") {
     status.textContent = "";
     void loadSessionHarnesses(freshProfile ? "" : undefined);
@@ -317,8 +328,33 @@ starter.onclick = report(async () => {
     updateStarter(result);
   }
 });
+studio = bindStudio({
+  find, request, report,
+  currentProject: () => projects.find(({ id }) => id === project.value),
+  // 노드 캔버스에서 저장하면 폼 화면·Workflow 화면이 가진 목록도 새로 읽게 한다.
+  async changed() {
+    scopedDefinitionsStale = true;
+    const selectedId = project.value;
+    if (!selectedId || !window.engineeringDesktop) return;
+    const records = await request("definitions", { project: selectedId });
+    if (selectedId === project.value) showAvailable(records);
+    await workflow?.reloadList?.();
+  },
+  profilesChanged(list) {
+    find("session-harness-editor").dispatchEvent(new CustomEvent("profileschange", { bubbles: true, detail: list }));
+  },
+  openWorkflow(id) {
+    showView("workflow");
+    const list = find("workflow-list");
+    if ([...list.options].some((option) => option.value === id)) {
+      list.value = id;
+      list.dispatchEvent(new Event("change"));
+    }
+  },
+  openHarness: (id, version) => report(() => editor.open(id, version))(),
+});
 const params = new URLSearchParams(location.search);
-const target = params.get("view") ?? "setup";
+const target = params.get("view") ?? "studio";
 if (target === "loop") kind.value = "loop";
 if (views.includes(target) || target === "loop") showView(target);
 

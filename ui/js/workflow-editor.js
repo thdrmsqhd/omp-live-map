@@ -444,7 +444,9 @@ export function bindWorkflow({ find, request, report, definitions, editHarness, 
   render();
   fit();
   templateButtons.refresh();
-  return { showRun: runs.refresh, useDefaults(id, refs) {
+  return { showRun: runs.refresh, async reloadList() {
+    if (project) await loadList(project);
+  }, useDefaults(id, refs) {
     if (id === project) templateButtons.useDefaults(refs);
   }, refreshProfiles() {
     harness.refreshChoices();

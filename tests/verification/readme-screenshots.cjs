@@ -198,6 +198,8 @@ async function captureEngineering() {
     };
 
     await page.getByRole("link", { name: "Engineering" }).click({ timeout: 15000 });
+    await page.locator("#studio-viewport").waitFor();
+    await page.locator("#setup-nav").click();
     await page.getByRole("heading", { name: "기초 생성" }).waitFor();
     await page.locator("#setup-defaults").click();
     await page.locator("#setup-starter-status").filter({ hasText: "개인 기본 구성이 준비됐습니다." }).waitFor();
@@ -237,6 +239,13 @@ async function captureEngineering() {
       await sleep(1200);
       await page.evaluate(() => window.scrollTo(0, 0));
       await shot(page, "17-engineering-loop.png");
+    });
+    await step("노드 캔버스", async () => {
+      await page.locator("#studio-nav").click();
+      await page.locator('.studio-node[data-kind="harness"]').first().waitFor({ timeout: 8000 });
+      await sleep(1200);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await shot(page, "18-engineering-studio.png");
     });
     const optionValue = (selector, text) => page.locator(selector + " option").filter({ hasText: text }).first().getAttribute("value");
     await step("Workflow 캔버스", async () => {

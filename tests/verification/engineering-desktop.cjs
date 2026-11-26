@@ -51,9 +51,15 @@ test("product desktop opens its isolated Engineering UI", { timeout: 110000 }, a
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
     await page.getByRole("link", { name: "Engineering" }).click({ timeout: 15000 });
+    await page.locator("#studio-viewport").waitFor();
+    await page.locator("#setup-nav").click();
     await page.getByRole("heading", { name: "기초 생성" }).waitFor();
     await page.locator("#setup-defaults").click();
     await page.locator("#setup-starter-status").filter({ hasText: "개인 기본 구성이 준비됐습니다." }).waitFor();
+    // 노드 캔버스: 기본 정의가 노드로 나타나고 하네스→모델 연결선이 그려져야 한다.
+    await page.locator("#studio-nav").click();
+    await page.locator('.studio-node[data-kind="harness"]').first().waitFor();
+    await page.locator('#studio-lines g[data-type="model"]').first().waitFor({ state: "attached" });
     await page.getByRole("button", { name: "Workflow", exact: true }).click();
     const origin = new URL(page.url()).origin;
     assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/);
