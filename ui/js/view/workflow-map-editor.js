@@ -24,6 +24,7 @@ function wfAllowLeave() {
 
 function wfClearButtons() {
   wfMap.buttons.clear();
+  wfActionBars.clear();
   $("workflow-map-nodes").replaceChildren();
   wfEdgeSignature = undefined;
 }

@@ -26,6 +26,7 @@ function paintWorkflowMap() {
   $("workflow-layer").dataset.running = String(!wfMap.edit && detail.run.status === "running");
   wfPaintEdges();
   paintMinimap();
+  wfPaintNodeActions(executions);
   wfPaintFollow();
 
   if (wfMap.edit) { $("wf-map-live").hidden = true; return; }

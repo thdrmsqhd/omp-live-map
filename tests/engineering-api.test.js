@@ -92,6 +92,24 @@ test("engineering API requires its desktop token and preserves the original grap
       const available = await send("definitions?project=" + project);
       assert.equal(available.find(({ id }) => id === reusable.loop).payload.attempts, 3);
       assert.equal(available.find(({ id }) => id === editedLoop).payload.attempts, 2);
+      // 승인 대기 실행은 '개입 필요' 함에 승인 안내와 함께 나오고, 기록이 없는 단계의 수행 내역은 비어 있다.
+      const gate = await send("workflows", { project, payload: { name: "승인 확인", nodes: [
+        { id: "start", label: "Start", type: "start", x: 0, y: 0 },
+        { id: "gate", label: "계획 승인", type: "approval", prompt: "계획을 검토해 주세요.", x: 200, y: 0 },
+        { id: "end", label: "End", type: "end", x: 400, y: 0 }],
+        edges: [{ from: "start", to: "gate", port: "next" }, { from: "gate", to: "end", port: "approved" }] } });
+      const gated = await send("workflow-runs", { key: "gate-fixture", project, workflow: gate.id, version: gate.version ?? 1,
+        title: "승인 확인 실행", timeoutMs: 60000, budgetCents: 0 });
+      let attention;
+      for (let index = 0; index < 50 && !attention; index++) {
+        attention = (await send("workflow-live-map")).attention.find(({ id }) => id === gated.id);
+        if (attention?.status !== "waiting_approval") { attention = undefined; await new Promise((resolve) => setTimeout(resolve, 40)); }
+      }
+      assert.equal(attention.node, "gate");
+      assert.equal(attention.prompt, "계획을 검토해 주세요.");
+      assert.deepEqual(await send("workflow-transcript?id=" + gated.id + "&node=gate"), { running: false, entries: [] });
+      await send("workflow-transcript?id=missing&node=gate", undefined, 404);
+      await send("workflow-runs/approval", { id: gated.id, node: "gate", decision: "approved", reason: "" });
       await send("projects/archive", { id: project });
       await send("workflows/presets/defaults", { project }, 409);
     });

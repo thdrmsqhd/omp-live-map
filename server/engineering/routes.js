@@ -100,7 +100,18 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "tasks") result = tasks.list(query("project"));
         if (endpoint === "sdlc-stages") result = stages.list(query("project"));
         if (endpoint === "workflow-approvals") result = observability.approvals(query("project"));
-        if (endpoint === "workflow-live-map") result = observability.liveMapRuns();
+        if (endpoint === "workflow-live-map") {
+          result = observability.liveMapRuns();
+          // '개입 필요' 함에서 바로 승인·반려할 수 있게 승인 단계의 안내 문구를 붙인다.
+          for (const item of result.attention) {
+            if (item.status !== "waiting_approval" || !item.node) continue;
+            try {
+              const run = flowRuns.get(item.id);
+              const step = workflows.get(run.project, run.workflow, run.version).payload.nodes.find(({ id }) => id === item.node);
+              if (typeof step?.prompt === "string") item.prompt = step.prompt.slice(0, 1200);
+            } catch { /* 안내가 없어도 목록은 보여 준다 */ }
+          }
+        }
         if (endpoint === "workflow-dashboard") result = observability.dashboard(query("project"),
           integer(Number(url.searchParams.get("days") ?? 30), "metrics period", 1, 90));
         if (endpoint === "project-budget") result = { current: budget.get(query("project")) ?? null };

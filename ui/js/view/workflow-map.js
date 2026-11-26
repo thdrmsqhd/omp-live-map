@@ -224,6 +224,7 @@ function wfCreateNode(node) {
     } else wfMap.positions[node.id] = position;
     button.style.left = wfPoint(node).x + "px";
     button.style.top = wfPoint(node).y + "px";
+    wfPlaceNodeActions(node.id);
     wfPaintEdges();
   });
   button.addEventListener("lostpointercapture", () => {
@@ -238,6 +239,76 @@ function wfCreateNode(node) {
     paintWorkflowMap();
   });
   return button;
+}
+
+// ---- 노드 카드 바로 아래의 개입 도구 ------------------------------------------------
+// 승인 대기 단계는 승인·반려를, 실패한 단계는 재실행을 캔버스에서 바로 한다(상세 패널을 찾아가지 않아도 된다).
+// 노드 카드는 <button> 이라 안에 입력칸을 넣을 수 없으므로 같은 레이어에 따로 두고 카드 아래에 붙인다.
+const wfActionBars = new Map();
+function wfPlaceNodeActions(id) {
+  const bar = wfActionBars.get(id), button = wfMap.buttons.get(id), node = wfNodes().find((item) => item.id === id);
+  if (!bar || !button || !node) return;
+  const point = wfPoint(node);
+  bar.style.left = point.x + "px";
+  bar.style.top = point.y + button.offsetHeight + 6 + "px";
+  bar.style.width = wfWidth(node) + "px";
+}
+function wfPaintNodeActions(executions) {
+  const want = new Map();
+  if (!wfMap.edit && wfMap.run) {
+    for (const node of wfNodes()) {
+      const execution = executions.get(node.id);
+      if (wfMap.run.run.status === "waiting_approval" && execution?.status === "waiting_approval") want.set(node.id, "approval");
+      else if (wfMap.run.interventions?.[node.id]) want.set(node.id, "retry");
+    }
+  }
+  for (const [id, bar] of wfActionBars) if (want.get(id) !== bar.dataset.kind) { bar.remove(); wfActionBars.delete(id); }
+  for (const [id, kind] of want) {
+    if (!wfActionBars.has(id)) {
+      const bar = wfText("div", "", "wf-node-actions");
+      bar.dataset.kind = kind;
+      bar.dataset.workflowControls = "";
+      bar.dataset.actionsFor = id;
+      const status = wfText("small", "", "wf-node-actions-status");
+      status.setAttribute("role", "status");
+      if (kind === "approval") {
+        const memo = document.createElement("textarea");
+        memo.rows = 2;
+        memo.maxLength = 2000;
+        memo.placeholder = "승인 메모(선택) · 반려 사유(필수)";
+        memo.setAttribute("aria-label", "승인 메모 또는 반려 사유");
+        const row = wfText("div", "", "wf-node-actions-row");
+        for (const [decision, label] of [["approved", "승인"], ["rejected", "반려"]]) {
+          const action = wfActionButton(label, ({ currentTarget }) => {
+            if (decision === "rejected" && !memo.value.trim()) { status.textContent = "반려 사유를 입력해 주세요."; memo.focus(); return; }
+            status.textContent = "";
+            return wfPerform(currentTarget, "workflow-runs/approval", { node: id, decision, reason: memo.value });
+          });
+          action.dataset.decision = decision;
+          row.append(action);
+        }
+        memo.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); row.querySelector('[data-decision="approved"]').click(); }
+        });
+        bar.append(memo, row, status);
+      } else {
+        const options = wfMap.run.interventions[id];
+        const row = wfText("div", "", "wf-node-actions-row");
+        row.append(wfActionButton(options.verify ? "검증만 재실행" : "이 단계 재실행", ({ currentTarget }) =>
+          wfPerform(currentTarget, "workflow-runs/retry", { node: id, mode: options.verify ? "verify" : "retry" })));
+        if (options.rework?.length) row.append(wfActionButton("수정 요청…", () => {
+          wfMap.selected = id;
+          paintWorkflowMap();
+          $("wf-map-details").querySelector("details")?.setAttribute("open", "");
+        }));
+        bar.append(row, status);
+      }
+      for (const type of ["pointerdown", "wheel", "dblclick"]) bar.addEventListener(type, (event) => event.stopPropagation());
+      $("workflow-map-nodes").append(bar);
+      wfActionBars.set(id, bar);
+    }
+    wfPlaceNodeActions(id);
+  }
 }
 
 function wfChip(type, text, title) {
@@ -388,6 +459,7 @@ function wfClose() {
   wfEdgeSignature = undefined;
   wfMap.selected = null;
   wfMap.buttons.clear();
+  wfActionBars.clear();
   $("workflow-map-nodes").replaceChildren();
   $("workflow-inspector").hidden = $("workflow-layer").hidden = true;
   writeJSON("omp-workflow-map-run", null);
@@ -419,6 +491,7 @@ function wfAccept(detail, initial, node) {
       wfMap.positions = previous?.positions ?? {};
     }
     wfMap.buttons.clear();
+  wfActionBars.clear();
     $("workflow-map-nodes").replaceChildren();
     const target = detail.graph.nodes.find(({ id }) => id === node)?.id;
     wfMap.selected = target ?? detail.nodes.find(({ status }) => ["failed", "waiting_approval", "running", "interrupted"].includes(status))?.node ??
