@@ -216,7 +216,10 @@ async function captureEngineering() {
     await page.locator("#setup-nav").click();
     await step("프로필", async () => {
       await page.locator("#session-harnesses-nav").click();
-      await sleep(1200);
+      await sleep(1500);
+      await page.locator("#session-harness-list").selectOption({ label: "기본 · 심층 개발 · v1" });
+      await sleep(1000);
+      await shot(page, "11-engineering-profile.png");
     });
     await step("하네스", async () => {
       await page.locator("#design-nav").click();

@@ -2,7 +2,7 @@
 
 const { problem } = require("./state");
 const { transaction } = require("./database");
-const { MODELS, HARNESSES, LOOPS } = require("./default-definitions");
+const { MODELS, HARNESSES, PROFILES, LOOPS } = require("./default-definitions");
 
 function addPresetDefinitions(db, catalog, project) {
   return transaction(db, () => {
@@ -19,6 +19,14 @@ function addPresetDefinitions(db, catalog, project) {
     // 프리셋 Workflow 는 Node 용 표준 루프를 쓴다. 다른 루프는 노드 설정에서 바꿔 고른다.
     return { author: harnesses.author.id, reviewer: harnesses.reviewer.id, loop: loops.node.id };
   });
+}
+
+// 기본 에이전트 프로필을 만든다. 프로필 저장소는 Engineering DB 와 따로이고 범위(개인·프로젝트)가 없으며,
+// 같은 이름이 이미 있으면 사용자가 고쳤을 수 있으므로 건드리지 않는다.
+function ensureProfiles(store = require("../harness/session-profiles")) {
+  const existing = store.list();
+  return Object.fromEntries(Object.entries(PROFILES).map(([key, payload]) =>
+    [key, (existing.find(({ name }) => name === payload.name) ?? store.save(payload)).id]));
 }
 
 const presets = Object.freeze({
@@ -71,4 +79,4 @@ const listPresets = () => Object.entries(presets).map(([id, preset]) => ({ id, n
   author: preset.phases.includes("draft") || preset.phases.includes("plan"),
   reviewer: preset.phases.includes("review"), loop: preset.phases.includes("implement") }));
 
-module.exports = { addPresetDefinitions, buildPreset, listPresets };
+module.exports = { addPresetDefinitions, ensureProfiles, buildPreset, listPresets };

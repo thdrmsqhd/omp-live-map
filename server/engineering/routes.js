@@ -14,7 +14,7 @@ const { workflowObservability } = require("./workflow-observability");
 const { workflowDelivery } = require("./workflow-delivery");
 const { retryOptions } = require("./workflow-retry-plan");
 const { quickLaunch } = require("./workflow-launch");
-const { addPresetDefinitions, buildPreset, listPresets } = require("./workflow-presets");
+const { addPresetDefinitions, ensureProfiles, buildPreset, listPresets } = require("./workflow-presets");
 const { projectBudget } = require("./project-budget");
 const { workflowStaging } = require("./workflow-staging");
 const { runStore } = require("./run-store");
@@ -72,7 +72,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       flowRuns.recover();
       const budget = projectBudget(db);
       services = { definitions, workflows, runs, flowRuns, tasks, budget, trials: harnessTrials(definitions, runner, workspace, budget),
-        presetDefinitions: (project) => addPresetDefinitions(db, definitions, project),
+        presetDefinitions: (project) => ({ ...addPresetDefinitions(db, definitions, project), profiles: ensureProfiles() }),
         stages: sdlcStages(db, definitions, workflows),
         observability: workflowObservability(db, flowRuns, workspaceRoot),
         delivery, staging: workflowStaging(db, delivery),

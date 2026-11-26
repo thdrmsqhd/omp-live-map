@@ -58,6 +58,11 @@ const HARNESSES = Object.freeze({
   },
 });
 
+// 에이전트 프로필: 관제의 새 세션과 Workflow 프로필 노드가 쓰는 정의. 하네스와 역할·지시·모델이 갈라지지 않도록
+// HARNESSES 에서 그대로 만든다(같은 이름). 그래서 같은 역할을 대화형 세션과 자동 실행(하네스·루프) 양쪽에서 똑같이 쓴다.
+const PROFILES = Object.freeze(Object.fromEntries(Object.entries(HARNESSES).map(([key, spec]) => [key,
+  { name: spec.name, adapter: "claude", model: MODELS[spec.model].model, provider: "", role: spec.role, instructions: spec.instructions }])));
+
 // 루프 = 하네스 + 시도 횟수 + 시간·예산 한도 + 검증 명령. 검증 명령은 컨테이너가 허용하는 3가지뿐이다(docker-runner 의 permitted).
 // 예산(센트)은 모델 호출 전에 토큰 수와 출력 한도로 계산해 보수적으로 "예약"하는 상한이라 실제 비용보다 훨씬 크게 잡아야 한다.
 // 컨텍스트 20K 토큰 호출 1회가 약 228센트를 예약하므로 6000센트면 시도당 약 26회, 15000센트면 약 65회를 호출할 수 있다.
@@ -71,4 +76,4 @@ const LOOPS = Object.freeze({
     checks: [{ command: "node", args: ["--test"], code: 0 }] },
 });
 
-module.exports = { MODELS, HARNESSES, LOOPS };
+module.exports = { MODELS, HARNESSES, PROFILES, LOOPS };
