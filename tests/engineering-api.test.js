@@ -60,7 +60,7 @@ test("engineering API requires its desktop token and preserves the original grap
       const reusable = await send("workflows/presets/defaults", { scope: "personal" });
       assert.deepEqual(await send("workflows/presets/defaults", { scope: "personal" }), reusable);
       const personal = await send("definitions?scope=personal");
-      assert.equal(personal.length, 5);
+      assert.equal(personal.length, 9); // 모델 4 + 하네스 4 + 루프 1
       assert.equal(personal.find(({ id }) => id === reusable.loop).project, null);
       const team = await send("teams", { name: "Platform" });
       assert.equal(team, "Platform");
@@ -77,7 +77,7 @@ test("engineering API requires its desktop token and preserves the original grap
       const refs = await send("workflows/presets/defaults", { project });
       assert.notEqual(refs.author, refs.reviewer);
       assert.deepEqual(await send("workflows/presets/defaults", { project }), refs);
-      assert.equal((await send("definitions?project=" + project)).length, 10);
+      assert.equal((await send("definitions?project=" + project)).length, 18); // 개인 기본 9 + 프로젝트 기본 9
       const saved = await send("workflows/presets", { project, preset: "refactor", name: "부분수정", refs });
       assert.deepEqual(saved.payload.nodes.filter(({ definition }) => definition).map(({ definition }) => definition),
         [refs.author, refs.loop, refs.reviewer]);

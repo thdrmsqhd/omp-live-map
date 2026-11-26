@@ -2,6 +2,7 @@
 
 const { problem } = require("./state");
 const { transaction } = require("./database");
+const { MODELS, HARNESSES } = require("./default-definitions");
 
 function addPresetDefinitions(db, catalog, project) {
   return transaction(db, () => {
@@ -10,11 +11,12 @@ function addPresetDefinitions(db, catalog, project) {
     if (project && catalog.project(project).archived) throw problem(409, "보관된 프로젝트에는 기본 구성을 추가할 수 없습니다.");
     const ensure = (kind, payload) => existing.find((entry) => entry.kind === kind && entry.name === payload.name)
       ?? catalog.writeDefinition({ scope, project, kind, payload });
-    const model = ensure("model", { name: "기본 · Claude Sonnet 4.6", provider: "anthropic", model: "claude-sonnet-4-6" });
-    const harness = (name, role) => ensure("harness", { name, adapter: "claude", model: model.id, role });
-    const author = harness("기본 · 설계 및 문서", "요구사항 분석 및 문서 작성");
-    const reviewer = harness("기본 · 코드 리뷰", "코드 변경 및 테스트 결과 검토");
-    const developer = harness("기본 · 개발", "구현 및 테스트");
+    const models = Object.fromEntries(Object.entries(MODELS).map(([key, payload]) => [key, ensure("model", payload)]));
+    const harness = ({ name, model, role, instructions }) => ensure("harness", { name, adapter: "claude", model: models[model].id, role, instructions });
+    const author = harness(HARNESSES.author);
+    const reviewer = harness(HARNESSES.reviewer);
+    const developer = harness(HARNESSES.developer);
+    harness(HARNESSES.triage);
     const loop = ensure("loop", { name: "기본 · 개발 및 테스트", harness: developer.id, attempts: 3,
       timeoutMs: 300000, budgetCents: 100, checks: [{ command: "node", args: ["--test"], code: 0 }] });
     return { author: author.id, reviewer: reviewer.id, loop: loop.id };
