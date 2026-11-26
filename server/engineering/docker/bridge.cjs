@@ -29,7 +29,10 @@ const server = http.createServer(async (req, res) => {
   const id = ++seq;
   chunks.set(id, res);
   res.on("close", () => chunks.delete(id));
-  send({ kind: "request", id, path: route, method: "POST", body: Buffer.concat(body).toString("utf8") });
+  // 새 Claude Code 는 베타 헤더가 있어야 허용되는 필드를 보낸다. 값은 호스트 브로커가 허용 목록으로 거른다.
+  const beta = req.headers["anthropic-beta"];
+  send({ kind: "request", id, path: route, method: "POST", body: Buffer.concat(body).toString("utf8"),
+    ...(typeof beta === "string" && beta.length <= 2000 ? { beta } : {}) });
 });
 server.listen(7351, "127.0.0.1", () => {
   const [program, ...args] = process.argv.slice(2);

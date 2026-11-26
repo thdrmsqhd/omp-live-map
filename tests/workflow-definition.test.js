@@ -46,6 +46,82 @@ test("workflow planning is deterministic and rejects missing ports, cycles and i
   assert.throws(() => compileGraph(wrongSource), /compatible predecessor/);
 });
 
+test("handoff schema is optional and rejects unbounded, nonliteral and profile edge values", () => {
+  assert.deepEqual(compileGraph(graph()).document.edges[0], { from: "s", to: "p", port: "next" });
+  for (const schema of [null, 1, [], { id: "report" }, "", "Report", " report", "report\n", "x/y", "x".repeat(49)]) {
+    const payload = graph();
+    payload.edges[0].schema = schema;
+    assert.throws(() => compileGraph(payload), /Invalid handoff schema ID/);
+  }
+  const payload = graph();
+  payload.edges[0].schema = "x".repeat(48);
+  assert.equal(compileGraph(payload).document.edges[0].schema.length, 48);
+  payload.edges[0].port = "profile";
+  assert.throws(() => compileGraph(payload), /Profile connections cannot declare a handoff schema/);
+});
+
+test("workflow handoffs validate the exact pinned result file, direct binding, and definition scope", (t) => {
+  const db = openDatabase(":memory:");
+  t.after(() => db.close());
+  const insert = db.prepare("INSERT INTO project VALUES (?,?,?,?,0)");
+  insert.run("one", "one-root", "Project one", "main");
+  insert.run("two", "two-root", "Project two", "main");
+  const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
+  const model = definitions.saveDefinition({ scope: "personal", kind: "model", payload: { name: "M", provider: "fixture", model: "fake" } });
+  const harnessPayload = (name, extra = {}) => ({ name, adapter: "claude", model: model.id, role: name, ...extra });
+  const producerPayload = harnessPayload("Writer", { result: { shape: "object", path: "build/result.json", fields: ["evidence"] } });
+  const producer = definitions.saveDefinition({ scope: "personal", kind: "harness", payload: producerPayload });
+  const consumer = definitions.saveDefinition({ scope: "personal", kind: "harness",
+    payload: harnessPayload("Reader", { assets: { inputs: ["evidence"] } }) });
+  const loop = definitions.saveDefinition({ project: "one", kind: "loop", payload: {
+    name: "Loop", harness: producer.id, attempts: 2, timeoutMs: 1000, budgetCents: 10, checks: [check.check],
+  } });
+  const handoff = () => ({ name: "Typed handoff", nodes: [node("s", "start"),
+    node("writer", "agent", { definition: producer.id, version: 1, instruction: "Write", outputs: [{ name: "report", path: "build/result.json" }] }),
+    node("reader", "agent", { definition: consumer.id, version: 1, instruction: "Read", inputs: [{ name: "evidence", source: "writer", artifact: "report" }] }),
+    node("z", "end")], edges: [edge("s", "writer"), { ...edge("writer", "reader"), schema: "report" }, edge("reader", "z")] });
+  const save = (payload, extra = {}) => workflows.save({ project: "one", payload, ...extra });
+  const saved = save(handoff());
+  assert.equal(workflows.get("one", saved.id, 1).payload.edges[1].schema, "report");
+  const plan = workflows.executionPlan("one", saved.payload, saved.id);
+  assert.equal(plan.document.edges[1].schema, "report");
+  assert.equal(plan.display.edges[1].schema, "report");
+  const parent = save({ name: "Parent", nodes: [node("s", "start"), node("child", "subgraph", { workflow: saved.id }), node("z", "end")],
+    edges: [edge("s", "child"), edge("child", "z")] });
+  const childEdge = workflows.executionPlan("one", parent.payload, parent.id).display.edges.find(({ schema }) => schema === "report");
+  assert.match(childEdge.from, /^n-/);
+  assert.match(childEdge.to, /^n-/);
+  definitions.saveDefinition({ scope: "personal", id: producer.id, version: 1, kind: "harness",
+    payload: { ...producerPayload, result: { ...producerPayload.result, path: "new.json" } } });
+  assert.equal(workflows.executionPlan("one", handoff()).display.edges[1].schema, "report");
+  const badVersion = handoff(); delete badVersion.nodes[1].version;
+  assert.throws(() => workflows.executionPlan("one", badVersion), /source must declare this artifact at the harness result path/);
+  assert.throws(() => save(badVersion, { id: saved.id, version: 1 }), /harness result path/);
+  assert.equal(workflows.get("one", saved.id).version, 1);
+
+  const wrongArtifact = handoff(); wrongArtifact.edges[1].schema = "other";
+  assert.throws(() => save(wrongArtifact), /source must declare this artifact/);
+  const missingBinding = handoff(); missingBinding.nodes[2].inputs = [];
+  assert.throws(() => save(missingBinding), /target must bind this artifact/);
+  const wrongInput = handoff(); wrongInput.nodes[2].inputs[0].name = "undeclared";
+  assert.throws(() => workflows.saveCanvas({ project: "one", id: saved.id, version: 1, payload: wrongInput }), /declared harness input/);
+  const labelOnly = handoff(); labelOnly.nodes[1].definition = consumer.id;
+  assert.throws(() => save(labelOnly), /harness result path/);
+  const loopGraph = handoff();
+  loopGraph.name = "Typed loop handoff";
+  Object.assign(loopGraph.nodes[1], { type: "loop", definition: loop.id });
+  assert.equal(save(loopGraph).payload.edges[1].schema, "report");
+  assert.throws(() => workflows.executionPlan("two", loopGraph), /wrong project or kind/);
+  const unsupported = handoff();
+  Object.assign(unsupported.nodes[2], { type: "command", definition: undefined, ...check });
+  assert.throws(() => save(unsupported), /both endpoints must use a pinned Agent or Loop harness/);
+
+  const untyped = handoff(); delete untyped.edges[1].schema; delete untyped.nodes[1].version;
+  const next = save(untyped, { id: saved.id, version: 1 });
+  assert.equal(next.payload.nodes[1].version, 2);
+  assert.equal(Object.hasOwn(next.payload.edges[1], "schema"), false);
+});
+
 test("a V2 database migrates in place and workflows preserve immutable reference versions", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-graph-test-"));
   const file = path.join(dir, "engineering.sqlite");

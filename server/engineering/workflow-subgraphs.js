@@ -35,7 +35,7 @@ function expandSubgraphs(document, load, currentId) {
         output.set(original.id, item.id);
       }
     }
-    edges.push(...graph.edges.map(({ from, to, port }) => ({ from: output.get(from), to: target.get(to), port })));
+    edges.push(...graph.edges.map((edge) => ({ ...edge, from: output.get(edge.from), to: target.get(edge.to) })));
     return { nodes, edges, entry: target.get(graph.nodes.find((item) => item.type === "start").id) };
   }
 

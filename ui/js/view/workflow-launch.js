@@ -12,7 +12,15 @@ function bindMapWorkflowLaunch() {
   const settings = $("workflow-launch-settings");
   const roles = ["author", "reviewer", "triage", "loop"];
   const optional = new Set(["triage"]); // 고르지 않으면 설계·문서 하네스가 대신한다.
-  let definitions = [], presets = [], saved = [], generation = 0, pending = false, requestKey;
+  let definitions = [], presets = [], saved = [], generation = 0, pending = false, requestKey, runtime = null;
+  const timeoutOf = () => Number(form.elements.minutes.value) * 60000;
+  // 실행 환경 인증에 따라 안내한다. Claude Code 로그인이 시간 제한 안에 만료되면 시작 전에 알린다.
+  function showRuntime() {
+    const warning = engineeringLoginWarning(runtime, timeoutOf());
+    if (warning) status.textContent = warning;
+    status.dataset.tone = warning ? "warn" : "";
+    engineeringApplyBudgetWording(runtime, dialog);
+  }
   const option = ({ id, name, version }) => new Option(name + (version ? " · v" + version : ""), id);
   function usePreset() { return presets.find(({ id }) => source.value === "preset:" + id); }
   function refreshControls() {
@@ -49,22 +57,35 @@ function bindMapWorkflowLaunch() {
     definitions = [];
     saved = [];
     source.replaceChildren();
-    $("workflow-launch-engineering").href = "/engineering.html?" + new URLSearchParams({ project: value, view: "design" });
+    $("workflow-launch-engineering").href = "/engineering.html?" + new URLSearchParams({ project: value });
     if (!value) return refreshControls();
     try {
       const data = await Promise.all(["definitions", "workflows"].map((endpoint) => mapWorkflowRequest(endpoint, { project: value })));
       if (revision !== generation) return;
       [definitions, saved] = data;
-      void mapWorkflowRequest("runtime").catch(() => {});
-      const templates = document.createElement("optgroup");
-      templates.label = "기본 템플릿";
-      templates.append(...presets.map((item) => option({ ...item, id: "preset:" + item.id })));
-      const workflows = document.createElement("optgroup");
-      workflows.label = "저장된 Workflow";
-      workflows.append(...saved.map((item) => option({ ...item, id: "saved:" + item.id })));
-      source.append(templates, workflows);
-      if (typeof preferredWorkflow === "string" && saved.some(({ id }) => id === preferredWorkflow)) source.value = "saved:" + preferredWorkflow;
-      else if (saved.length) source.value = "saved:" + saved[0].id;
+      void mapWorkflowRequest("runtime").then((current) => {
+        if (revision !== generation) return;
+        runtime = current;
+        showRuntime();
+      }).catch(() => {});
+      // 템플릿, 사용자가 저장한 Workflow, 템플릿 빠른 실행이 만든 자동 사본을 따로 묶는다.
+      // 자동 사본은 그 사본으로 돈 실행에서 '이 Workflow로 새 실행'을 눌렀을 때만 보여 준다(평소에는 템플릿을 고르면 된다).
+      const named = saved.filter(({ generated }) => !generated);
+      const copy = saved.find(({ id, generated }) => generated && id === preferredWorkflow);
+      const group = (label, items) => {
+        const element = document.createElement("optgroup");
+        element.label = label;
+        element.append(...items);
+        return element;
+      };
+      source.append(group("템플릿 · 실행 설정에서 하네스를 고름", presets.map((item) => new Option(item.name + " · 템플릿", "preset:" + item.id))));
+      if (named.length) source.append(group("저장된 Workflow", named.map((item) => option({ ...item, id: "saved:" + item.id }))));
+      if (copy) source.append(group("빠른 실행 사본(자동 생성)", [new Option(engineeringWorkflowLabel(copy), "saved:" + copy.id)]));
+      const hiddenCopies = saved.length - named.length - (copy ? 1 : 0);
+      source.title = hiddenCopies ? "템플릿 빠른 실행이 만든 자동 사본 " + hiddenCopies + "개는 목록에서 뛴니다." : "";
+      if (copy) source.value = "saved:" + copy.id;
+      else if (typeof preferredWorkflow === "string" && named.some(({ id }) => id === preferredWorkflow)) source.value = "saved:" + preferredWorkflow;
+      else if (named.length) source.value = "saved:" + named[0].id;
       else if (presets.some(({ id }) => id === "bugfix")) source.value = "preset:bugfix";
       refreshControls();
     } catch (error) { if (revision === generation) status.textContent = error.message; }
@@ -98,7 +119,9 @@ function bindMapWorkflowLaunch() {
   for (const control of [source, ...roles.map((role) => form.elements[role])]) control.onchange = () => {
     status.textContent = "";
     refreshControls();
+    showRuntime();
   };
+  form.elements.minutes.addEventListener("change", () => { status.textContent = ""; showRuntime(); });
   form.onsubmit = async (event) => {
     event.preventDefault();
     if (pending) return;
@@ -120,9 +143,17 @@ function bindMapWorkflowLaunch() {
       input.version = choice.version;
     }
     const signature = JSON.stringify(input);
-    if (requestKey?.signature !== signature) requestKey = { signature, key: crypto.randomUUID() };
     pending = true;
     submit.disabled = true;
+    runtime = await mapWorkflowRequest("runtime").catch(() => runtime);
+    const warning = engineeringLoginWarning(runtime, input.timeoutMs);
+    if (warning && !window.confirm(warning + "\n\n그래도 실행할까요?")) {
+      pending = false;
+      refreshControls();
+      showRuntime();
+      return;
+    }
+    if (requestKey?.signature !== signature) requestKey = { signature, key: crypto.randomUUID() };
     status.textContent = "실행을 준비하는 중입니다.";
     try {
       const run = await mapWorkflowRequest("workflows/launch", {}, { ...input, key: requestKey.key });
@@ -130,7 +161,7 @@ function bindMapWorkflowLaunch() {
       dialog.close();
       if (typeof refreshWorkflowQueue === "function") void refreshWorkflowQueue();
       if (typeof openMapWorkflow === "function") void openMapWorkflow(run.id);
-      else location.href = "/engineering.html?" + new URLSearchParams({ project: run.project, view: "workflow", run: run.id });
+      else location.href = "/?" + new URLSearchParams({ run: run.id });
     } catch (error) { status.textContent = error.message; }
     finally { pending = false; refreshControls(); }
   };

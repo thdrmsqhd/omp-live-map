@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const childProcess = require("node:child_process");
 const fs = require("node:fs/promises");
+const os = require("node:os");
 const path = require("node:path");
 const { setTimeout: delay } = require("node:timers/promises");
 const { test } = require("node:test");
@@ -22,6 +23,9 @@ async function waitForText(file, text) {
 }
 
 test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한다", { timeout: 10000 }, async (t) => {
+  // Claude 세션은 호스트 가용 RAM 이 적으면 바로 띄우지 않고 '가용 RAM 부족 · 실행 대기'로 줄을 세운다(server/performance.js).
+  // 이 테스트는 실행 경로를 확인하므로 RAM 이 넉넉한 호스트로 고정한다. 고정하지 않으면 RAM 사용률이 80%를 넘는 PC 에서 Claude 실행이 없어 실패한다.
+  t.mock.method(os, "freemem", () => Math.floor(os.totalmem() / 2));
   const spawn = childProcess.spawn;
   const children = new Set();
   const launches = [];

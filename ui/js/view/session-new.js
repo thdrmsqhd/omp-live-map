@@ -20,7 +20,7 @@ function openNewSession(at) {
     </select></label>
     <div class="nsharness-tools">
       <small class="nsprofile-note" role="status"></small>
-      <a href="/engineering.html?view=session-harnesses">하네스 관리</a>
+      <a href="/?mode=design">프로필 관리</a>
     </div>
     <label>실행기<select class="nshz">
       <option value="omp">omp (기본)</option>

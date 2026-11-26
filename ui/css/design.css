@@ -1,0 +1,31 @@
+/* 관제 화면의 '설계' 모드. 노드 캔버스(studio.css)가 기대하는 Engineering 기본 모양을 이 영역에만 준다. */
+#design {
+  --bg: #13151a; --panel: #1c1f26; --field: #15171d; --border: #383d49; --text: #eeedf3; --muted: #a8adbd; --accent: #baa8ff;
+  flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 12px 6px; background: var(--bg); color: var(--text);
+  font: 13.5px/1.5 system-ui, "Malgun Gothic", sans-serif;
+}
+#design[hidden] { display: none; }
+#app[data-view="design"] #workarea, #app[data-view="design"] #minimap { display: none !important; }
+#design .design-bar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+#design .design-bar label { display: grid; gap: 2px; color: var(--muted); font-size: 12px; }
+#design .design-bar select { min-width: 16rem; }
+#design .design-bar a { color: #91daca; font-size: 12.5px; margin-left: auto; }
+#design-status { flex: 1; margin: 0; color: #f299ad; font-size: 12.5px; }
+/* :where 로 우선순위를 낮춰 노드 안 입력칸(studio.css)의 작은 모양이 이기게 한다. */
+:where(#design) :where(input, textarea, select, button) {
+  font: inherit; min-width: 0; max-width: 100%; padding: .3rem .6rem; border: 1px solid var(--border); border-radius: .4rem; color: var(--text); background: var(--field);
+}
+:where(#design) button { cursor: pointer; background: #272b35; }
+:where(#design) button:disabled { opacity: .5; cursor: default; }
+:where(#design) button:not(:disabled):hover, :where(#design) summary:hover { border-color: var(--accent); }
+:where(#design) label { min-width: 0; }
+:where(#design) :where(textarea, pre) { font-family: ui-monospace, Consolas, monospace; }
+#design .workflow-primary { background: var(--accent); color: #201730; border-color: transparent; font-weight: 700; }
+#design #studio { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 0; }
+#design .studio-graph { flex: 1; height: auto; min-height: 20rem; }
+#design .studio-help { margin: 4px 2px 0; color: var(--muted); font-size: 11.5px; }
+#design .studio-node { font-size: 12.5px; }
+/* 이 페이지 기본 CSS 에는 [hidden] 강제 규칙이 없어 캔버스의 빈 화면 안내·메뉴가 보이므로 설계 영역에서 다시 숨긴다. */
+#design [hidden] { display: none !important; }
+/* 지도 전용 도구(배치·줌)는 설계 모드에서 숨긴다. */
+#app[data-view="design"] .zoom { display: none; }

@@ -7,6 +7,14 @@ const { open } = require("../rpc");
 const { resultInstruction } = require("./harness-result");
 const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
+const { claudeStreamProgress, ompToolLine } = require("./stream-progress");
+const { brokerFailure } = require("./anthropic");
+
+// 브로커가 호출을 막았으면(구독 로그인 만료·예산 소진) CLI 의 일반 오류 대신 그 사유로 실패한다.
+function throwBrokerFailure(child) {
+  const code = child?.failure?.();
+  if (code) throw brokerFailure(code);
+}
 
 const claudeTools = ["Read", "Edit", "Write", "Glob", "Grep"];
 
@@ -26,6 +34,15 @@ function promptSections(harness, instruction = "", feedback = []) {
 
 function prompt({ harness, instruction, feedback }) {
   return promptSections(harness, instruction, feedback).map(({ text }) => text).join("\n\n");
+}
+
+// 실행 중 진행 상황(글자 조각·도구 호출)을 관제 화면에 넘긴다. 콜백이 없거나 실패해도 실행에는 영향이 없다.
+function progressOf(context) {
+  const report = typeof context.onProgress === "function" ? context.onProgress : null;
+  return (patch) => {
+    if (!report) return;
+    try { report(patch); } catch { /* 진행 표시만 잃는다 */ }
+  };
 }
 
 function execution(backend, name, run) {
@@ -67,8 +84,12 @@ async function omp(backend, context) {
   let turns = 0;
   let output = "";
   const tools = new Set();
+  const progress = progressOf(context);
   const done = new Promise((resolve, reject) => {
     rpc.onEvent((frame) => {
+      if (frame.type === "message_update" && frame.assistantMessageEvent?.type === "text_delta" &&
+          typeof frame.assistantMessageEvent.delta === "string") progress({ phase: "responding", text: frame.assistantMessageEvent.delta });
+      if (frame.type === "tool_execution_start" && typeof frame.toolName === "string") progress({ phase: "tool", tool: frame.toolName, text: ompToolLine(frame) });
       if (capture && frame.type === "tool_execution_start" && typeof frame.toolName === "string" && tools.size < 40) {
         tools.add(frame.toolName.slice(0, 120));
       }
@@ -108,6 +129,7 @@ async function omp(backend, context) {
     if (!turns || !session.sessionId) throw new Error("OMP returned no completed turn or session");
     return { ...(capture ? { output: output || null, tools: [...tools] } : {}), sessionId: session.sessionId, model: model.model, costCents: rpc.child.cost?.() ?? costCents, costBasis: backend.protocol ? "reserved" : "reported" };
   } catch (error) {
+    if (!signal.aborted) throwBrokerFailure(rpc.child);
     if (diagnostics) throw new Error(error.message + ": " + redact(diagnostics));
     throw error;
   } finally {
@@ -136,17 +158,24 @@ async function claude(backend, context) {
   const lines = createInterface({ input: child.stdout });
   let result;
   const tools = new Set();
+  const streamed = claudeStreamProgress(progressOf(context));
   try {
     for await (const line of lines) {
       let event;
       try { event = JSON.parse(line); } catch { continue; }
       if (event.type === "result") result = event;
+      try { streamed(event); } catch { /* 진행 표시는 실행에 영향을 주지 않는다 */ }
       if (capture && event.type === "assistant") for (const block of (Array.isArray(event.message?.content) ? event.message.content : [])) {
         if (block.type === "tool_use" && typeof block.name === "string" && tools.size < 40) tools.add(block.name.slice(0, 120));
       }
     }
     const [code] = await closed;
     signal.throwIfAborted();
+    if (code !== 0 || !result || result.is_error || !Number.isFinite(result.total_cost_usd)) throwBrokerFailure(child);
+    // Claude Code 가 오류 결과를 냈으면(예: 모델에 비해 CLI 버전이 낮음) 그 이유를 그대로 남겨 관제 화면에서 보이게 한다.
+    if (result?.is_error && typeof result.result === "string" && result.result) {
+      throw new Error("Claude Code 실행 실패: " + redact(result.result).slice(0, 600));
+    }
     if (code !== 0 || !result || result.is_error || !Number.isFinite(result.total_cost_usd) || result.total_cost_usd < 0) {
       throw new Error("Claude returned no successful result with valid cost");
     }

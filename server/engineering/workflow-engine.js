@@ -1,10 +1,20 @@
 "use strict";
 
+const manualGateText = Object.freeze({
+  browser: "브라우저의 결제·동의·비밀번호 화면은 그 창에서 직접 처리하세요. 관제에는 그 정보를 입력하지 마세요.",
+  payment: "결제는 원래 결제 창에서 직접 확인하고 처리하세요. 관제에는 결제 정보를 입력하지 마세요.",
+  consent: "약관 원문을 직접 읽고 원래 창에서 동의 여부를 선택하세요.",
+  password: "비밀번호는 원래 로그인 창에서만 입력하세요. 관제의 입력란에 비밀번호를 쓰지 마세요.",
+  system: "시스템 변경은 해당 설치·설정 화면에서 직접 확인하세요. 이 버튼은 관리자 권한을 부여하지 않습니다.",
+  uac: "Windows UAC 프롬프트가 표시된 경우 해당 시스템 화면에서만 처리하세요. 이 승인으로 관리자 권한을 얻지 않습니다.",
+});
+
 const { graphScheduler } = require("./graph-scheduler");
 const { retryPlan } = require("./workflow-retry-plan");
 const { nodeExecutor } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
 const { runParallel } = require("./workflow-parallel");
+const live = require("./workflow-live");
 const { problem, redact } = require("./state");
 
 const external = ({ type }) => ["agent", "loop", "command"].includes(type);
@@ -45,7 +55,11 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
         retry?.mode === "rework" && "Rework requested after " + retry.failed + " failed.\n" +
           [retry.note, "Previous failure evidence:\n" + retry.evidence].filter(Boolean).join("\n\n")].filter(Boolean);
       const input = node.instruction ? { ...node, instruction: context.join("\n\n"), verificationOnly: retry?.mode === "verify" } : node;
-      let result = await runNode(input, run.project, location, Math.max(0, remaining), signal, references);
+      live.start(id, node.id);
+      let result;
+      try {
+        result = await runNode(input, run.project, location, Math.max(0, remaining), signal, references, live.reporter(id, node.id));
+      } finally { live.end(id, node.id); }
       if (result.status === "succeeded" && node.outputs.length) {
         try { result.artifacts = await collectOutputs(location, node, signal); } catch (error) {
           result = { ...result, status: "failed", interrupted: true, error: redact(error.message) };
@@ -96,7 +110,11 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
         } else {
           const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
           signal.throwIfAborted();
-          if (node.type === "approval") { store.ask(id, node.id, node.prompt, artifacts); return; }
+          if (node.type === "approval") {
+            const instruction = manualGateText[node.gate];
+            store.ask(id, node.id, instruction ? node.prompt + "\n\n" + instruction : node.prompt, artifacts, node.gate);
+            return;
+          }
           begin(node);
           let result = { status: "succeeded" };
           if (node.type === "condition") result.port = scheduler.conditionPort(node, results);
@@ -156,7 +174,7 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
       if (decision === "approved" && waiting.outcome?.artifacts?.length) {
         await validateArtifacts(run.workspace, waiting.outcome.artifacts);
       }
-      store.decide(id, node, decision, reason);
+      store.decide(id, node, decision, waiting.outcome?.gate ? (decision === "approved" ? "사용자가 직접 처리 완료를 확인함" : "사용자가 수동 작업을 진행하지 않음") : reason);
       launch(id);
       return store.get(id);
     },

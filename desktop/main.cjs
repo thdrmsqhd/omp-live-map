@@ -19,16 +19,16 @@ const endpoints = new Set([
   "harness/trial", "harness/trial/cancel", "harness/trial/retry",
   "workflows", "workflows/launch", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflows/presets/defaults", "workflows/presets/all",
-  "workflow-runs", "workflow-run", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
+  "workflow-runs", "workflow-run", "workflow-transcript", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
-  "workflow-approvals", "workflow-live-map", "workflow-dashboard", "workflow-review", "workflow-artifact",
+  "workflow-approvals", "workflow-live-map", "workflow-dashboard", "workflow-review", "workflow-artifact", "independent-evaluation",
   "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
 ]);
 
-const liveMapReads = new Set(["projects", "tasks", "workflow-approvals", "workflow-live-map", "workflow-runs", "workflow-run",
-  "workflows", "workflow", "definitions", "definitions/version", "workflows/presets", "runtime", "workflow-review", "workflow-artifact"]);
-const liveMapWrites = new Set(["workflows/launch", "workflows/save-canvas", "workflows/plan", "workflow-runs/retry", "workflow-runs/approval", "workflow-runs/action"]);
+// 관제 화면(/)은 Live Map 과 설계(노드 캔버스) 모드를 함께 담으므로 정의·Workflow 편집과 실행 API 를 모두 쓴다.
+// 비밀 값(API 키)·로그인·프로젝트 등록·보관·팀 등록 같은 설정 쓰기는 Engineering 설정 페이지에서만 한다.
+const settingsOnlyWrites = new Set(["runtime", "runtime/key", "runtime/login", "projects", "projects/archive", "teams"]);
 
 function startServer() {
   const data = app.getPath("userData");
@@ -72,7 +72,7 @@ ipcMain.handle("engineering:request", async (event, { endpoint, params, payload 
   const frame = event.senderFrame;
   const location = frame?.url ? new URL(frame.url) : null;
   const fromEngineering = location?.pathname === "/engineering.html" && endpoints.has(endpoint);
-  const fromLiveMap = location?.pathname === "/" && (payload === undefined ? liveMapReads : liveMapWrites).has(endpoint);
+  const fromLiveMap = location?.pathname === "/" && endpoints.has(endpoint) && (payload === undefined || !settingsOnlyWrites.has(endpoint));
   if (!window || event.sender !== window.webContents || frame !== window.webContents.mainFrame ||
       location?.origin !== origin || !(fromEngineering || fromLiveMap)) {
     return { ok: false, error: "Request denied" };

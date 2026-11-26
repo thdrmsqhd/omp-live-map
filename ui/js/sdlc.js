@@ -13,7 +13,7 @@ export function bindSdlc({ find, request, report, showRun }) {
     const mapped = stages.find(({ status, workflow }) => status === "backlog" && workflow) ?? stages.find(({ status }) => status === "ready");
     const fallback = mapped?.workflow ? mapped.workflow + ":" + mapped.workflow_version : "";
     const selected = editing ? editing.workflow + ":" + editing.workflow_version : selector.value || fallback;
-    const options = workflows.map((entry) => new Option(entry.name + " · v" + entry.version, entry.id + ":" + entry.version));
+    const options = workflows.map((entry) => new Option(engineeringWorkflowLabel(entry), entry.id + ":" + entry.version));
     if (editing && !options.some(({ value }) => value === selected)) {
       options.unshift(new Option(editing.workflow_name + " · v" + editing.workflow_version, selected));
     } else if (fallback && !options.some(({ value }) => value === fallback)) {
@@ -29,7 +29,7 @@ export function bindSdlc({ find, request, report, showRun }) {
     stageForm.elements.label.value = stage.label;
     stageForm.elements.position.value = stage.position;
     const mapping = stage.workflow ? stage.workflow + ":" + stage.workflow_version : "";
-    const options = workflows.map((flow) => new Option(flow.name + " · v" + flow.version, flow.id + ":" + flow.version));
+    const options = workflows.map((flow) => new Option(engineeringWorkflowLabel(flow), flow.id + ":" + flow.version));
     if (mapping && !options.some(({ value }) => value === mapping)) options.unshift(new Option("이전 기본 버전", mapping));
     stageForm.elements.workflow.replaceChildren(new Option("지정 안 함", ""), ...options);
     stageForm.elements.workflow.value = mapping;
@@ -63,6 +63,8 @@ export function bindSdlc({ find, request, report, showRun }) {
     if (task.status === "ready") item.append(control("Workflow 실행", async () => {
       const timeoutMs = Number(find("sdlc-minutes").value) * 60000, budgetCents = Number(find("sdlc-budget").value);
       const input = { task: task.id, timeoutMs, budgetCents };
+      const warning = engineeringLoginWarning(await request("runtime").catch(() => null), timeoutMs);
+      if (warning && !window.confirm(warning + "\n\n그래도 실행할까요?")) return;
       const fingerprint = JSON.stringify(input), entry = pending.get(task.id);
       const key = entry?.fingerprint === fingerprint ? entry.key : crypto.randomUUID();
       pending.set(task.id, { fingerprint, key });
