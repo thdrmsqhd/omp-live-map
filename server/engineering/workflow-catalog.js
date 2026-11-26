@@ -8,6 +8,14 @@ const { expandSubgraphs } = require("./workflow-subgraphs");
 const { string, integer } = require("./definitions");
 const { problem } = require("./state");
 const profiles = require("../harness/session-profiles");
+const { listPresets } = require("./workflow-presets");
+
+// 템플릿으로 빠른 실행할 때 자동으로 생기는 사본(workflow-launch.js makePreset: "<템플릿 이름> · <해시 12자>")이면
+// 템플릿 이름을 돌려준다. 목록에서 사용자가 저장한 Workflow 와 구분해 보여 주려고 쓴다.
+function generatedTemplate(name) {
+  const match = /^(.+) · ([0-9a-f]{12})$/.exec(name);
+  return match && listPresets().some((preset) => preset.name === match[1]) ? match[1] : null;
+}
 
 function workflowCatalog(db, catalog) {
   function get(project, id, version) {
@@ -182,8 +190,11 @@ function workflowCatalog(db, catalog) {
 
   return { get, plan, executionPlan, ensurePreset, saveCanvas, save: (body) => transaction(db, () => writeWorkflow(body)), harnessUses, relinkHarness, list(project) {
     catalog.project(project);
-    return db.prepare("SELECT id,name,version FROM workflow WHERE project=? ORDER BY name,id").all(project);
+    return db.prepare("SELECT id,name,version FROM workflow WHERE project=? ORDER BY name,id").all(project).map((row) => {
+      const template = generatedTemplate(row.name);
+      return template ? { ...row, generated: true, template } : row;
+    });
   } };
 }
 
-module.exports = { workflowCatalog };
+module.exports = { workflowCatalog, generatedTemplate };

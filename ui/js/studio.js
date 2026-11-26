@@ -1026,7 +1026,11 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   function fillWorkflowPicker(chosen) {
     workflowPicker.replaceChildren(h("option", { value: "" }, project ? "Workflow 열지 않음 · 정의만 보기" : "프로젝트를 고르면 Workflow를 열 수 있습니다"),
       ...(project ? [h("option", { value: "new" }, "+ 새 Workflow")] : []),
-      ...workflows.map(({ id, name, version }) => h("option", { value: id }, `${name}${version ? " · v" + version : ""}`)));
+      // 템플릿 빠른 실행이 만든 자동 사본은 사용자가 저장한 Workflow 와 따로 묶는다.
+      ...[["저장된 Workflow", false], ["빠른 실행 사본(자동 생성)", true]].map(([label, generated]) => {
+        const items = workflows.filter((item) => Boolean(item.generated) === generated);
+        return items.length ? h("optgroup", { label }, ...items.map((item) => h("option", { value: item.id }, engineeringWorkflowLabel(item)))) : null;
+      }).filter(Boolean));
     workflowPicker.value = chosen ?? "";
     workflowPicker.dataset.value = workflowPicker.value;
   }

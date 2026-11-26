@@ -56,15 +56,24 @@ function bindMapWorkflowLaunch() {
       if (revision !== generation) return;
       [definitions, saved] = data;
       void mapWorkflowRequest("runtime").catch(() => {});
-      const templates = document.createElement("optgroup");
-      templates.label = "기본 템플릿";
-      templates.append(...presets.map((item) => option({ ...item, id: "preset:" + item.id })));
-      const workflows = document.createElement("optgroup");
-      workflows.label = "저장된 Workflow";
-      workflows.append(...saved.map((item) => option({ ...item, id: "saved:" + item.id })));
-      source.append(templates, workflows);
-      if (typeof preferredWorkflow === "string" && saved.some(({ id }) => id === preferredWorkflow)) source.value = "saved:" + preferredWorkflow;
-      else if (saved.length) source.value = "saved:" + saved[0].id;
+      // 템플릿, 사용자가 저장한 Workflow, 템플릿 빠른 실행이 만든 자동 사본을 따로 묶는다.
+      // 자동 사본은 그 사본으로 돈 실행에서 '이 Workflow로 새 실행'을 눌렀을 때만 보여 준다(평소에는 템플릿을 고르면 된다).
+      const named = saved.filter(({ generated }) => !generated);
+      const copy = saved.find(({ id, generated }) => generated && id === preferredWorkflow);
+      const group = (label, items) => {
+        const element = document.createElement("optgroup");
+        element.label = label;
+        element.append(...items);
+        return element;
+      };
+      source.append(group("템플릿 · 실행 설정에서 하네스를 고름", presets.map((item) => new Option(item.name + " · 템플릿", "preset:" + item.id))));
+      if (named.length) source.append(group("저장된 Workflow", named.map((item) => option({ ...item, id: "saved:" + item.id }))));
+      if (copy) source.append(group("빠른 실행 사본(자동 생성)", [new Option(engineeringWorkflowLabel(copy), "saved:" + copy.id)]));
+      const hiddenCopies = saved.length - named.length - (copy ? 1 : 0);
+      source.title = hiddenCopies ? "템플릿 빠른 실행이 만든 자동 사본 " + hiddenCopies + "개는 목록에서 뛴니다." : "";
+      if (copy) source.value = "saved:" + copy.id;
+      else if (typeof preferredWorkflow === "string" && named.some(({ id }) => id === preferredWorkflow)) source.value = "saved:" + preferredWorkflow;
+      else if (named.length) source.value = "saved:" + named[0].id;
       else if (presets.some(({ id }) => id === "bugfix")) source.value = "preset:bugfix";
       refreshControls();
     } catch (error) { if (revision === generation) status.textContent = error.message; }

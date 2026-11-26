@@ -355,7 +355,7 @@ export function bindWorkflow({ find, request, report, definitions, editHarness, 
     const records = id ? await request("workflows", { project: id }) : [];
     if (id !== project) return;
     workflows = records;
-    choices(selector, [["", "새 Workflow"], ...records.map(({ id, name }) => [id, name])]);
+    choices(selector, [["", "새 Workflow"], ...records.map((record) => [record.id, engineeringWorkflowLabel({ ...record, version: 0 })])]);
   }
   selector.addEventListener("change", report(async () => {
     const id = selector.value, owner = project;
