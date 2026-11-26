@@ -171,7 +171,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = node -p "require('./desktop/package.json').version"
-          if ($version -notmatch '^\d+\.\d+\.\d+-preview\.\d+$') { throw "Unexpected release version" }
+          if ($version -notmatch '^\d+\.\d+\.\d+-preview\.\d+$') {
+            Write-Host "Stable version $version is published by its release workflow."
+            exit 0
+          }
           $tag = "v$version"
           gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName 2>$null
           if ($LASTEXITCODE -eq 0) {
