@@ -1,8 +1,20 @@
-# OMP Live Map V4
+# OMP Live Map
 
 OMP와 Claude Code 세션을 한 화면에서 관제하고, 에이전트와 함께 개발 작업을 수행하는 로컬 워크스테이션입니다.
 
-[실행 방법](#실행) · [화면 조작](#화면) · [자동 검증](#검증) · [실제 화면 캡처 원본](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45509666670)
+[현재 상태](#현재-상태) · [실행 방법](#실행) · [화면 조작](#화면) · [자동 검증](#검증) · [실제 화면 캡처 원본](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45509666670)
+
+## 현재 상태
+
+2026-11-26에 `main`(`298c1df`)을 클론해 `node server.js --port 7806 --hours 24`로 직접 띄워 확인한 내용입니다. 시간이 지나면 달라질 수 있으니 날짜를 기준으로 읽어 주세요.
+
+| 항목 | 확인한 상태 |
+|---|---|
+| 서버 실행 | 정상. 첫 화면이 200으로 열리고 `/api/graph`가 응답하며, `index.html`이 적재하는 스크립트 95개가 모두 200입니다. |
+| 첫 화면 | 프로젝트 관제(Overview). 상단에서 프로젝트 · 워크스페이스 · Live Map(관제) 모드를 바꿉니다(Alt+1/2/3). |
+| 일반 브라우저의 Engineering | `/engineering.html`은 열려 "기초 생성" 화면이 보이지만, "데스크톱 앱에서 Engineering을 열어 주세요."가 표시되고 `/api/engineering/*`는 403입니다. Engineering 데이터는 데스크톱 앱에서만 읽고 씁니다. |
+| 최신 버전 | 태그 `v8.2.1`(정식 릴리스). `desktop/package.json`의 버전은 아직 `8.2.1-preview.1`입니다. |
+| 로컬 회귀 테스트 | `node --test`가 모두 통과합니다(Node 26.5, Windows). 자세한 내용은 [검증](#검증)을 보세요. |
 
 ## V4 주요 화면
 
@@ -42,6 +54,8 @@ OMP와 Claude Code 세션을 한 화면에서 관제하고, 에이전트와 함�
 - 의존성 없음. Node 내장 모듈만 씁니다(Node 22 이상. 컨텍스트 상한 조회에 `node:sqlite`를 씁니다. 없으면 사용률만 빠집니다).
 - `127.0.0.1`에만 바인드합니다. 로컬 1인 사용을 전제로 하며 로그인은 없습니다.
 - Windows + Git Bash + WSL 환경에 맞춰져 있습니다.
+- 두 가지로 쓸 수 있습니다. 브라우저로 여는 **웹 모드**(`node server.js`)와, Engineering(프로젝트·하네스·루프·Workflow·개발 Task)까지 쓰는 **Windows 데스크톱 앱**입니다. 웹 모드에서 Engineering은 화면만 열립니다([현재 상태](#현재-상태)).
+- 세션을 만들거나 이어가려면 `omp` 또는 `claude` CLI가 PATH에 있어야 합니다. 둘 다 없어도 기록 읽기와 지도 보기는 됩니다.
 
 ## 무엇을 하나
 
@@ -111,8 +125,19 @@ node server.js --port 7800 --hours 24
 | `OMP_USD_KRW` | 1390 | 비용 원화 환산 환율 |
 | `OMP_LLM_BASE_URL`, `OMP_LLM_API_KEY`, `OMP_LLM_MODEL` | `~/.omp/agent/models.yml`의 provider | 세션 요약(`/api/summary`)에 쓰는 OpenAI 호환 엔드포인트 |
 | `OMP_SUMMARY_MODEL` | provider 기본 모델 | 요약 모델만 따로 지정 |
+| `OMP_MAP_STATE` | 프로젝트의 `data/` | Claude 카드별 모델 선택과 비우기 계보를 저장하는 폴더 |
+| `OMP_MAP_CLAUDE_MODEL` | `default` | Claude Code 카드에서 "CLI 기본 모델"로 넘길 `--model` 값 |
+| `OMP_MAP_CLAUDE_MAX_RUNS` | 4 | 동시에 실행할 Claude Code 프로세스 수(1~32) |
+| `OMP_PYRIGHT` | PATH에서 탐색 | `pyright-langserver` 실행 파일 경로 |
 
 `ui/` 파일은 요청할 때마다 디스크에서 읽으므로 새로고침하면 반영됩니다. `server.js`와 `server/`를 고치면 서버를 다시 띄워야 합니다.
+
+### Windows 데스크톱 앱
+
+- 설치 파일은 [GitHub Releases](https://github.com/thdrmsqhd/omp-live-map/releases)의 `OMP-Live-Map-<버전>-Windows-x64-Setup.exe`입니다. 같은 릴리스의 `SHA256SUMS.txt`로 체크섬을 확인하세요. 프리릴리스 설치 파일에는 코드 서명이 없습니다.
+- 앱은 `server.js`를 `--port 0`(빈 포트 자동 선택)으로 자식 프로세스로 띄우고, 같은 창에서 `/`(관제)와 `/engineering.html`을 엽니다. 7800 포트의 기존 서비스는 건드리지 않습니다. 앱 하나만 실행할 수 있습니다.
+- `/api/engineering/*`는 앱이 만든 토큰(`x-omp-engineering-token`)을 가진 요청만 받습니다. Engineering 데이터는 앱의 사용자 데이터 폴더(SQLite)에 저장됩니다.
+- 소스에서 실행·빌드: `cd desktop` 후 `npm install`, `npm start`(Electron), `npm run build:windows`(NSIS 설치 파일). 이번 점검에서는 실행하지 않았습니다. CI의 Electron 검증은 `tests/verification/electron.cjs`가 맡습니다.
 
 ## 터미널 세션 실시간 표시(확장)
 
@@ -177,10 +202,16 @@ server/
   sse.js http.js routes*.js      SSE 방송, 요청 가드, 라우트
   active.js ext-live.js          실시간 방송: 기록 이벤트, 확장 기록(~/.omp/live-map) tail
   uploads.js                     프롬프트 첨부: 작은 이미지는 rpc `images`, 나머지는 %TEMP%\omp-live-map-uploads\ 에 저장해 경로를 메시지에 붙임
+  harness/                       Claude Code 하네스: claude.js(기록 읽기) · claude-run.js(실행) · switch.js(하네스 전환) · session-profiles.js 등
+  engineering/                   Engineering(데스크톱 전용): 프로젝트·하네스·루프·Workflow·개발 Task, SQLite(schema*.sql), 실행기(runner·docker-runner), routes.js
 extension/
   live-map.ts          omp 확장: 세션의 툴 출력·글을 ~/.omp/live-map 으로(설치: install.js)
+desktop/               Electron 데스크톱 앱(main.cjs · preload.cjs · credentials.cjs · 설치 파일 빌드 설정)
+tests/                 node --test 회귀 테스트(*.test.js, fake-omp·fake-claude 가짜 하네스) · verification/ Windows·Electron·브라우저 검증 스크립트
+.github/workflows/     CI: V3 Windows verification(v2-phase-0.yml) 외 3개
 ui/
   index.html           스크립트를 계층 순서로 적재(번들러·프레임워크 없음)
+  engineering.html     Engineering 화면(기초 생성 · 프로필 · 하네스 · 루프 · Workflow · 개발 Task · 실행). js/engineering*.js, workflow-*.js, harness-*.js, sdlc.js
   css/                 tokens · shell · sessions · cards · panel · blocks
   js/core/             format · dom · state(가변 상태 단일 소유) · persist(localStorage)
   js/model/            layout(배치 계산, DOM 접근 없음)
@@ -189,20 +220,20 @@ ui/
                        카드(card-compact, card-session, card-metrics, charts, spark-hover, panel), 세션 목록(session-list)
                        블록(blocks, block-controls, block-chat/term/bg/editor/browser/db/context, editor-*(탐색기·탭·Monaco 상태바))
   js/app.js            부트스트랩: 첫 스냅샷 → SSE → 폴러
-docs/                  archify 구조 다이어그램(architecture · components · layers · ui), media/(README 이미지·GIF)
+docs/                  archify 구조 다이어그램(architecture · components · layers · ui), adr/, 릴리스 노트(release-v*.md), media/(README 이미지·GIF)
 ```
 
 규칙:
 
 - 의존 방향은 core → model → viewmodel → view → app 한쪽입니다. model은 DOM을 모르고 view만 DOM을 만집니다.
-- 파일 하나는 200줄 미만으로 유지합니다.
+- 파일 하나는 200줄 미만을 원칙으로 합니다. 2026-11-26 기준 JS 229개 중 12개가 넘고, 가장 큰 파일은 `ui/js/workflow-editor.js`(468줄)입니다.
 - 서버의 가변 상태는 모듈 하나가 소유하고 함수로만 내보냅니다(예: 파일 상태 Map은 `tail.js`).
 - 화면은 `renderMap()`이 조각 목록을 만들고 `patchPieces()`가 마크업이 바뀐 조각만 바꿉니다. 큰 카드는 스냅샷이 올 때 chrome만 교체하고, 블록이 사는 body는 블록 구성이 같으면 DOM을 유지합니다. 그래서 입력 포커스·스크롤·트리 펼침이 갱신에 끊기지 않습니다.
 - 새 블록은 `ui/js/view/block-<이름>.js`에서 `registerBlock({ type, slot, flex, render, mount, paint })`로 등록하고 `index.html`에 스크립트를 추가합니다. `render`는 바디를 만들 때, `mount`는 그 직후 1회, `paint`는 스냅샷 갱신 때 불립니다.
 
 ## 데이터와 API
 
-기록의 원본은 `~/.omp/agent/sessions/<폴더>/<세션>.jsonl`과 서브에이전트 `<세션>/<Agent>.jsonl`입니다. 서버는 읽기만 하고 상태를 메모리에만 둡니다. 서버를 다시 띄우면 기록에서 다시 만듭니다.
+기록의 원본은 `~/.omp/agent/sessions/<폴더>/<세션>.jsonl`과 서브에이전트 `<세션>/<Agent>.jsonl`입니다. 서버는 읽기만 하고 상태를 메모리에만 둡니다. 서버를 다시 띄우면 기록에서 다시 만듭니다. 예외는 Claude 카드별 모델 선택과 비우기 계보(`data/` 또는 `OMP_MAP_STATE`)와, 데스크톱 앱의 Engineering 데이터(앱 사용자 데이터 폴더의 SQLite)입니다.
 
 | 경로 | 내용 |
 |---|---|
@@ -227,6 +258,13 @@ docs/                  archify 구조 다이어그램(architecture · components
 | `POST /api/release` `{node}` | 이 카드에서 띄운 백그라운드 잡과, 명령줄에 세션 폴더가 들어간 프로세스(자식 포함)를 종료. 세션을 돌리는 omp 프로세스와 그 자식(MCP 서버·실행기)은 건드리지 않음 |
 | `GET /api/res?cwd=&node=` · `GET /api/proc` · `GET /api/sys` | 자원·프로세스·호스트 |
 | `GET /api/infra` · `POST /api/infra/action` `{kind, target}` | WSL 배포판·Docker 컨테이너 조회와 start/stop/restart, Compose 프로젝트 실행(`project-start`) |
+| `GET /api/performance` | 서버 프로세스 메모리·CPU·이벤트 루프 지연(P95), SSE 지표, 데스크톱 프로세스 지표, 세션별 자원 |
+| `GET /api/claude/status` | Claude Code CLI 상태 `{ok, installed, version, auth{loggedIn, method}}` |
+| `POST /api/claude/options` · `/api/claude/project-info` · `/api/claude/queue` | Claude Code 카드용 옵션·프로젝트 정보·프롬프트 대기열 |
+| `POST /api/session/stop` · `/api/session/switch` | 세션 종료 · 하네스 전환(omp ↔ Claude Code) |
+| `GET`·`POST /api/session-harnesses` | 세션 하네스 프로필 목록·변경 `{ok, profiles[]}` |
+| `POST /api/chat/activity` · `/api/chat/answer` · `/api/chat/diff` | 대화 블록 보조: 턴별 활동 기록, 질문 카드 답변, 세션 폴더의 파일 diff |
+| `/api/engineering/*` | 데스크톱 앱 전용. 앱의 토큰 헤더가 없으면 403 |
 
 컨텍스트 편집은 omp 가 실제로 지원하는 두 경로만 씁니다(rpc 에 메시지 삭제·수정·시스템 프롬프트 교체 명령이 없습니다): 작업 가이드 프롬프트/steer 와 `compact` + `customInstructions`. 기록 파일(.jsonl)은 직접 고쳐 쓰지 않습니다.
 
@@ -239,17 +277,18 @@ docs/                  archify 구조 다이어그램(architecture · components
 main 세션·로컬 카드의 코드 편집기는 기본 블록이 아닙니다. 카드의 `코드` 버튼 또는 블록 메뉴에서 명시적으로 열 수 있습니다(서브에이전트 카드에는 없음). 대화(chat)가 있는 카드에서는 대화 오른쪽에 나란히 놓이고(경계를 끌어 폭 비율 조절, 카드별 저장), 대화가 없는 로컬 카드에서는 전체 폭입니다. 왼쪽 액티비티 바(탐색기 접기/펼치기)·탐색기 사이드바(세션 cwd 기준 파일 트리: 폴더 펼침/접힘·지연 로드·경로 필터·새로고침·상위 폴더, 폭 조절)·상단 탭(미저장 ●, ×, 미리보기 탭은 이탤릭)·브레드크럼·Monaco 본문·파란 상태바(문제 수·저장 상태·줄/열·언어·LSP)로 이루어집니다. 파일 클릭은 미리보기 탭, 더블클릭은 고정 탭이고, 탐색기 우클릭 메뉴는 **경로 복사(절대경로)**·**이름 복사**·**터미널 cwd를 이 폴더로**를 줍니다. 카드마다 Monaco·탭·미저장 내용을 따로 가지며 재렌더·카드 이동·크기 조절에도 유지되고 카드를 닫으면 정리됩니다. Monaco Editor 를 jsDelivr CDN 에서 파일을 처음 열 때만 받으므로 npm 의존성은 없고, 오프라인이면 열리지 않습니다. 옛 저장 블록 구성의 `files` 는 `editor` 로 합쳐집니다.
 
 - `Ctrl+S`: 저장. 읽을 때 받은 `mtime` 과 현재가 다르면(다른 곳에서 수정) 409 로 알리고 덮어쓸지 묻습니다.
-- `F12`·`Ctrl+클릭`: 정의로 이동. Python 은 `pyright-langserver --stdio`(PATH 또는 `C:\Users\op383\AppData\Local\Programs\Python\Python39\Scripts\pyright-langserver.exe`)를 파일의 프로젝트 루트마다 하나 띄워 씁니다. 다른 파일의 정의면 그 파일을 탭으로 열고 위치로 이동합니다. JS/TS 는 Monaco 내장 TypeScript 서비스로 같은 파일의 정의로 이동합니다.
+- `F12`·`Ctrl+클릭`: 정의로 이동. Python 은 `pyright-langserver --stdio`(PATH, 환경변수 `OMP_PYRIGHT`, 또는 `%LOCALAPPDATA%\Programs\Python\Python39\Scripts\pyright-langserver.exe` 순서로 찾음)를 파일의 프로젝트 루트마다 하나 띄워 씁니다. 다른 파일의 정의면 그 파일을 탭으로 열고 위치로 이동합니다. JS/TS 는 Monaco 내장 TypeScript 서비스로 같은 파일의 정의로 이동합니다.
 - 진단: Python 은 입력이 멈춘 뒤 약 600ms 후 서버에 물어 빨간 밑줄을 긋고, JS/TS 문법 오류는 Monaco 가 스스로 표시합니다. 그 밖의 언어는 구문 강조만 합니다.
 - Python 언어 서버가 없으면 편집·저장은 그대로 되고 상단에 `Python 언어 서버 없음` 이 표시됩니다. 언어 서버 프로세스는 5분 유휴 시 스스로 종료합니다.
 
 ## 보안
 
-이 서버는 셸 명령 실행과 에이전트 프롬프트 전송을 그대로 받습니다. 방어는 세 가지입니다.
+이 서버는 셸 명령 실행과 에이전트 프롬프트 전송을 그대로 받습니다. 방어는 네 가지입니다.
 
 - `127.0.0.1`에만 바인드합니다. 다른 PC에서는 접속할 수 없습니다.
 - 모든 요청에서 `Host`가 `127.0.0.1:<포트>` 또는 `localhost:<포트>`인지 확인합니다(DNS rebinding 차단).
 - `/api/*`는 `Origin`·`Sec-Fetch-Site`가 같은 출처일 때만 받고, POST는 `Content-Type: application/json`만 받습니다. 브라우저에서 연 다른 사이트가 이 서버로 명령을 보낼 수 없습니다.
+- `/api/engineering/*`는 데스크톱 앱이 만든 토큰 헤더가 있어야 합니다. 웹 모드에서는 403입니다.
 
 이 PC에 로그인한 다른 프로그램은 막지 못합니다. 포트를 외부에 열거나 프록시 뒤에 두지 마세요.
 
@@ -257,13 +296,18 @@ DB 연결 프로필은 브라우저 `localStorage`(`omp-map-dbprofiles`)에 유�
 
 ## 검증
 
-V4 자동 검증은 [Windows CI #34](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45507478308)에서 40건 통과, 실패 0건을 기록했습니다. 테스트용 10개 세션에서 scan → SSE → DOM 반영 지연 P95는 29.4ms였습니다(허용 기준 1,000ms). 실제 에이전트 프로세스의 메모리 절감량 및 V4 설치 프로그램은 별도 검증 대상입니다.
+**로컬 회귀 테스트**: `node --test`는 2026-11-26에 Node 26.5(Windows)에서 모두 통과했습니다.
+
+**Windows CI**: `main`에 push하면 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다.
+
+V4 시점의 기록은 [Windows CI #34](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45507478308)의 40건 통과, 테스트용 10개 세션에서 scan → SSE → DOM 반영 지연 P95 29.4ms(허용 기준 1,000ms)입니다. 과거 측정값이며 현재 `main`의 결과가 아닙니다. 실제 에이전트 프로세스의 메모리 절감량과 설치 프로그램은 별도 검증 대상입니다.
 
 로컬에서는 다음 명령으로 회귀 테스트 및 서버 실행을 확인합니다.
 
 ```bash
 node --test
 node tests/verification/browser.cjs # Playwright 및 Monaco 테스트 의존성 설치 필요
+node tests/verification/engineering-desktop.cjs # Electron·Playwright 필요(CI 설치 방법은 워크플로의 "Prepare Electron and Chromium" 단계)
 ```
 
 추가 구문 검사:
@@ -274,4 +318,4 @@ wc -l server.js server/*.js ui/js/*.js ui/js/*/*.js | sort -rn | head   # 200줄
 node server.js --port 7806      # 운영 포트와 다른 포트로 띄워 화면에서 확인
 ```
 
-프롬프트 전송을 실제 비용 없이 확인하려면, JSON 줄을 출력하는 가짜 `omp.exe`를 PATH 맨 앞에 두고 테스트 서버를 띄웁니다.
+프롬프트 전송을 실제 비용 없이 확인하려면, JSON 줄을 출력하는 가짜 `omp.exe`를 PATH 맨 앞에 두고 테스트 서버를 띄웁니다. 테스트용 가짜 하네스는 `tests/fake-omp`, `tests/fake-claude`에 있습니다.
