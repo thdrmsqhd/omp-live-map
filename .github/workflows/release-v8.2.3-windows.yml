@@ -1,0 +1,96 @@
+name: OMP Live Map v8.2.3 Windows release
+
+on:
+  push:
+    branches: ['release/v8.2.3-windows']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omp-release-v8.2.3
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    permissions:
+      contents: write
+      actions: read
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: '1e00db7fa2ce011092aea782f512da1458c8d401'
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Build Windows installer
+        run: |
+          npm --prefix desktop pkg set version=8.2.3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop install --package-lock=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix desktop run build:windows -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OMP-Live-Map-8.2.3-Windows-x64
+          path: desktop/dist/OMP-Live-Map-V3-Setup.exe
+          if-no-files-found: error
+      - name: Install on hosted Windows and verify local assets
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
+          $setup = Join-Path $PWD 'desktop/dist/OMP-Live-Map-V3-Setup.exe'
+          $result = Start-Process -FilePath $setup -ArgumentList '/S',"/D=$target" -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
+          $env:OMP_MAP_INSTALLED_EXE = Join-Path $target 'OMP Live Map V3.exe'
+          if (!(Test-Path -LiteralPath $env:OMP_MAP_INSTALLED_EXE)) { throw 'Installed executable not found' }
+          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/verification/engineering-desktop.cjs
+      - name: Verify uninstall retains workspace data
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'omp-v3-install'
+          $data = Join-Path $env:APPDATA 'OMP Live Map V3'
+          $marker = Join-Path $data 'retention-test.txt'
+          New-Item -ItemType Directory -Path $data -Force | Out-Null
+          Set-Content -Path $marker -Value 'preserve'
+          $uninstall = Get-ChildItem -LiteralPath $target -Filter 'Uninstall*.exe' | Select-Object -First 1
+          if (!$uninstall) { throw 'Uninstaller not found' }
+          $result = Start-Process -FilePath $uninstall.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($result.ExitCode -ne 0 -or !(Test-Path -LiteralPath $marker)) { throw 'Uninstall retention check failed' }
+      - name: Publish verified installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'v8.2.3'
+          $sourceCommit = git rev-parse HEAD
+          $mainCommit = gh api "repos/$env:GITHUB_REPOSITORY/branches/main" --jq .commit.sha
+          if ($LASTEXITCODE -ne 0 -or $mainCommit -ne $sourceCommit) {
+            throw 'The verified commit is no longer the head of main'
+          }
+          $jobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/45753150630/jobs" | ConvertFrom-Json
+          $verification = ($jobs.jobs | Where-Object { $_.name -eq 'windows' }).conclusion
+          if ($LASTEXITCODE -ne 0 -or $verification -ne 'success') {
+            throw 'Windows verification on main has not passed'
+          }
+          $asset = 'OMP-Live-Map-8.2.3-Windows-x64-Setup.exe'
+          Copy-Item -LiteralPath 'desktop/dist/OMP-Live-Map-V3-Setup.exe' -Destination $asset
+          $checksum = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath SHA256SUMS.txt -Value "$checksum  $asset" -Encoding ascii
+          @'
+          ## 변경 사항
+          - 기본 구성을 최신 Claude 5.x 모델(Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5)로 다시 정의했습니다. **기본 하네스·루프 만들기**가 모델 4개, 에이전트 프로필 9개, 하네스 9개, 루프 6개를 만듭니다.
+          - 루프마다 전용 하네스가 붙습니다(기능 개발 Node·npm·Python, 버그 수정·집중, 리팩토링, 테스트 작성). 하네스에는 AGENTS.md 규칙과 스킬이 함께 들어 있습니다.
+          - 기본 Workflow 템플릿 8종을 단계별 하네스와 한국어 지시문으로 다시 설계했고, **기본 Workflow 8종 추가**로 프로젝트에 한 번에 만들 수 있습니다. 템플릿을 고르면 맞는 하네스·루프가 미리 선택됩니다.
+          - 루프·개발 Task·새 실행의 기본 예산을 100~300센트에서 6,000센트로 올렸습니다. 예산은 호출 전에 예약하는 상한이라 이전 기본값으로는 실제 에이전트 호출이 한 번도 되지 않았습니다.
+          - Engineering 모델 목록에 최신 모델을 추가했고 이전 모델로 저장한 정의는 계속 실행됩니다.
+          - 이미 만들어 둔 기본 정의는 바뀌지 않습니다. 새 구성은 새로 만들 때 적용됩니다.
+
+          Windows x64 설치 파일과 SHA-256 체크섬을 제공합니다. 설치 파일에는 코드 서명이 적용되어 있지 않습니다.
+          '@ | Set-Content -LiteralPath release-notes.md -Encoding utf8
+          gh release create $tag $asset SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $sourceCommit --title "OMP Live Map $tag" --latest --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
