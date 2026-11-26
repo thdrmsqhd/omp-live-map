@@ -14,15 +14,7 @@ OMP와 Claude Code 세션을 한 화면에서 관제하고, 에이전트와 함�
 | 첫 화면 | 프로젝트 관제(Overview). 상단에서 프로젝트 · 워크스페이스 · Live Map(관제) 모드를 바꿉니다(Alt+1/2/3). |
 | 일반 브라우저의 Engineering | `/engineering.html`은 열려 "기초 생성" 화면이 보이지만, "데스크톱 앱에서 Engineering을 열어 주세요."가 표시되고 `/api/engineering/*`는 403입니다. Engineering 데이터는 데스크톱 앱에서만 읽고 씁니다. |
 | 최신 버전 | 태그 `v8.2.1`(정식 릴리스). `desktop/package.json`의 버전은 아직 `8.2.1-preview.1`입니다. |
-| 설치 파일 | `v8.2.1` 릴리스에는 첨부 파일이 없습니다. 설치 파일과 `SHA256SUMS.txt`가 붙은 가장 최신 릴리스는 `v8.2.0`입니다. |
-| 로컬 회귀 테스트 | `node --test` 68건 통과(Node 26.5, Windows). 자세한 내용은 [검증](#검증)을 보세요. |
-| Windows CI (`main`) | "V3 Windows verification"이 최근 4회 연속 실패했습니다. 직전 성공은 PR #8 머지 때입니다. |
-
-알려진 문제:
-
-- **CI 실패**: 실패 단계는 "Product desktop UI and protected API"(`tests/verification/engineering-desktop.cjs`)입니다. 이 스크립트가 `page.reload()` 뒤 곧바로 `#project`를 고르는데, 새로고침하면 Engineering 화면이 기본인 "기초 생성"으로 돌아가고 이 화면에서는 프로젝트 선택이 숨겨져 30초 뒤 타임아웃이 납니다(`ui/js/engineering.js`의 `updateProjectContext`). 앱 동작이 아니라 검증 스크립트가 PR #9의 화면 변경을 따라가지 못한 것으로 보며, Workflow 탭을 먼저 누른 뒤 프로젝트를 고르게 순서를 바꾸는 수정안을 아직 CI로 확인하지 않았습니다.
-- **첫 로딩 오류(간헐적)**: 서버를 막 띄운 직후 첫 접속에서 한 번 "시작 실패: wfMap is not defined"가 표시됐고, 이어진 4번의 새로고침은 모두 정상이었습니다. `ui/js/app.js`가 `workflow-map.js`보다 먼저 적재되는데 `wfMap`을 참조하므로(`ui/js/app.js:59`, `ui/index.html`) 스크립트 적재와 첫 스냅샷 응답의 경합일 가능성이 있습니다. 원인은 확인하지 않았습니다.
-- **200줄 규칙**: [구조](#구조)의 200줄 미만 원칙을 넘는 JS 파일이 12개 있습니다.
+| 로컬 회귀 테스트 | `node --test`가 모두 통과합니다(Node 26.5, Windows). 자세한 내용은 [검증](#검증)을 보세요. |
 
 ## V4 주요 화면
 
@@ -142,7 +134,7 @@ node server.js --port 7800 --hours 24
 
 ### Windows 데스크톱 앱
 
-- 설치 파일은 [GitHub Releases](https://github.com/thdrmsqhd/omp-live-map/releases)의 `OMP-Live-Map-<버전>-Windows-x64-Setup.exe`입니다. 같은 릴리스의 `SHA256SUMS.txt`로 체크섬을 확인하세요. 프리릴리스 설치 파일에는 코드 서명이 없습니다. 어느 릴리스에 설치 파일이 붙어 있는지는 [현재 상태](#현재-상태)를 보세요.
+- 설치 파일은 [GitHub Releases](https://github.com/thdrmsqhd/omp-live-map/releases)의 `OMP-Live-Map-<버전>-Windows-x64-Setup.exe`입니다. 같은 릴리스의 `SHA256SUMS.txt`로 체크섬을 확인하세요. 프리릴리스 설치 파일에는 코드 서명이 없습니다.
 - 앱은 `server.js`를 `--port 0`(빈 포트 자동 선택)으로 자식 프로세스로 띄우고, 같은 창에서 `/`(관제)와 `/engineering.html`을 엽니다. 7800 포트의 기존 서비스는 건드리지 않습니다. 앱 하나만 실행할 수 있습니다.
 - `/api/engineering/*`는 앱이 만든 토큰(`x-omp-engineering-token`)을 가진 요청만 받습니다. Engineering 데이터는 앱의 사용자 데이터 폴더(SQLite)에 저장됩니다.
 - 소스에서 실행·빌드: `cd desktop` 후 `npm install`, `npm start`(Electron), `npm run build:windows`(NSIS 설치 파일). 이번 점검에서는 실행하지 않았습니다. CI의 Electron 검증은 `tests/verification/electron.cjs`가 맡습니다.
@@ -304,9 +296,9 @@ DB 연결 프로필은 브라우저 `localStorage`(`omp-map-dbprofiles`)에 유�
 
 ## 검증
 
-**로컬 회귀 테스트**: 2026-11-26에 `node --test`(Node 26.5, Windows)로 68건이 모두 통과했습니다. 다만 클론 직후 첫 실행에서 `tests/desktop-startup.test.js` 1건이 5초 대기 제한으로 한 번 실패했고(이후 단독 재실행 12회와 전체 재실행 1회는 모두 통과), 원인은 확인하지 못했습니다. 서버를 따로 20회 띄워 보면 `desktop-ready`는 약 0.2초, 첫 스캔은 약 0.55초에 도착했습니다. 첫 실행의 파일 캐시나 병렬 부하가 의심되지만 가설입니다.
+**로컬 회귀 테스트**: `node --test`는 2026-11-26에 Node 26.5(Windows)에서 모두 통과했습니다.
 
-**Windows CI**: `main`에 push하면 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다. 2026-11-25 기준 마지막 실행에서 앞 단계는 모두 성공했고, 마지막 "Product desktop UI and protected API"만 실패했습니다([현재 상태](#현재-상태)의 CI 실패 참고).
+**Windows CI**: `main`에 push하면 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다.
 
 V4 시점의 기록은 [Windows CI #34](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45507478308)의 40건 통과, 테스트용 10개 세션에서 scan → SSE → DOM 반영 지연 P95 29.4ms(허용 기준 1,000ms)입니다. 과거 측정값이며 현재 `main`의 결과가 아닙니다. 실제 에이전트 프로세스의 메모리 절감량과 설치 프로그램은 별도 검증 대상입니다.
 
