@@ -201,3 +201,8 @@
 .wf-legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 2px; vertical-align: middle; }
 #wf-map-live .wf-live-stream { max-height: 15em; overflow: auto; margin: 6px 0; font: 11.5px/1.5 var(--mono); color: #d8f0ff; background: #0f141b; border-color: #23415a; white-space: pre-wrap; }
 #wf-map-live .wf-tools { margin: 4px 0 0; }
+
+/* 실행 따라가기: 켜져 있으면 실행 중 단계 색으로 표시한다. */
+#wf-map-follow[aria-pressed="true"] { border-color: #7fb8ff; background: #20344d; color: #e6f1ff; }
+#wf-map-follow[aria-pressed="true"]::before { content: "● "; color: #7fb8ff; }
+#wf-map-follow:disabled { opacity: .55; }

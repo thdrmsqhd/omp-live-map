@@ -71,6 +71,54 @@ function wfFit() {
   animateView({ k, x: (width - box.w * k) / 2 - box.x * k, y: (stage.height - box.h * k) / 2 - box.y * k }, 170);
 }
 
+// ---- 실행 따라가기 --------------------------------------------------------------
+// 실행 중(없으면 승인 대기)인 단계를 읽을 수 있는 배율로 화면 가운데(상세 패널 왼쪽)에 둔다.
+// 켜 두면 다음 단계로 넘어갈 때 따라가고, 사용자가 화면을 움직이면(끌기·휠·확대 키) 멈춘다.
+const WF_READABLE = 0.9;
+function wfActiveNode(detail = wfMap.run) {
+  if (!detail || wfMap.edit) return null;
+  const order = new Map(detail.graph.nodes.map(({ id }, index) => [id, index]));
+  const pick = (status) => detail.nodes.filter((item) => item.status === status && order.has(item.node))
+    .sort((a, b) => order.get(a.node) - order.get(b.node))[0]?.node;
+  return pick("running") ?? pick("waiting_approval") ?? null;
+}
+function wfFocusNode(id, dur = 260) {
+  const node = wfNodes().find((item) => item.id === id);
+  if (!node) return false;
+  const point = wfPoint(node), w = wfWidth(node), h = wfHeight(node);
+  const stage = $("stage").getBoundingClientRect();
+  const width = Math.max(160, stage.width - $("workflow-inspector").offsetWidth - 30);
+  const k = Math.min(1.25, Math.max(WF_READABLE, view.k));
+  wfMap.followTarget = id;
+  animateView({ k, x: (width - w * k) / 2 - point.x * k, y: Math.max(24, (stage.height - h * k) / 2) - point.y * k }, dur);
+  return true;
+}
+function wfPaintFollow() {
+  const button = $("wf-map-follow");
+  const active = wfActiveNode();
+  button.hidden = !wfMap.run || Boolean(wfMap.edit);
+  button.disabled = !active;
+  button.setAttribute("aria-pressed", String(Boolean(wfMap.follow && active)));
+  button.title = !active ? "실행 중이거나 승인을 기다리는 단계가 없습니다."
+    : wfMap.follow ? "다음 단계로 넘어가면 화면이 따라갑니다. 화면을 움직이면 멈춥니다." : "누르면 실행 중인 단계로 이동하고 따라갑니다.";
+}
+function wfFollowActive(previous) {
+  const active = wfActiveNode();
+  if (!wfMap.follow || !active || mapMode !== "map") return;
+  if (active === wfMap.followTarget && active === previous) return;
+  // 따라가는 동안에는 상세 패널도 지금 단계를 보여 준다.
+  if (wfMap.selected === previous || wfMap.selected === wfMap.followTarget) {
+    wfMap.selected = active;
+    paintWorkflowMap();
+  }
+  wfFocusNode(active, 420);
+}
+function wfStopFollow() {
+  if (!wfMap.follow) return;
+  wfMap.follow = false;
+  wfPaintFollow();
+}
+
 // ---- 연결선 ------------------------------------------------------------------
 function wfEdgeState(from, to, port, executions) {
   const before = executions.get(from), after = executions.get(to);
@@ -323,6 +371,8 @@ function wfClose() {
   wfMap.generation++;
   wfMap.opening = false;
   wfMap.run = null;
+  wfMap.follow = false;
+  wfMap.followTarget = null;
   wfEdgeSignature = undefined;
   wfMap.selected = null;
   wfMap.buttons.clear();
@@ -362,9 +412,12 @@ function wfAccept(detail, initial, node) {
     wfMap.selected = target ?? detail.nodes.find(({ status }) => ["failed", "waiting_approval", "running", "interrupted"].includes(status))?.node ??
       detail.graph.nodes[0]?.id;
   }
+  const previous = wfActiveNode();
   wfMap.run = detail;
   void wfLoadDefinitions(detail.run.project);
   paintWorkflowMap();
+  if (!initial) wfFollowActive(previous);
+  wfPaintFollow();
 }
 
 async function openMapWorkflow(id, node) {
@@ -379,9 +432,21 @@ async function openMapWorkflow(id, node) {
     const detail = await mapWorkflowRequest("workflow-run", { id });
     if (token !== wfMap.generation) return false;
     wfMap.previousView ??= { ...view };
+    wfMap.follow = false;
+    wfMap.followTarget = null;
     wfAccept(detail, true, node);
     writeJSON("omp-workflow-map-run", id);
-    wfFit();
+    // 실행 중이거나 승인을 기다리는 단계가 있으면 그 단계를 읽을 수 있게 보여 주고 따라가기를 켠다.
+    const active = wfActiveNode();
+    if (active && !node) {
+      wfMap.follow = true;
+      wfMap.selected = active;
+      paintWorkflowMap();
+      // 방금 만든 노드의 높이를 재려면 한 프레임 뒤에 맞춘다.
+      requestAnimationFrame(() => { if (token === wfMap.generation) wfFocusNode(active, 200); });
+    } else if (active && node) wfFocusNode(node, 200);
+    else wfFit();
+    wfPaintFollow();
     return true;
   } catch (error) {
     if (token === wfMap.generation) $("wf-map-status").textContent = error.message;
@@ -404,7 +469,34 @@ async function refreshMapWorkflow() {
 }
 
 $("wf-map-close").onclick = wfClose;
-$("wf-map-fit").onclick = wfFit;
+$("wf-map-fit").onclick = () => { wfStopFollow(); wfFit(); };
+$("wf-map-follow").onclick = () => {
+  wfMap.follow = !wfMap.follow;
+  const active = wfActiveNode();
+  if (wfMap.follow && active) {
+    wfMap.selected = active;
+    paintWorkflowMap();
+    wfFocusNode(active);
+  }
+  wfPaintFollow();
+};
+// 사용자가 화면을 움직이면 자동 이동을 멈춘다. 노드를 누르기만 한 것은 움직임으로 치지 않는다.
+{
+  const stage = $("stage");
+  let press = null;
+  const outside = (event) => !event.target.closest?.("[data-workflow-controls], dialog");
+  stage.addEventListener("wheel", (event) => { if (wfMap.follow && mapMode === "map" && outside(event)) wfStopFollow(); }, { passive: true, capture: true });
+  stage.addEventListener("pointerdown", (event) => { press = wfMap.follow && outside(event) ? { x: view.x, y: view.y, k: view.k } : null; }, true);
+  addEventListener("pointerup", () => {
+    if (press && (Math.abs(view.x - press.x) > 2 || Math.abs(view.y - press.y) > 2 || view.k !== press.k)) wfStopFollow();
+    press = null;
+  }, true);
+  addEventListener("keydown", (event) => {
+    if (!wfMap.follow || mapMode !== "map" || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (/input|textarea|select/i.test(event.target?.tagName ?? "") || event.target?.isContentEditable) return;
+    if (["+", "=", "-", "_", "0", "1"].includes(event.key)) wfStopFollow();
+  }, true);
+}
 $("wf-map-new").onclick = () => {
   if (wfMap.run && !wfMap.opening && (!wfMap.edit || wfLeaveEditing())) void openMapWorkflowLaunch(wfMap.run.run.project, wfMap.run.run.workflow);
 };
