@@ -10,7 +10,8 @@ function bindMapWorkflowLaunch() {
   const status = $("workflow-launch-status"), source = form.elements.source, project = form.elements.project;
   const submit = form.querySelector("button[type=submit]");
   const settings = $("workflow-launch-settings");
-  const roles = ["author", "reviewer", "loop"];
+  const roles = ["author", "reviewer", "triage", "loop"];
+  const optional = new Set(["triage"]); // 고르지 않으면 설계·문서 하네스가 대신한다.
   let definitions = [], presets = [], saved = [], generation = 0, pending = false, requestKey;
   const option = ({ id, name, version }) => new Option(name + (version ? " · v" + version : ""), id);
   function usePreset() { return presets.find(({ id }) => source.value === "preset:" + id); }
@@ -22,15 +23,19 @@ function bindMapWorkflowLaunch() {
       const previous = control.value;
       const visible = Boolean(preset?.[role]);
       control.disabled = !visible;
-      control.required = visible;
+      control.required = visible && !optional.has(role);
       control.closest("label").hidden = !visible;
       const choices = definitions.filter(({ kind, id }) => kind === (role === "loop" ? "loop" : "harness") &&
         !(role === "reviewer" && preset?.author && id === (form.elements.author.value || selectedAuthor)));
       control.replaceChildren(new Option("선택해 주세요", ""), ...choices.map((entry) => option({ ...entry, name: engineeringDefinitionLabel(entry) })));
-      if (choices.some(({ id }) => id === previous)) control.value = previous;
-      else if (choices.length === 1) control.value = choices[0].id;
+      const suggested = choices.find(({ name }) => name === preset?.suggest?.[role])?.id;
+      const manual = previous && previous !== control.dataset.auto && choices.some(({ id }) => id === previous);
+      if (manual) control.value = previous;
+      else if (suggested) control.value = suggested;
+      else if (choices.length === 1 && !optional.has(role)) control.value = choices[0].id;
+      control.dataset.auto = !manual && control.value ? control.value : "";
     }
-    const missing = roles.filter((role) => preset?.[role] && !form.elements[role].value);
+    const missing = roles.filter((role) => !optional.has(role) && preset?.[role] && !form.elements[role].value);
     if (missing.length) {
       settings.open = true;
       status.textContent = "실행 설정에서 필요한 하네스와 Loop를 선택해 주세요. 목록에는 개인, 이 프로젝트의 팀, 이 프로젝트에 저장된 하네스가 표시됩니다.";
@@ -104,7 +109,7 @@ function bindMapWorkflowLaunch() {
     const preset = usePreset();
     if (preset) {
       input.preset = preset.id;
-      input.refs = Object.fromEntries(roles.filter((role) => preset[role]).map((role) => {
+      input.refs = Object.fromEntries(roles.filter((role) => preset[role] && fields.get(role)).map((role) => {
         const item = definitions.find(({ id }) => id === fields.get(role));
         return [role, { id: item.id, version: item.version }];
       }));

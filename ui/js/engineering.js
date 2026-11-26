@@ -307,11 +307,11 @@ find("setup-new-loop").onclick = showDefinitions("loop", true, "personal");
 updateStarter();
 starter.onclick = report(async () => {
   creatingDefaults = true;
-  updateStarter("기본 하네스와 루프를 만드는 중입니다.");
+  updateStarter("기본 프로필, 하네스, 루프를 만드는 중입니다.");
   let result;
   try {
     await addWorkflowDefaults();
-    result = "개인 기본 구성이 준비됐습니다. 하네스와 루프에서 확인할 수 있습니다.";
+    result = "개인 기본 구성이 준비됐습니다. 프로필, 하네스, 루프에서 확인할 수 있습니다.";
   } finally {
     creatingDefaults = false;
     updateStarter(result);

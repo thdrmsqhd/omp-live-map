@@ -21,7 +21,7 @@ export function bindDefinitionEditor({ find, request, report, options, definitio
   function defaultPayload() {
     const model = entries().find((entry) => entry.kind === "model");
     const harness = availableHarnesses()[0];
-    if (kind.value === "model") return { name: "Claude Sonnet 4.6", provider: "anthropic", model: "claude-sonnet-4-6", reasoning: "" };
+    if (kind.value === "model") return { name: "Claude Sonnet 5.5", provider: "anthropic", model: "claude-sonnet-5-5", reasoning: "" };
     if (kind.value === "harness") return { name: "Claude Code", adapter: "claude", model: model?.id ?? "", role: "개발", instructions: "", assets: { agents: "", skills: [], mcp: {}, hooks: {} } };
     return { name: "", harness: harness?.id ?? "", attempts: 3, timeoutMs: 600000, budgetCents: 300,
       checks: [{ command: "node", args: ["--test"], code: 0 }] };

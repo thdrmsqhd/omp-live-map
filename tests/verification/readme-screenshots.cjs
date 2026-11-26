@@ -216,38 +216,53 @@ async function captureEngineering() {
     await page.locator("#setup-nav").click();
     await step("프로필", async () => {
       await page.locator("#session-harnesses-nav").click();
-      await sleep(1200);
+      await sleep(1500);
+      await page.locator("#session-harness-list").selectOption({ label: "기본 · 심층 디버깅 · v1" });
+      await sleep(1000);
+      await shot(page, "11-engineering-profile.png");
     });
     await step("하네스", async () => {
       await page.locator("#design-nav").click();
       await sleep(1500);
       await page.locator("#definition option").first().waitFor({ state: "attached", timeout: 8000 });
-      await page.locator("#definition").selectOption({ label: "기본 · 개발" }).catch(() => {});
+      await page.locator("#definition").selectOption({ label: "기본 · Node 개발" }).catch(() => {});
       await sleep(1200);
       await page.evaluate(() => window.scrollTo(0, 0));
       await shot(page, "12-engineering-harness.png");
     });
+    await step("루프", async () => {
+      await page.locator("#loop-nav").click();
+      await sleep(1500);
+      await page.locator("#definition").selectOption({ label: "기능 개발 · Node" }).catch(() => {});
+      await sleep(1200);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await shot(page, "17-engineering-loop.png");
+    });
+    const optionValue = (selector, text) => page.locator(selector + " option").filter({ hasText: text }).first().getAttribute("value");
     await step("Workflow 캔버스", async () => {
       await page.locator("#project").selectOption({ label: "modbus-gateway" }).catch(() => {});
       await click("Workflow");
       await page.getByText("기본 제공 Workflow", { exact: true }).click();
       const preset = page.locator("#workflow-preset-form");
-      await preset.locator("[name=preset]").selectOption("bugfix");
-      await preset.locator("[name=name]").fill("Modbus 버그 수정");
-      await preset.locator("[name=create]").click();
-      await page.locator("#workflow-list option").filter({ hasText: "Modbus 버그 수정" }).waitFor({ state: "attached" });
+      for (const [id, role] of [["bugfix", "loop"], ["tests", "loop"], ["incident", "triage"]]) {
+        await preset.locator("[name=preset]").selectOption(id);
+        console.log(`preset ${id} → ${role}:`, (await preset.locator(`[name=${role}] option:checked`).textContent()).trim());
+      }
+      await page.locator("#workflow-preset-all").click();
+      await page.locator("#workflow-list option").filter({ hasText: "버그 수정" }).waitFor({ state: "attached" });
+      console.log("기본 Workflow 개수:", (await page.locator("#workflow-list option").count()) - 1);
+      await page.locator("#workflow-list").selectOption(await optionValue("#workflow-list", "버그 수정"));
       await page.getByText("기본 제공 Workflow", { exact: true }).click().catch(() => {});
       await sleep(1200);
       await page.locator("#workflow-fit").click().catch(() => {});
       await sleep(800);
       await shot(page, "13-engineering-workflow.png");
-    });
-    await step("개발 Task", async () => {
+    });    await step("개발 Task", async () => {
       await click("개발 Task");
       const task = page.locator("#sdlc-form");
       await task.getByLabel("업무 제목").fill("Modbus 재접속 오류 수정");
       await task.getByLabel("요구사항").fill("PLC 연결이 끊긴 뒤 5초 안에 자동으로 다시 접속한다. 재현 테스트를 포함한다.");
-      await task.getByLabel("Workflow 버전").selectOption({ index: 1 });
+      await task.getByLabel("Workflow 버전").selectOption(await optionValue("#sdlc-form [name=workflow]", "버그 수정"));
       await task.getByRole("button", { name: "Task 저장" }).click();
       await page.locator("#sdlc-board article").filter({ hasText: "Modbus 재접속 오류 수정" }).waitFor();
       await page.locator("#sdlc-board article").filter({ hasText: "Modbus 재접속 오류 수정" }).getByRole("button", { name: "준비로 이동" }).click().catch(() => {});
@@ -279,6 +294,16 @@ async function captureEngineering() {
       await page.getByText("Modbus 재접속 수정 · 계획 승인").first().click();
       await sleep(3500);
       await shot(page, "16-live-map-workflow.png");
+      await page.getByRole("button", { name: "닫기" }).first().click().catch(() => {});
+      await page.locator("#workflow-new-run").click();
+      const launch = page.locator("#workflow-launch-form");
+      await launch.locator("[name=project]").selectOption({ label: "modbus-gateway" }).catch(() => {});
+      await sleep(1500);
+      for (const preset of ["bugfix", "incident"]) {
+        await launch.locator("[name=source]").selectOption("preset:" + preset);
+        const pick = async (role) => (await launch.locator(`[name=${role}] option:checked`).textContent()).trim();
+        console.log(`새 실행 ${preset}:`, await pick("author"), "|", await pick("loop").catch(() => "-"), "|", await pick("triage").catch(() => "-"));
+      }
     });
   } finally {
     await browser.close().catch(() => {});

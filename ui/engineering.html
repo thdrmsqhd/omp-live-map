@@ -76,7 +76,7 @@
       </div>
       <div class="setup-starter">
         <h3>개인 기본 구성</h3>
-        <p>설계·리뷰·개발 하네스와 테스트 루프를 한 번에 만들어 내 작업에서 재사용합니다.</p>
+        <p>에이전트 프로필, 설계·리뷰·개발 하네스, 테스트 루프를 한 번에 만들어 내 작업에서 재사용합니다.</p>
         <div class="workflow-controls">
           <button id="setup-defaults" class="workflow-primary" type="button" disabled>기본 하네스·루프 만들기</button>
         </div>
@@ -233,8 +233,10 @@
             <label>저장할 이름 <input name="name" maxlength="240"></label>
             <label>설계 / 문서 하네스 <select name="author"></select></label>
             <label>리뷰 하네스 <select name="reviewer"></select></label>
+            <label>점검 하네스 <select name="triage"></select></label>
             <label>개발 Loop <select name="loop"></select></label>
             <button id="workflow-preset-defaults" type="button" disabled>기본 하네스·Loop 추가</button>
+            <button id="workflow-preset-all" type="button" disabled>기본 Workflow 8종 추가</button>
             <button name="create" disabled>템플릿으로 생성</button>
           </form>
           <p id="workflow-preset-hint" role="status"></p>
@@ -353,7 +355,7 @@
           <label>실행 제목 <input name="title" maxlength="240" required></label>
           <div class="workflow-controls">
             <label>최대 시간(분) <input name="minutes" type="number" min="1" max="60" value="20" required></label>
-            <label>예산(센트) <input name="budget" type="number" min="0" max="100000" value="300" required></label>
+            <label>예산(센트) <input name="budget" type="number" min="0" max="100000" value="6000" required></label>
           </div>
           <button class="workflow-primary">저장된 버전 실행</button>
         </form>
@@ -410,7 +412,7 @@
       </form>
       <div class="workflow-controls">
         <label>실행 시간 한도(분) <input id="sdlc-minutes" type="number" min="1" max="60" value="20"></label>
-        <label>실행 예산(센트) <input id="sdlc-budget" type="number" min="0" max="100000" value="300"></label>
+        <label>실행 예산(센트) <input id="sdlc-budget" type="number" min="0" max="100000" value="6000"></label>
       </div>
       <div id="sdlc-board" aria-label="개발 Task 칸반"></div>
       <section><h3>승인 대기함</h3><ul id="sdlc-inbox"></ul></section>
