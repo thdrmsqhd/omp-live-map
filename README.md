@@ -110,20 +110,14 @@ node server.js --port 7800 --hours 24
 ## 어떻게 동작하나
 
 ```mermaid
-flowchart TB
-  subgraph observe["관제 (웹 모드와 앱 공통)"]
-    direction LR
-    R["세션 기록 (읽기 전용 JSONL)<br/>~/.omp · ~/.claude"] --> S["Node 서버<br/>증분 읽기 → 스냅샷"]
-    X["omp 확장<br/>터미널 세션 실시간 이벤트"] --> S
-    S -- "SSE · REST" --> U["브라우저 UI<br/>관제 · 워크스페이스 · Live Map"]
-  end
-  subgraph engineering["Engineering (데스크톱 앱)"]
-    direction LR
-    D["Electron 앱"] -- "토큰 인증 IPC" --> E["Workflow 엔진<br/>SQLite"]
-    E --> C["Docker 컨테이너<br/>omp · Claude Code · 검증 명령"]
-    E --> G["GitHub PR · CI"]
-  end
-  D -. "자식 프로세스로 실행" .-> S
+flowchart LR
+  R["세션 기록<br/>JSONL, 읽기 전용"] --> S["Node 서버"]
+  X["omp 확장<br/>터미널 세션"] --> S
+  D["Electron 앱"] --> S
+  S --> U["브라우저 UI<br/>관제 · Live Map"]
+  D --> E["Engineering<br/>Workflow · SQLite"]
+  E --> C["Docker 컨테이너<br/>omp · Claude Code"]
+  E --> G["GitHub PR · CI"]
 ```
 
 - 세션 상태의 원본은 JSONL 하나입니다. 서버를 다시 띄우면 기록에서 그대로 복원합니다([ADR-0002](docs/adr/0002-jsonl-single-source-no-server-state.md)).
