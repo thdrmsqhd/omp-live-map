@@ -6,6 +6,8 @@ import { loadModelOptions } from "./engineering-model-options.js";
 import {
   h, KIND_LABELS, STEP_TYPES, STEP_HINTS, SCOPE_LABELS, HARNESS_TEMPLATES, HARNESS_CATALOG,
   socketsOf, widgetsOf, problemsOf, blankPayload, blankStep, harnessTypeOf,
+  harnessContractDetails, isEvaluationHarness, isEvaluationRole, evaluationFlowBlock, socketDragAllowed,
+  EXTERNAL_LANE_X, EXTERNAL_LANE_LABEL,
 } from "./studio-nodes.js";
 
 const COLUMN = { model: 0, harness: 400, loop: 800, profile: 800 };
@@ -127,6 +129,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   }
   // 연결 가능 여부. 문제가 있으면 이유를 돌려준다.
   function linkProblem(source, target, slot) {
+    const blocked = evaluationFlowBlock(source, target, slot);
+    if (blocked) return blocked;
     if (!source || !target || source === target) return "서로 다른 노드를 연결하세요.";
     if (slot === "flow") {
       if (source.kind !== "step" || target.kind !== "step") return "실행 순서는 Workflow 단계끼리 연결합니다.";
@@ -195,7 +199,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const draft = payload ? structuredClone(payload) : blankPayload(kind, catalog, template);
     draft.name = uniqueName(kind, draft.name.slice(0, 236), owner);
     const ref = kind === "harness" ? { model: "" } : kind === "loop" ? { harness: "" } : {};
-    const node = { key: "new:" + crypto.randomUUID(), kind, isNew: true, owner, draft, ref, x: at?.x, y: at?.y };
+    const node = { key: "new:" + crypto.randomUUID(), kind, isNew: true, owner, draft, ref,
+      x: kind === "harness" && isEvaluationRole(draft.role) ? EXTERNAL_LANE_X : at?.x, y: at?.y };
     if (payload && kind === "harness") ref.model = payload.model ? "def:" + payload.model : "";
     if (payload && kind === "loop") ref.harness = payload.harness ? "def:" + payload.harness : "";
     node.initial = "";
@@ -455,10 +460,21 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const scope = node.kind === "profile" ? "" : (owner.scope === "team" ? "팀 " + owner.team : SCOPE_LABELS[owner.scope]) + " · ";
     return kind + " · " + scope + "v" + node.record.version;
   }
-  function socket(node, direction, { slot, type, label }) {
-    return h("span", { class: "studio-socket", title: `${label} ${direction === "in" ? "입력" : "출력"} · 끌어서 연결`,
-      dataset: { dir: direction, slot, type, key: node.key },
-      onpointerdown: (event) => startLink(event, node, direction, slot, type) });
+  function socket(node, direction, spec) {
+    const { slot, type, label } = spec;
+    const locked = !socketDragAllowed(node, direction, spec);
+    return h("span", { class: locked ? "studio-socket is-definition" : "studio-socket",
+      title: locked ? "정의 연결 전용 · 실행 흐름으로 끌 수 없습니다" : `${label} ${direction === "in" ? "입력" : "출력"} · 끌어서 연결`,
+      dataset: { dir: direction, slot, type, key: node.key, execution: locked ? "0" : "1" },
+      onpointerdown: (event) => {
+        if (locked) {
+          event.preventDefault();
+          event.stopPropagation();
+          say("평가 하네스는 실행 흐름 밖에 있습니다. 이 출력은 Workflow 단계로 끌 수 없습니다.", "error");
+          return;
+        }
+        startLink(event, node, direction, slot, type);
+      } });
   }
   function refOptions(node, slot) {
     return libraryNodes().filter((candidate) => candidate.kind === slot && !linkProblem(candidate, node, slot))
@@ -485,6 +501,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   function card(node) {
     const { inputs, outputs } = socketsOf(node);
     const type = node.kind === "step" ? node.data.type : node.kind;
+    const external = isEvaluationHarness(node);
     const title = h("strong", { class: "studio-title" }, nameOf(node));
     const head = h("header", { class: "studio-head", title: node.kind === "step" ? STEP_HINTS[type] ?? "" : "" },
       h("button", { type: "button", class: "studio-collapse", "aria-label": node.collapsed ? "펼치기" : "접기",
@@ -498,12 +515,16 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       h("div", { class: "studio-inputs" }, ...inputs.map((input) => inputRow(node, input))),
       h("div", { class: "studio-outputs" }, ...outputs.map((output) => h("div", { class: "studio-out", dataset: { type: output.type } },
         h("span", { class: "studio-slot" }, output.label), socket(node, "out", output)))));
+    const contract = node.kind === "harness" ? harnessContractDetails(node.draft.role, { visible: true }) : null;
+    const banner = external ? h("p", { class: "studio-external-label" }, EXTERNAL_LANE_LABEL) : null;
     const body = h("div", { class: "studio-body" }, ...widgetsOf(node, ctx));
     const problems = h("ul", { class: "studio-problems" });
     const foot = node.kind === "step" ? null : h("footer", { class: "studio-foot" },
       h("button", { type: "button", class: "studio-save", disabled: !isDirty(node), onclick: guard(() => saveNode(node)) }, node.isNew ? "저장" : "새 버전 저장"),
       node.isNew ? null : h("button", { type: "button", class: "studio-mini", hidden: !isDirty(node), onclick: () => revert(node) }, "되돌리기"));
-    const root = h("article", { class: "studio-node", dataset: { key: node.key, kind: node.kind, type }, tabIndex: -1 }, head, io, body, problems, foot);
+    const root = h("article", { class: external ? "studio-node is-external" : "studio-node",
+      dataset: { key: node.key, kind: node.kind, type, ...(external ? { external: "1" } : {}) }, tabIndex: -1 },
+      head, banner, io, contract, body, problems, foot);
     root.classList.toggle("is-collapsed", Boolean(node.collapsed));
     root.classList.toggle("is-selected", selected === node.key);
     root.addEventListener("pointerdown", (event) => {
@@ -550,6 +571,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   }
   function render() {
     resize.disconnect();
+    for (const node of nodes.values()) if (isEvaluationHarness(node) && node.x !== undefined) node.x = EXTERNAL_LANE_X;
     const visible = visibleNodes().sort((a, b) => (a.kind === "step") - (b.kind === "step"));
     for (const node of nodes.values()) node.el = null;
     layer.replaceChildren(...visible.map(card));
@@ -567,9 +589,10 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       const users = [...nodes.values()].filter((other) => other.el && other.y !== undefined && Object.values(other.ref).includes(node.key));
       return users.length ? Math.min(...users.map(({ y }) => y)) : Infinity;
     };
+    const external = list.filter((node) => isEvaluationHarness(node));
     const grid = list.filter((node) => node.kind === "profile" && !linkedProfile(node));
     for (const kinds of [["loop", "profile"], ["harness"], ["model"]]) {
-      const column = list.filter((node) => kinds.includes(node.kind) && !grid.includes(node));
+      const column = list.filter((node) => kinds.includes(node.kind) && !grid.includes(node) && !external.includes(node));
       if (!column.length) continue;
       for (const node of column) node.anchor = anchor(node);
       column.sort((a, b) => a.anchor - b.anchor || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || nameOf(a).localeCompare(nameOf(b), "ko"));
@@ -585,6 +608,25 @@ export function bindStudio({ find, request, report, currentProject, changed: not
           if (y < other.y + other.el.offsetHeight + GAP && y + height + GAP > other.y) y = other.y + other.el.offsetHeight + GAP;
         }
         node.x = COLUMN[node.kind];
+        node.y = y;
+        bottom = y + height;
+        place(node);
+        remember(node);
+      }
+    }
+    if (external.length) {
+      for (const node of external) node.anchor = anchor(node);
+      external.sort((a, b) => a.anchor - b.anchor || nameOf(a).localeCompare(nameOf(b), "ko"));
+      const fixed = [...nodes.values()].filter((other) => other.el && other.kind !== "step" && !pending.has(other) &&
+        other.x !== undefined && Math.abs(other.x - EXTERNAL_LANE_X) < 200);
+      let bottom = -GAP;
+      for (const node of external) {
+        let y = Math.max(bottom + GAP, Number.isFinite(node.anchor) ? node.anchor : 0);
+        const height = node.el.offsetHeight;
+        for (const other of fixed.sort((a, b) => a.y - b.y)) {
+          if (y < other.y + other.el.offsetHeight + GAP && y + height + GAP > other.y) y = other.y + other.el.offsetHeight + GAP;
+        }
+        node.x = EXTERNAL_LANE_X;
         node.y = y;
         bottom = y + height;
         place(node);
@@ -692,7 +734,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const origin = canvas.point(event.clientX, event.clientY), start = { x: node.x, y: node.y };
     const move = (moveEvent) => {
       const point = canvas.point(moveEvent.clientX, moveEvent.clientY);
-      node.x = Math.max(node.kind === "step" ? WORKFLOW_X : -4000, Math.round(start.x + point.x - origin.x));
+      node.x = isEvaluationHarness(node) ? EXTERNAL_LANE_X
+        : Math.max(node.kind === "step" ? WORKFLOW_X : -4000, Math.round(start.x + point.x - origin.x));
       node.y = Math.max(node.kind === "step" ? 0 : -4000, Math.round(start.y + point.y - origin.y));
       place(node);
       scheduleDraw();
@@ -725,6 +768,9 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     link = { origin, point: canvas.point(event.clientX, event.clientY), startX: event.clientX, startY: event.clientY };
     viewport.classList.add("is-linking");
     viewport.dataset.linking = type;
+    if (isEvaluationHarness(nodes.get(origin.key)) && origin.dir === "out") viewport.dataset.linkOrigin = "evaluation";
+    else if (node.kind === "step" && type === "harness") viewport.dataset.linkOrigin = "step";
+    else delete viewport.dataset.linkOrigin;
     const move = (moveEvent) => { link.point = canvas.point(moveEvent.clientX, moveEvent.clientY); scheduleDraw(); };
     const up = (upEvent) => {
       const still = Math.abs(upEvent.clientX - link.startX) < 4 && Math.abs(upEvent.clientY - link.startY) < 4;
@@ -750,6 +796,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     link = null;
     viewport.classList.remove("is-linking");
     delete viewport.dataset.linking;
+    delete viewport.dataset.linkOrigin;
     scheduleDraw();
   }
   function finishLink(event) {
@@ -795,7 +842,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     for (const family of HARNESS_CATALOG.families) {
       for (const type of HARNESS_CATALOG.types.filter((type) => type.family === family.id)) {
         items.push({ group: family.label, label: type.label, hint: type.output, search: `새 하네스 ${type.id} ${type.outputSchema}`,
-          out: "harness", in: ["model"], create: (at) => createLibrary("harness", at, { template: type.id, owner: libraryOwner() }) });
+          out: "harness", in: ["model"], evaluation: type.id === "evaluation",
+          create: (at) => createLibrary("harness", at, { template: type.id, owner: libraryOwner() }) });
       }
     }
     if (wf) {
@@ -810,14 +858,32 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       const type = node.kind === "harness" ? harnessTypeOf(node.draft.role) : null;
       items.push({ group: "저장된 정의 불러오기", label: labelOf(node), hint: (type?.label ?? KIND_LABELS[node.kind]) + " · v" + (node.record?.version ?? "-"),
         search: type ? `${type.id} ${type.outputSchema}` : "", out: node.kind, in: Object.keys(node.ref),
-        create: (at) => { pinned.add(node.key); node.x = at.x; node.y = at.y; remember(node); saveLayout(); return node; } });
+        evaluation: isEvaluationHarness(node),
+        create: (at) => {
+          pinned.add(node.key);
+          node.x = isEvaluationHarness(node) ? EXTERNAL_LANE_X : at.x;
+          node.y = at.y;
+          remember(node);
+          saveLayout();
+          return node;
+        } });
     }
     if (!origin) {
       if (desktop()) items.push({ group: "빠른 시작", label: "기본 구성 추가", hint: "기본 모델·하네스·루프·프로필을 개인 범위에 추가", out: null, in: [],
         create: () => { void addDefaults(); return null; } });
       return items;
     }
-    return items.filter((item) => origin.dir === "out" ? item.in.includes(origin.type) : item.out === origin.type);
+    const originNode = nodes.get(origin.key);
+    const externalOut = origin.dir === "out" && isEvaluationHarness(originNode);
+    const stepHarnessIn = origin.dir === "in" && origin.type === "harness" && originNode?.kind === "step";
+    return items.filter((item) => {
+      if (origin.dir === "out") {
+        if (externalOut && item.group === "Workflow 단계") return false;
+        return item.in.includes(origin.type);
+      }
+      if (stepHarnessIn && item.evaluation) return false;
+      return item.out === origin.type;
+    });
   }
   let menuState = null;
   function openMenu(clientX, clientY, origin) {
@@ -1098,6 +1164,23 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     el("lanes").hidden = !wf;
     el("lane-workflow").style.left = WORKFLOW_X + "px";
     el("lane-line").style.left = (WORKFLOW_X - 50) + "px";
+    paintExternalLane();
+  }
+  function paintExternalLane() {
+    const host = el("surface");
+    let lane = host.querySelector(":scope > .studio-lane-external");
+    let line = host.querySelector(":scope > .studio-lane-external-line");
+    if (!lane) {
+      lane = h("div", { class: "studio-lane studio-lane-external" }, EXTERNAL_LANE_LABEL,
+        h("small", {}, "Workflow 단계로 들어가지 않습니다"));
+      line = h("div", { class: "studio-lane-line studio-lane-external-line" });
+      host.prepend(line, lane);
+    }
+    const shown = visibleNodes().some(isEvaluationHarness);
+    lane.hidden = !shown;
+    line.hidden = !shown;
+    lane.style.left = EXTERNAL_LANE_X + "px";
+    line.style.left = (EXTERNAL_LANE_X + 340) + "px";
   }
   function fillWorkflowPicker(chosen) {
     workflowPicker.replaceChildren(h("option", { value: "" }, project ? "Workflow 열지 않음 · 정의만 보기" : "프로젝트를 고르면 Workflow를 열 수 있습니다"),

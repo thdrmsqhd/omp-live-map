@@ -47,20 +47,49 @@ const CONTRACT_FIELDS = [["input", "입력"], ["output", "산출물"], ["criteri
 export function harnessTypeOf(role) {
   return HARNESS_CATALOG.types.find(({ label }) => role === label || role?.startsWith(label + ROLE_SEPARATOR));
 }
+// 평가 하네스는 유형 id가 evaluation 이고, 역할 이름은 '평가 하네스'로 시작한다. 실행 흐름 밖에 둔다.
+export const EXTERNAL_LANE_X = -480;
+export const EXTERNAL_LANE_LABEL = "독립 평가 · 실행 흐름 밖";
+export function isEvaluationRole(role) {
+  const type = harnessTypeOf(role);
+  return type?.id === "evaluation" || (typeof role === "string" && role.startsWith("평가 하네스"));
+}
+export function isEvaluationHarness(node) {
+  return node?.kind === "harness" && isEvaluationRole(node.draft?.role ?? node.role);
+}
+// 평가 하네스를 Workflow 단계에 넣으면 실행 흐름이 된다. 루프 같은 정의 연결은 막지 않는다.
+export function evaluationFlowBlock(source, target, slot) {
+  if (target?.kind === "step" && (slot === "harness" || slot === "flow") && isEvaluationHarness(source)) {
+    return "평가 하네스는 실행 흐름 밖에 있어 Workflow 단계에 연결할 수 없습니다.";
+  }
+  return "";
+}
+export function socketDragAllowed(node, direction, spec) {
+  return !(isEvaluationHarness(node) && direction === "out" && spec?.execution === false);
+}
 function customRoleOf(role, type = harnessTypeOf(role)) {
   return type ? role.slice(type.label.length + ROLE_SEPARATOR.length) : role ?? "";
 }
 function typedRole(type, role) {
   return type ? [type.label, role.trim()].filter(Boolean).join(ROLE_SEPARATOR) : role || "개발";
 }
-export function harnessContractDetails(role, { open = false } = {}) {
+function contractBody(type) {
+  const family = HARNESS_CATALOG.families.find(({ id }) => id === type.family);
+  return [
+    family ? h("p", { class: "studio-note" }, family.label) : null,
+    h("dl", { class: "studio-contract-list" }, ...CONTRACT_FIELDS.flatMap(([key, label]) => [h("dt", {}, label),
+      h("dd", {}, key === "outputSchema" ? h("code", {}, type[key]) : type[key])])),
+  ];
+}
+export function harnessContractDetails(role, { open = false, visible = false } = {}) {
   const type = harnessTypeOf(role);
   if (!type) return null;
-  const family = HARNESS_CATALOG.families.find(({ id }) => id === type.family);
-  return details(type.label + " · 유형 계약", open,
-    h("p", { class: "studio-note" }, family.label),
-    h("dl", {}, ...CONTRACT_FIELDS.flatMap(([key, label]) => [h("dt", {}, label),
-      h("dd", {}, key === "outputSchema" ? h("code", {}, type[key]) : type[key])])));
+  const title = type.label + " · 유형 계약";
+  if (visible) {
+    return h("section", { class: "studio-contract", "aria-label": title },
+      h("strong", { class: "studio-contract-title" }, title), ...contractBody(type));
+  }
+  return details(title, open, ...contractBody(type));
 }
 
 const lines = (value) => value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -69,7 +98,12 @@ const lines = (value) => value.split(/\r?\n/).map((line) => line.trim()).filter(
 export function socketsOf(node) {
   if (node.kind === "model") return { inputs: [], outputs: [{ slot: "model", type: "model", label: "모델" }] };
   if (node.kind === "harness") {
-    return { inputs: [{ slot: "model", type: "model", label: "모델" }], outputs: [{ slot: "harness", type: "harness", label: "하네스" }] };
+    const inputs = [{ slot: "model", type: "model", label: "모델" }];
+    // 평가 하네스의 정의 출력은 루프 연결용으로만 남긴다. 실행 흐름으로 끌 수 없게 execution 을 끈다.
+    if (isEvaluationRole(node.draft?.role)) {
+      return { inputs, outputs: [{ slot: "harness", type: "harness", label: "하네스", execution: false }] };
+    }
+    return { inputs, outputs: [{ slot: "harness", type: "harness", label: "하네스" }] };
   }
   if (node.kind === "loop") {
     return { inputs: [{ slot: "harness", type: "harness", label: "하네스" }], outputs: [{ slot: "loop", type: "loop", label: "루프" }] };
@@ -123,6 +157,7 @@ export function problemsOf(node, ctx) {
   if (node.kind === "profile" && node.draft.adapter === "omp" && node.draft.model && !node.draft.provider) list.push("OMP 모델은 제공자가 필요합니다.");
   if (node.kind !== "step") return list.concat(Object.values(node.errors ?? {}));
   const { type } = node.data;
+  if (type === "agent" && isEvaluationHarness(ctx.node(node.ref.harness))) list.push("평가 하네스는 실행 흐름 밖에 있어 이 단계에 연결할 수 없습니다.");
   if (type === "agent" && !node.ref.harness && !node.ref.profile) list.push("하네스 또는 프로필을 연결하세요.");
   if (type === "loop" && !node.ref.loop) list.push("루프를 연결하세요.");
   if (["agent", "loop"].includes(type) && !node.data.instruction?.trim()) list.push("작업 지시를 입력하세요.");
@@ -260,7 +295,6 @@ function harnessWidgets(ctx, node) {
       field("실행기", select([["claude", "Claude Code"], ["omp", "OMP"]], draft.adapter, (value) => { draft.adapter = value; ctx.changed(node); })),
       field(type ? "세부 역할" : "역할", roleInput)),
     field("하네스 유형", typePicker),
-    harnessContractDetails(draft.role),
     field("작업 지시", textArea(ctx, node, draft, "instructions", { maxLength: 12000 })),
     details(`규칙 · 자료 · 스킬 ${skillCount} · 결과 형식`, false,
       field("프로젝트 규칙 (AGENTS.md)", textArea(ctx, node, assets, "agents", { maxLength: 10000 })),

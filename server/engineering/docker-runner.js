@@ -107,7 +107,7 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemo
   const supports = (name, model) => Boolean((key || oauth) && model.provider === "anthropic" && models.has(model.model) &&
     (!model.reasoning || name === "omp"));
 
-  function start(program, args, options, { signal, budgetCents = 0, model } = {}) {
+  function start(program, args, options, { signal, budgetCents = 0, model, workflowAsk = false } = {}) {
     signal?.throwIfAborted();
     const cwd = fs.realpathSync(options.cwd);
     if (path.dirname(cwd) !== root || fs.lstatSync(options.cwd).isSymbolicLink() ||
@@ -126,7 +126,8 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemo
       "--env", "BUN_INSTALL_CACHE_DIR=/tmp/bun-cache", "--env", "DISABLE_NONESSENTIAL_TRAFFIC=1",
       "--env", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "--env", "OMP_BRIDGE_MODEL=" + model.model,
       // 도구 입력(예: Write 가 쓰는 리뷰 본문)을 다 만든 뒤 한꺼번에 받지 않고 만들어지는 대로 받아 관제 화면에 흘려 보낸다.
-      "--env", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING=1");
+      "--env", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING=1",
+      ...(program === "omp" && workflowAsk ? ["--env", "OMP_WORKFLOW_ASK=1"] : []));
     const command = agent ? ["--entrypoint", "node", image, bridgeFile, program, ...args] :
       ["--entrypoint", program, image, ...args];
     const raw = launchProcess(binary, [...prefix, ...flags, ...command], {

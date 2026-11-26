@@ -42,7 +42,9 @@ server.listen(7351, "127.0.0.1", () => {
     const model = process.env.OMP_BRIDGE_MODEL;
     if (!/^claude-[a-z0-9-]+$/.test(model)) process.exit(2);
     fs.writeFileSync("/tmp/omp-system.md", "Make changes only in the workspace. Verification runs separately. Avoid using shell tools.");
-    args.push("--tools", "read,edit,write", "--no-extensions", "--no-skills", "--no-lsp", "--no-pty");
+    // ask 는 핀된 omp 18.8.9 내장 도구다. 워크플로가 켠 경우에만 넣고, 그 외 도구는 열지 않는다.
+    const tools = process.env.OMP_WORKFLOW_ASK === "1" ? "read,edit,write,ask" : "read,edit,write";
+    args.push("--tools", tools, "--no-extensions", "--no-skills", "--no-lsp", "--no-pty");
     fs.writeFileSync(home + "/models.yml", JSON.stringify({ providers: { "omp-bridge": {
       api: "anthropic-messages", baseUrl: "http://127.0.0.1:7351", apiKey: "ANTHROPIC_API_KEY",
       models: [{ id: model, name: model, contextWindow: 100000, maxTokens: 8192, input: ["text"],

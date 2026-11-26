@@ -54,3 +54,16 @@
 #unified-run-timeline button[aria-pressed="true"] { border-color:#a799e7; background:#343050; }
 #design .unified-node-ask { min-width:0; overflow-wrap:anywhere; border-top:1px solid #8c6d40; padding-top:6px; }
 #design .unified-node-ask .casks { max-height:24rem; }
+
+#unified-sessions { padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel); overflow:auto; overflow-wrap:anywhere; max-height:min(42vh,28rem); }
+#unified-sessions .unified-sessions-label { margin:0; font-size:11px; letter-spacing:.06em; color:#94daca; font-weight:650; }
+#unified-sessions .unified-sessions-status { margin:6px 0 0; color:var(--muted); font-size:12px; }
+#unified-sessions .unified-sessions-list { list-style:none; margin:8px 0 0; padding:0; display:grid; gap:4px; }
+#unified-sessions .unified-sessions-list:empty { display:none; }
+#unified-sessions .unified-session { min-width:0; }
+#unified-sessions .unified-session-title { display:block; font-size:13px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#unified-sessions .unified-sessions-asks { display:grid; gap:8px; margin-top:8px; }
+#unified-sessions .unified-sessions-asks:empty { display:none; }
+#unified-sessions .unified-session-ask { display:grid; gap:4px; min-width:0; }
+#unified-sessions .unified-session-ask-title { font-size:12px; }
+#unified-sessions .casks { max-height:16rem; }
