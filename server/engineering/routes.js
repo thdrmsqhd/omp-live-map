@@ -25,6 +25,7 @@ const { harnessTrials } = require("./harness-trials");
 const { previewHarness } = require("./harness-preview");
 const { integer, string } = require("./definitions");
 const { problem } = require("./state");
+const workflowLive = require("./workflow-live");
 
 const prefix = "/api/engineering/";
 const limit = 64 * 1024;
@@ -116,8 +117,14 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = { run, nodes, interventions: run.status === "failed" ? retryOptions(graph, nodes) : {}, retries: flowRuns.retries(id), timeline: observability.timeline(id),
             delivery: delivery.get(id), staging: staging.get(id),
             labels: Object.fromEntries(graph.nodes.map(({ id, label }) => [id, label])),
-            graph: { name: display.name, nodes: display.nodes.map(({ id, label, type, x, y, profileVersion }) => ({ id, label, type, x, y, profileVersion })),
-              edges: display.edges } };
+            // 관제 화면이 단계 안에서 어떤 프롬프트가 어떤 정의로 실행되는지 보여 주는 데 쓴다.
+            graph: { name: display.name, nodes: display.nodes.map(({ id, label, type, x, y, profileVersion, definition, version, instruction, prompt, check, workflow }) => ({
+              id, label, type, x, y, profileVersion, definition, version, workflow,
+              instruction: typeof instruction === "string" ? instruction.slice(0, 600) : undefined,
+              prompt: typeof prompt === "string" ? prompt.slice(0, 600) : undefined,
+              check: check ? { command: check.command, args: check.args } : undefined })),
+              edges: display.edges },
+            live: workflowLive.snapshot(id) };
         }
         if (endpoint === "workflow") {
           const version = url.searchParams.get("version");

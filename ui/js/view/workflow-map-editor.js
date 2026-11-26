@@ -121,7 +121,7 @@ function wfAddStage(type) {
   const center = $("stage").getBoundingClientRect();
   const point = worldPoint(center.left + center.width / 3, center.top + center.height / 2);
   const coord = (value) => Math.max(0, Math.min(10000, Math.round(value)));
-  const node = { id, type, label: wfEditTypes[type], x: coord(point.x - wfMap.origin.x), y: coord(point.y - wfMap.origin.y) };
+  const node = { id, type, label: wfEditTypes[type], x: coord((point.x - wfMap.origin.x) / wfScale.x), y: coord((point.y - wfMap.origin.y) / wfScale.y) };
   for (const key of ["agent", "loop"]) if (type === key) Object.assign(node, { definition: "", instruction: "" });
   if (type === "command") node.check = { command: "node", args: ["--test"], code: 0 };
   if (type === "approval") node.prompt = "";

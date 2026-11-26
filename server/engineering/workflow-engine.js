@@ -5,6 +5,7 @@ const { retryPlan } = require("./workflow-retry-plan");
 const { nodeExecutor } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
 const { runParallel } = require("./workflow-parallel");
+const live = require("./workflow-live");
 const { problem, redact } = require("./state");
 
 const external = ({ type }) => ["agent", "loop", "command"].includes(type);
@@ -45,7 +46,11 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
         retry?.mode === "rework" && "Rework requested after " + retry.failed + " failed.\n" +
           [retry.note, "Previous failure evidence:\n" + retry.evidence].filter(Boolean).join("\n\n")].filter(Boolean);
       const input = node.instruction ? { ...node, instruction: context.join("\n\n"), verificationOnly: retry?.mode === "verify" } : node;
-      let result = await runNode(input, run.project, location, Math.max(0, remaining), signal, references);
+      live.start(id, node.id);
+      let result;
+      try {
+        result = await runNode(input, run.project, location, Math.max(0, remaining), signal, references, live.reporter(id, node.id));
+      } finally { live.end(id, node.id); }
       if (result.status === "succeeded" && node.outputs.length) {
         try { result.artifacts = await collectOutputs(location, node, signal); } catch (error) {
           result = { ...result, status: "failed", interrupted: true, error: redact(error.message) };

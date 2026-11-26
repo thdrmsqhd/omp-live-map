@@ -8,6 +8,7 @@ function paintWorkflowMap() {
   });
   if (!wfMap.edit) $("wf-map-status").textContent = [wfLabel(detail.run.status), detail.run.error, wfMap.notice].filter(Boolean).join(" · ");
   const executions = new Map((wfMap.edit ? [] : detail.nodes).map((item) => [item.node, item]));
+  const live = wfMap.edit ? {} : detail.live ?? {};
   const root = $("workflow-map-nodes");
   for (const node of wfNodes()) {
     let button = wfMap.buttons.get(node.id);
@@ -16,23 +17,63 @@ function paintWorkflowMap() {
       wfMap.buttons.set(node.id, button);
       root.append(button);
     }
-    const p = wfPoint(node), status = executions.get(node.id)?.status;
+    const p = wfPoint(node);
     button.style.left = p.x + "px";
     button.style.top = p.y + "px";
-    button.dataset.status = node.type === "profile" ? "profile" : status ?? "queued";
     button.setAttribute("aria-pressed", String(node.id === wfMap.selected));
-    button.firstChild.textContent = node.label;
-    button.lastChild.textContent = node.type === "profile" ? "프로필 · v" + node.profileVersion
-      : wfMap.edit ? wfEditTypes[node.type] ?? node.type : wfLabel(status);
+    wfPaintNode(button, node, executions.get(node.id), live[node.id]);
   }
+  $("workflow-layer").dataset.running = String(!wfMap.edit && detail.run.status === "running");
   wfPaintEdges();
   paintMinimap();
 
-  if (wfMap.edit) return;
+  if (wfMap.edit) { $("wf-map-live").hidden = true; return; }
   const step = graph.nodes.find(({ id }) => id === wfMap.selected);
   const state = executions.get(wfMap.selected);
   const previous = detail.retries.filter(({ node }) => node === wfMap.selected);
+  paintWorkflowLive(step, state, live[wfMap.selected]);
   paintWorkflowEvidence(step, state, previous);
+}
+
+// 선택한 단계가 실행 중이면 지금 보내는 프롬프트의 구성과 에이전트의 실시간 출력을 보여 준다.
+function paintWorkflowLive(node, execution, live) {
+  const panel = $("wf-map-live");
+  const running = execution?.status === "running";
+  panel.hidden = !node || !running;
+  if (panel.hidden) { panel.replaceChildren(); return; }
+  if (panel.dataset.node !== node.id || !panel.firstChild) {
+    panel.dataset.node = node.id;
+    const phase = wfText("p", "", "wf-phase");
+    const bar = wfText("span", "", "wf-bar");
+    const legend = wfText("p", "", "wf-legend");
+    const task = document.createElement("details");
+    task.append(wfText("summary", "작업 지시"), wfText("pre", ""));
+    const stream = wfText("pre", "", "wf-live-stream");
+    const tools = wfText("p", "", "wf-tools");
+    panel.replaceChildren(wfText("h3", "지금 실행 중인 프롬프트"), phase, bar, legend, task, stream, tools);
+  }
+  const [, phase, bar, legend, task, stream, tools] = panel.children;
+  const started = live?.startedAt ?? execution.updated ?? Date.now();
+  phase.dataset.started = String(started);
+  phase.dataset.label = [wfPhases[live?.phase] ?? "실행 중", live?.attempts > 1 ? "시도 " + Math.max(1, live.attempt) + "/" + live.attempts : "",
+    live?.chars ? "프롬프트 " + live.chars.toLocaleString() + "자" : ""].filter(Boolean).join(" · ");
+  phase.textContent = phase.dataset.label + " · " + wfClock(Date.now() - started);
+  wfPaintBar(bar, live?.sections ?? []);
+  legend.replaceChildren(...(live?.sections ?? []).map(({ name, chars }) => {
+    const item = wfText("span", (wfSectionNames[name] ?? name) + " " + chars.toLocaleString());
+    item.dataset.section = name;
+    return item;
+  }));
+  legend.hidden = !live?.sections?.length;
+  const instruction = node.type === "approval" ? node.prompt : node.instruction;
+  task.hidden = !instruction;
+  task.lastChild.textContent = instruction ?? "";
+  const nearBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 24;
+  stream.textContent = live?.text?.trim() || (node.type === "command" ? "명령 출력은 끝난 뒤 검증 기록에 남습니다." : "에이전트 응답을 기다리는 중입니다.");
+  stream.append(wfText("span", "", "wf-caret"));
+  if (nearBottom) stream.scrollTop = stream.scrollHeight;
+  tools.replaceChildren(...(live?.tools ?? []).map((tool) => wfText("span", tool, tool === live.tool ? "is-current" : "")));
+  tools.hidden = !live?.tools?.length;
 }
 
 let wfEvidenceSignature;
