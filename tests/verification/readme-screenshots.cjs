@@ -20,6 +20,8 @@ const HOME = path.join(DEMO, "home");
 const PROJECTS = { gateway: path.join(DEMO, "work", "modbus-gateway"), dashboard: path.join(DEMO, "work", "factory-dashboard") };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const VIEWPORT = { width: 1440, height: 900 };
+// 1 이면 Claude Code 로그인(사용자 ~/.claude)으로 코드 리뷰 Workflow 를 한 번 실제로 돌려 실행 중 화면(19)을 찍는다.
+const LIVE = process.env.OMP_README_LIVE === "1";
 
 const iso = (secondsAgo) => new Date(Date.now() - secondsAgo * 1000).toISOString();
 const line = (record) => JSON.stringify(record) + "\n";
@@ -30,7 +32,35 @@ function write(file, text) {
 }
 
 function seedProjects() {
-  write(path.join(PROJECTS.gateway, "src", "modbus-client.js"), "// Modbus TCP 클라이언트\nmodule.exports = { connect() {}, reconnect() {} };\n");
+  // 실행 중 화면(OMP_README_LIVE=1)에서 코드 리뷰가 실제로 찾을 거리가 있도록 재접속 결함을 넣어 둔다.
+  write(path.join(PROJECTS.gateway, "src", "modbus-client.js"), [
+    "// Modbus TCP 클라이언트: 끊기면 재접속한다.",
+    "const net = require(\"node:net\");",
+    "",
+    "class ModbusClient {",
+    "  constructor({ host, port, retryMs = 1000 }) {",
+    "    this.host = host; this.port = port; this.retryMs = retryMs;",
+    "    this.socket = null; this.timer = null; this.pending = new Map();",
+    "  }",
+    "  connect() {",
+    "    this.socket = net.createConnection({ host: this.host, port: this.port });",
+    "    this.socket.on(\"close\", () => this.reconnect());",
+    "    this.socket.on(\"data\", (chunk) => this.onData(chunk));",
+    "    return this.socket;",
+    "  }",
+    "  reconnect() {",
+    "    this.timer = setTimeout(() => this.socket.connect(this.port, this.host), this.retryMs);",
+    "  }",
+    "  send(frame) { this.socket.write(frame); }",
+    "  onData(chunk) {",
+    "    const id = chunk.readUInt16BE(0);",
+    "    this.pending.get(id)?.(chunk);",
+    "    this.pending.delete(id);",
+    "  }",
+    "}",
+    "module.exports = { ModbusClient };",
+    "",
+  ].join("\n"));
   write(path.join(PROJECTS.gateway, "src", "poller.js"), "// 주기 폴링\nmodule.exports = { start() {} };\n");
   write(path.join(PROJECTS.gateway, "test", "reconnect.test.js"), "// 재접속 회귀 테스트\n");
   write(path.join(PROJECTS.gateway, "README.md"), "# modbus-gateway\n");
@@ -167,8 +197,14 @@ async function captureEngineering() {
   const electron = require("electron");
   const userData = path.join(DEMO, "appdata");
   fs.mkdirSync(userData, { recursive: true });
+  // HOME 을 데모 폴더로 바꾸므로 실행 중 화면을 찍을 때는 Claude Code 로그인 위치만 실제 사용자 폴더로 알려 준다(파일은 읽기만 한다).
+  const claudeConfig = LIVE ? { CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || path.join(require("node:os").homedir(), ".claude") } : {};
+  // Docker CLI 는 HOME 의 .docker/contexts 에서 desktop-linux 컨텍스트를 찾는다(런타임은 DOCKER_* 환경 변수를 지운다).
+  // 인증 정보가 있는 config.json 은 두고 컨텍스트 메타데이터만 데모 HOME 에 복사한다.
+  const contexts = path.join(require("node:os").homedir(), ".docker", "contexts");
+  if (LIVE && fs.existsSync(contexts)) fs.cpSync(contexts, path.join(HOME, ".docker", "contexts"), { recursive: true });
   const app = spawn(electron, [path.join(ROOT, "desktop"), "--remote-debugging-port=0", "--user-data-dir=" + userData, "--skip-v2-import"], {
-    env: { ...process.env, HOME, USERPROFILE: HOME, OMP_MAP_STATE: path.join(DEMO, "state"), OMP_MAP_CWD: path.join(DEMO, "work") },
+    env: { ...process.env, HOME, USERPROFILE: HOME, OMP_MAP_STATE: path.join(DEMO, "state"), OMP_MAP_CWD: path.join(DEMO, "work"), ...claudeConfig },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
@@ -240,13 +276,6 @@ async function captureEngineering() {
       await page.evaluate(() => window.scrollTo(0, 0));
       await shot(page, "17-engineering-loop.png");
     });
-    await step("노드 캔버스", async () => {
-      await page.locator("#studio-nav").click();
-      await page.locator('.studio-node[data-kind="harness"]').first().waitFor({ timeout: 8000 });
-      await sleep(1200);
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await shot(page, "18-engineering-studio.png");
-    });
     const optionValue = (selector, text) => page.locator(selector + " option").filter({ hasText: text }).first().getAttribute("value");
     await step("Workflow 캔버스", async () => {
       await page.locator("#project").selectOption({ label: "modbus-gateway" }).catch(() => {});
@@ -266,6 +295,22 @@ async function captureEngineering() {
       await page.locator("#workflow-fit").click().catch(() => {});
       await sleep(800);
       await shot(page, "13-engineering-workflow.png");
+    });
+    // 기본 Workflow 를 만든 뒤에 찍어야 모델 → 하네스 → 루프 → 단계, 프로필 → Agent 연결이 한 화면에 보인다.
+    // 첫 화면(정의만 보기)과 버그 수정 Workflow 를 연 화면을 넓은 창에서 '전체 보기'로 찍는다.
+    await step("노드 캔버스", async () => {
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      await page.locator("#studio-nav").click();
+      await page.locator('.studio-node[data-kind="harness"]').first().waitFor({ timeout: 8000 });
+      await page.locator("#studio-workflow").selectOption(await optionValue("#studio-workflow", "버그 수정"));
+      await page.locator('.studio-node[data-kind="step"]').first().waitFor({ timeout: 8000 });
+      await sleep(1200);
+      await page.locator("#studio-fit").click();
+      await sleep(800);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      console.log("노드 캔버스 배율:", await page.locator("#studio-scale").textContent());
+      await shot(page, "18-engineering-studio.png");
+      await page.setViewportSize(VIEWPORT);
     });    await step("개발 Task", async () => {
       await click("개발 Task");
       const task = page.locator("#sdlc-form");
@@ -313,6 +358,48 @@ async function captureEngineering() {
         const pick = async (role) => (await launch.locator(`[name=${role}] option:checked`).textContent()).trim();
         console.log(`새 실행 ${preset}:`, await pick("author"), "|", await pick("loop").catch(() => "-"), "|", await pick("triage").catch(() => "-"));
       }
+      await page.locator("#workflow-launch-close").click().catch(() => {});
+    });
+    // 실행 중 화면: 실제 모델을 부르므로 OMP_README_LIVE=1 일 때만 찍는다(Claude Code 구독 로그인 또는 저장한 키 필요).
+    // 코드 리뷰 템플릿을 한 번 돌려 리뷰 단계가 도구를 쓰며 출력을 내는 순간을 찍고, 최종 승인으로 넘어갈 때 '실행 따라가기'가 따라가는지 남긴다.
+    if (LIVE) await step("실행 중(관제 Live Map)", async () => {
+      const runtime = await request("runtime", {});
+      if (runtime.status !== "ready") throw new Error("실행 환경이 준비되지 않았습니다: " + runtime.detail);
+      await page.locator("#workflow-new-run").click();
+      const launch = page.locator("#workflow-launch-form");
+      await launch.locator("[name=project]").selectOption({ label: "modbus-gateway" }).catch(() => {});
+      await launch.locator("[name=source] option").first().waitFor({ state: "attached", timeout: 10000 });
+      await sleep(1200);
+      await launch.locator("[name=source]").selectOption("preset:review");
+      await launch.locator("[name=title]").fill("Modbus 클라이언트 재접속 리뷰");
+      await launch.locator("[name=goal]").fill("src/modbus-client.js 의 재접속(reconnect) 로직을 리뷰한다. 타이머 정리 누락과 닫힌 소켓 재사용 위험을 근거와 함께 찾는다.");
+      await launch.locator("[name=acceptance]").fill("발견 사항마다 파일·줄 근거와 심각도, 고치는 방법을 적는다. 구현 파일은 수정하지 않는다.");
+      page.on("dialog", (dialog) => { console.log("확인 창:", dialog.message()); void dialog.accept(); });
+      await launch.getByRole("button", { name: "실행 시작" }).click();
+      await page.locator("#workflow-launch").waitFor({ state: "hidden", timeout: 30000 });
+      const state = () => page.evaluate(() => ({ follow: wfMap.follow, target: wfMap.followTarget, k: Math.round(view.k * 100),
+        nodes: Object.fromEntries((wfMap.run?.nodes ?? []).map((item) => [item.node, item.status])), status: wfMap.run?.run.status, error: wfMap.run?.run.error,
+        live: Object.values(wfMap.run?.live ?? {})[0] }));
+      let captured = false;
+      for (const deadline = Date.now() + 12 * 60000; Date.now() < deadline;) {
+        await sleep(1500);
+        const now = await state();
+        if (!captured && now.nodes.review === "running" && (now.live?.text?.length ?? 0) > 400 && now.live?.tools?.length) {
+          await sleep(1500);
+          await shot(page, "19-live-map-running.png");
+          console.log("실행 중 캡처:", JSON.stringify({ follow: now.follow, target: now.target, k: now.k, tools: now.live.tools }));
+          captured = true;
+        }
+        if (now.status === "waiting_approval" || Object.values(now.nodes).includes("waiting_approval")) {
+          await sleep(1500);
+          const after = await state();
+          console.log("승인 대기로 넘어감:", JSON.stringify({ follow: after.follow, target: after.target, k: after.k }));
+          await page.screenshot({ path: path.join(process.env.TEMP, "readme-live-approval.png") });
+          break;
+        }
+        if (!["running", "queued"].includes(now.status)) throw new Error("실행이 끝났습니다: " + now.status + " " + (now.error ?? ""));
+      }
+      if (!captured) throw new Error("실행 중 화면을 찍지 못했습니다.");
     });
   } finally {
     await browser.close().catch(() => {});
