@@ -11,3 +11,6 @@
 /desktop/node_modules/
 /desktop/dist/
 /desktop/.vendor/
+
+# 검증용으로 루트에 설치하는 electron·playwright(npm install --no-save)
+/node_modules/
