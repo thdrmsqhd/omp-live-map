@@ -1,7 +1,7 @@
 // 노드 캔버스의 노드 종류: 소켓(입력·출력)과 노드 안 위젯(셀렉트·입력칸)을 만든다.
 // 상태 변경과 연결은 studio.js 가 넘겨주는 ctx 로만 한다.
 import { modelKey, showModelOptions } from "./engineering-model-options.js";
-import "./workspace-catalog.js";
+import "./harness-kinds.js";
 
 export function h(tag, props = {}, ...children) {
   const element = document.createElement(tag);
@@ -39,21 +39,15 @@ export const HARNESS_TEMPLATES = {
 };
 
 export const HARNESS_CATALOG = globalThis.WORKSPACE_CATALOG;
+export const harnessTypeOf = globalThis.harnessTypeOf;
+export const isEvaluationRole = globalThis.isEvaluationRole;
 const ROLE_SEPARATOR = " · ";
 const CONTRACT_FIELDS = [["input", "입력"], ["output", "산출물"], ["criteria", "판단 기준"],
   ["handoff", "인계"], ["stop", "중단 조건"], ["outputSchema", "산출물 스키마 ID"]];
 
-// 역할은 기존 정의 API가 버전별로 저장하는 필드다. 유형을 접두어에 두어 이름이나 세부 역할을 바꿔도 유지한다.
-export function harnessTypeOf(role) {
-  return HARNESS_CATALOG.types.find(({ label }) => role === label || role?.startsWith(label + ROLE_SEPARATOR));
-}
-// 평가 하네스는 유형 id가 evaluation 이고, 역할 이름은 '평가 하네스'로 시작한다. 실행 흐름 밖에 둔다.
+// 평가 하네스는 종류 id evaluation 이다. 접두어 판정은 harness-kinds.js 만 한다.
 export const EXTERNAL_LANE_X = -480;
 export const EXTERNAL_LANE_LABEL = "독립 평가 · 실행 흐름 밖";
-export function isEvaluationRole(role) {
-  const type = harnessTypeOf(role);
-  return type?.id === "evaluation" || (typeof role === "string" && role.startsWith("평가 하네스"));
-}
 export function isEvaluationHarness(node) {
   return node?.kind === "harness" && isEvaluationRole(node.draft?.role ?? node.role);
 }

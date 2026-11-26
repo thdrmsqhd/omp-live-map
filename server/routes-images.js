@@ -7,7 +7,7 @@
 "use strict";
 
 const fs = require("fs");
-const { fail } = require("./http");
+const { fail } = require("./edge/http");
 const { sniff, blobFile, inlineOf, uploadFile } = require("./images");
 
 const PREFIX = "/api/img/";

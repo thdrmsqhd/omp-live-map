@@ -8,11 +8,14 @@ server/
   snapshot.js models.js          세션/노드 그래프, 컨텍스트 상한 조회, 요약 호출
   proc.js owner.js sys.js infra.js   프로세스·세션 소유 프로세스·호스트·WSL/Docker 관측
   shell.js prompt.js             Git Bash 실행, 백그라운드 잡, omp 프롬프트 전송·취소
-  sse.js http.js routes*.js      SSE 방송, 요청 가드, 라우트
+  sse.js edge/http.js routes*.js SSE 방송, 요청 가드(edge), 라우트
   active.js ext-live.js          실시간 방송: 기록 이벤트, 확장 기록(~/.omp/live-map) tail
   uploads.js                     프롬프트 첨부: 작은 이미지는 rpc `images`, 나머지는 %TEMP%\omp-live-map-uploads\ 에 저장해 경로를 메시지에 붙임
   harness/                       Claude Code 하네스: claude.js(기록 읽기) · claude-run.js(실행) · switch.js(하네스 전환) · session-profiles.js 등
-  engineering/                   Engineering(데스크톱 전용): 프로젝트·하네스·루프·Workflow·개발 Task, SQLite(schema*.sql), 실행기(runner·docker-runner), routes.js
+  edge/                        HTTP 가드와 엔지니어링 인증·라우트
+  application/               Workflow 중단 규칙, 관찰 읽기
+  infrastructure/            SQLite(sqlite.js), Docker 실행(docker.js)
+  engineering/               프로젝트·하네스·루프·Workflow·개발 Task, schema*.sql, 실행 결정(workflow-engine)
 extension/
   live-map.ts          omp 확장: 세션의 툴 출력·글을 ~/.omp/live-map 으로(설치: install.js)
 desktop/               Electron 데스크톱 앱(main.cjs · preload.cjs · credentials.cjs · 설치 파일 빌드 설정)

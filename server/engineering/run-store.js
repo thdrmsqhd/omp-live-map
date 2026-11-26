@@ -2,7 +2,7 @@
 
 const { randomUUID, createHash } = require("node:crypto");
 const { event } = require("./catalog");
-const { transaction } = require("./database");
+const { transaction } = require("../infrastructure/sqlite");
 const { string } = require("./definitions");
 const { projectBudget } = require("./project-budget");
 const { checkTransition, problem } = require("./state");

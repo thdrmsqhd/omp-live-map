@@ -50,7 +50,9 @@ function handleAskEvent(a) {
     const i = list.findIndex((r) => r.id === String(a.id));
     if (i < 0) return;
     list.splice(i, 1);
+    ASK_SENT.delete(askFlight(a.node, a.id));
   } else if (a.kind === "add" && a.request && a.request.id) {
+    ASK_SENT.delete(askFlight(a.node, a.request.id));
     if (list.some((r) => r.id === a.request.id)) return;
     list.push(askPrep(a.request));
   } else return;
@@ -125,7 +127,14 @@ function askResponse(r) {
   return { response: { value: String(r._value || "") } };
 }
 
+// 카드와 질문함이 같은 질문을 그려도 답은 한 번만 나간다. 실패하면 다시 보낼 수 있다.
+const ASK_SENT = new Set();
+const askFlight = (node, id) => askKey(node) + "\0" + String(id);
+
 async function askPost(node, id, response) {
+  const flight = askFlight(node, id);
+  if (ASK_SENT.has(flight)) return { ok: true, duplicate: true };
+  ASK_SENT.add(flight);
   if (typeof attnClear === "function") attnClear(liveNodeId(node) || node);   // 답을 보냈으면 선택 필요는 끝난다
   const r = askFind(node, id);
   if (r) r._err = "";
@@ -137,6 +146,7 @@ async function askPost(node, id, response) {
     out = { ok: false, out: err.message };
   }
   if (!out.ok) {
+    ASK_SENT.delete(flight);
     const cur = askFind(node, id);
     if (cur) { cur._err = out.out || "답을 보내지 못했습니다"; paintChat(liveNodeId(node) || node); }
   }

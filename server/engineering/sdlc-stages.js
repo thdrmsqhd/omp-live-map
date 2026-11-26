@@ -1,6 +1,6 @@
 "use strict";
 
-const { transaction } = require("./database");
+const { transaction } = require("../infrastructure/sqlite");
 const { event } = require("./catalog");
 const { integer, string } = require("./definitions");
 const { problem } = require("./state");

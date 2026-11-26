@@ -1,7 +1,7 @@
 // 대화 API: 맵 세션 띄우기·끝내기·목록, 프롬프트 전송(첨부 포함)·취소, 모델 목록·변경, 세션 맥락 요약.
 "use strict";
 
-const { json, withJson } = require("./http");
+const { json, withJson } = require("./edge/http");
 const { newSession, stopSession, prompt, cancel, list } = require("./sessions");
 const { listModels, setModel, modelOptions } = require("./session-model");
 const { prepare, MAX_BODY: UPLOAD_BODY } = require("./uploads");

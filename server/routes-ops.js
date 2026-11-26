@@ -2,7 +2,7 @@
 "use strict";
 
 const { HOME } = require("./config");
-const { json, withJson } = require("./http");
+const { json, withJson } = require("./edge/http");
 const { exec, treeOf, startBg, bgJobs, bgJob } = require("./shell");
 const { resFor, releaseSet, procState, findProc, reloadProc } = require("./proc");
 const { sysInfo } = require("./sys");

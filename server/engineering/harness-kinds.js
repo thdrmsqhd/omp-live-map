@@ -1,7 +1,8 @@
-// 통합 워크스페이스에서 표시하는 유형과 인계 산출물의 계약이다.
-// 작업 유형은 입력 주제가 아니라 산출물과 판단 기준이 달라질 때 구분한다.
-// outputSchema는 연결 경계에서 산출물을 식별하고 따로 검증하는 안정적인 ID다.
-globalThis.WORKSPACE_CATALOG = {
+"use strict";
+
+// 6계열 18종. 화면과 서버가 이 파일 하나를 그대로 읽는다.
+// 역할 접두어(예: "평가 하네스 · 품질") 판정은 이 모듈 안에만 둔다.
+const HARNESS_KINDS = {
   families: [
     { id: 'information', label: '정보를 다루는 하네스' },
     { id: 'creation', label: '만들어 내는 하네스' },
@@ -175,3 +176,33 @@ globalThis.WORKSPACE_CATALOG = {
     },
   ].map(type => ({ ...type, label: `${type.label} 하네스` })),
 };
+
+const root = typeof globalThis === "object" ? globalThis : Function("return this")();
+
+root.harnessTypeOf = function harnessTypeOf(role) {
+  if (typeof role !== "string") return null;
+  return HARNESS_KINDS.types.find(({ label }) => role === label || role.startsWith(label + " · ")) || null;
+};
+
+root.isEvaluationRole = function isEvaluationRole(role) {
+  return root.harnessTypeOf(role)?.id === "evaluation";
+};
+
+// 브라우저·시스템 역할만 수동 중단이다. 종류 id로 판정한다.
+root.gateForRole = function gateForRole(role) {
+  const id = root.harnessTypeOf(role)?.id;
+  if (id === "browser") return "browser";
+  if (id === "system") return "uac";
+  return null;
+};
+
+root.WORKSPACE_CATALOG = HARNESS_KINDS;
+
+if (typeof module === "object" && module && module.exports) {
+  module.exports = {
+    HARNESS_KINDS,
+    harnessTypeOf: root.harnessTypeOf,
+    isEvaluationRole: root.isEvaluationRole,
+    gateForRole: root.gateForRole,
+  };
+}

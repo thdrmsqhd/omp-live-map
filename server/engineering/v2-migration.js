@@ -2,7 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { backup } = require("./database");
+const { backup } = require("../infrastructure/sqlite");
 
 function migrateFromV2(source, destination) {
   const legacy = path.resolve(source), next = path.resolve(destination);

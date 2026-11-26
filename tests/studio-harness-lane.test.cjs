@@ -42,7 +42,7 @@ function loadStudioNodes() {
   };
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(root, "ui/js/workspace-catalog.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(root, "server/engineering/harness-kinds.js"), "utf8"), context);
   const source = fs.readFileSync(path.join(root, "ui/js/studio-nodes.js"), "utf8")
     .replace(/^import .*$/gm, "")
     .replace(/^export /gm, "")

@@ -8,6 +8,7 @@ const { ask: registerWorkflowAsk, drop: dropWorkflowAsk, asksFor } = require("..
 const { resultInstruction } = require("./harness-result");
 const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
+const { acceptsWorkflowAsk, rejectsWorkflowAsk } = require("../application/workflow-gates");
 const { claudeStreamProgress, ompToolLine } = require("./stream-progress");
 const { brokerFailure } = require("./anthropic");
 
@@ -18,8 +19,6 @@ function throwBrokerFailure(child) {
 }
 
 const claudeTools = ["Read", "Edit", "Write", "Glob", "Grep"];
-const interactiveMethods = ["ask", "select", "confirm", "input", "editor"];
-const workflowAskMethods = new Set(["ask", "select", "confirm"]);
 // 암호·결제 정보·OS 승인 문구는 질문 카드에 담지 않는다. 일치 문구는 오류문에도 남기지 않는다.
 const blockedAsk = /(?:\b(?:password|passwd|passphrase|cvv|cvc|uac|sudo)\b|credit\s*card|card\s*number|payment\s*(?:data|info|details|card)|os\s+approval|administrator\s+approval|admin(?:istrator)?\s+privileges?|비밀번호|패스워드|카드\s*번호|결제\s*정보|관리자\s*권한|사용자\s*계정\s*컨트롤)/i;
 
@@ -206,10 +205,10 @@ async function omp(backend, context) {
           if (askSession && asksFor(askSession).some((item) => item.id === target)) dropWorkflowAsk(askSession);
           return;
         }
-        if (interactiveMethods.includes(method)) {
+        if (acceptsWorkflowAsk(method) || rejectsWorkflowAsk(method)) {
           const id = String(frame.id ?? "");
           // 질문은 턴 실패가 아니다. input·editor·암호·결제·OS 승인은 여전히 거절한다.
-          if (context.workflowAsk !== true || !workflowAskMethods.has(method) || !id || blockedInteractive(frame)) {
+          if (context.workflowAsk !== true || !acceptsWorkflowAsk(method) || !id || blockedInteractive(frame)) {
             reject(new Error("Interactive OMP request is unsupported in a Loop: " + method));
             return;
           }

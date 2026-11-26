@@ -33,12 +33,8 @@
     paint();
   }
   function askSession(detail, node, status) {
-    if (mapMode !== 'design' || wfMap.edit || detail !== wfMap.run || detail.run.status !== 'running' || status !== 'running') return null;
-    if (!['agent', 'loop'].includes(node.type)) return null;
-    const key = detail.live?.[node.id]?.askSession;
-    if (!isWorkflowAskSession(key)) return null;
-    // A session shared by two entries is ambiguous: neither card is allowed to own it.
-    return Object.values(detail.live).filter(progress => progress?.askSession === key).length === 1 ? key : null;
+    if (detail !== wfMap.run) return null;
+    return workflowMonitorAskKey(detail, node, status);
   }
   function runtimeAsk(state, node, key) {
     let host = state.querySelector(':scope > .unified-node-ask');

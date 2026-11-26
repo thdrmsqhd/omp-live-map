@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { MIME } = require("./config");
-const { json, fail } = require("./http");
+const { json, fail } = require("./edge/http");
 
 const PREFIX = "/localfs/";
 const BASE = PREFIX + crypto.randomBytes(16).toString("hex") + "/";
