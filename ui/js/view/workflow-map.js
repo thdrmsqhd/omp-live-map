@@ -519,18 +519,21 @@ function wfAccept(detail, initial, node) {
   wfPaintFollow();
 }
 
-async function openMapWorkflow(id, node) {
+async function openMapWorkflow(id, node, options = {}) {
   if (wfMap.edit && !wfLeaveEditing()) return false;
   const token = ++wfMap.generation;
   wfMap.opening = true;
   wfMap.notice = "";
   $("workflow-inspector").hidden = false;
   $("wf-map-status").textContent = "실행을 불러오는 중입니다.";
-  if (window.ompDesign) setMapMode("design"); else setMapMode("map");
+  // Live Map 에서 연 실행은 지도의 단계 카드를 그대로 보여 준다. 설계 캔버스에서 실행을 시작한 경우만 그 캔버스로 돌아간다.
+  const watchOnDesign = Boolean(options.design) || (mapMode !== "map" && Boolean(window.ompDesign));
+  if (watchOnDesign) setMapMode("design");
+  else if (mapMode !== "design") setMapMode("map");
   try {
     const detail = await mapWorkflowRequest("workflow-run", { id });
     if (token !== wfMap.generation) return false;
-    if (window.ompDesign) await window.ompDesign.open({ project: detail.run.project, workflow: detail.run.workflow });
+    if (watchOnDesign && window.ompDesign) await window.ompDesign.open({ project: detail.run.project, workflow: detail.run.workflow });
     if (token !== wfMap.generation) return false;
     wfMap.previousView ??= { ...view };
     wfMap.follow = false;

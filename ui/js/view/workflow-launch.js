@@ -12,7 +12,7 @@ function bindMapWorkflowLaunch() {
   const settings = $("workflow-launch-settings");
   const roles = ["author", "reviewer", "triage", "loop"];
   const optional = new Set(["triage"]); // 고르지 않으면 설계·문서 하네스가 대신한다.
-  let definitions = [], presets = [], saved = [], generation = 0, pending = false, requestKey, runtime = null;
+  let definitions = [], presets = [], saved = [], generation = 0, pending = false, requestKey, runtime = null, returnToDesign = false;
   const timeoutOf = () => Number(form.elements.minutes.value) * 60000;
   // 실행 환경 인증에 따라 안내한다. Claude Code 로그인이 시간 제한 안에 만료되면 시작 전에 알린다.
   function showRuntime() {
@@ -91,8 +91,9 @@ function bindMapWorkflowLaunch() {
     } catch (error) { if (revision === generation) status.textContent = error.message; }
   }
   button.hidden = false;
-  async function open(preferredProject, preferredWorkflow) {
+  async function open(preferredProject, preferredWorkflow, options) {
     if (dialog.open) return;
+    returnToDesign = Boolean(options?.returnToDesign);
     dialog.showModal();
     const revision = ++generation;
     project.replaceChildren();
@@ -114,7 +115,7 @@ function bindMapWorkflowLaunch() {
   };
   $("workflow-launch-close").onclick = () => { if (!pending) dialog.close(); };
   dialog.addEventListener("cancel", (event) => { if (pending) event.preventDefault(); });
-  dialog.addEventListener("close", () => { generation++; });
+  dialog.addEventListener("close", () => { generation++; returnToDesign = false; });
   project.onchange = () => void loadProject();
   for (const control of [source, ...roles.map((role) => form.elements[role])]) control.onchange = () => {
     status.textContent = "";
@@ -158,9 +159,10 @@ function bindMapWorkflowLaunch() {
     try {
       const run = await mapWorkflowRequest("workflows/launch", {}, { ...input, key: requestKey.key });
       requestKey = undefined;
+      const watchOnDesign = returnToDesign;
       dialog.close();
       if (typeof refreshWorkflowQueue === "function") void refreshWorkflowQueue();
-      if (typeof openMapWorkflow === "function") void openMapWorkflow(run.id);
+      if (typeof openMapWorkflow === "function") void openMapWorkflow(run.id, undefined, { design: watchOnDesign });
       else location.href = "/?" + new URLSearchParams({ run: run.id });
     } catch (error) { status.textContent = error.message; }
     finally { pending = false; refreshControls(); }

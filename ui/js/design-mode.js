@@ -27,7 +27,8 @@ if (window.engineeringDesktop) {
     find, request, report,
     currentProject: () => projects.find(({ id }) => id === picker.value),
     openWorkflow(id) {
-      if (typeof openMapWorkflowLaunch === "function") void openMapWorkflowLaunch(picker.value, id);
+      setMapMode("map");
+      if (typeof openMapWorkflowLaunch === "function") void openMapWorkflowLaunch(picker.value, id, { returnToDesign: true });
     },
   });
 
