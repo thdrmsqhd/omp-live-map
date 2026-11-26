@@ -63,6 +63,8 @@ export function bindSdlc({ find, request, report, showRun }) {
     if (task.status === "ready") item.append(control("Workflow 실행", async () => {
       const timeoutMs = Number(find("sdlc-minutes").value) * 60000, budgetCents = Number(find("sdlc-budget").value);
       const input = { task: task.id, timeoutMs, budgetCents };
+      const warning = engineeringLoginWarning(await request("runtime").catch(() => null), timeoutMs);
+      if (warning && !window.confirm(warning + "\n\n그래도 실행할까요?")) return;
       const fingerprint = JSON.stringify(input), entry = pending.get(task.id);
       const key = entry?.fingerprint === fingerprint ? entry.key : crypto.randomUUID();
       pending.set(task.id, { fingerprint, key });

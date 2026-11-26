@@ -26,6 +26,8 @@ function bridgeProcess(raw, broker, abort) {
   channel.exitCode = null;
   channel.signalCode = null;
   channel.cost = () => broker.spent();
+  // 구독 로그인 만료처럼 인증 때문에 호출을 못 했으면 그 이유(claude-code-oauth.js 의 코드)를 실행기에 알려 준다.
+  channel.authFailure = () => broker.authFailure?.() ?? null;
   let pending = 0, requestCount = 0;
   channel.stdin = new Writable({
     write(chunk, _, done) { transmit({ kind: "input", data: chunk.toString("base64") }, done); },

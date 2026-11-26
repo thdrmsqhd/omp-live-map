@@ -8,6 +8,13 @@ const { resultInstruction } = require("./harness-result");
 const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
 const { claudeStreamProgress, ompToolLine } = require("./stream-progress");
+const { authError } = require("./claude-code-oauth");
+
+// 브로커가 인증 때문에 호출을 못 했으면(구독 로그인 만료 등) CLI 의 일반 오류 대신 그 사유로 실패한다.
+function throwAuthFailure(child) {
+  const code = child?.authFailure?.();
+  if (code) throw authError(code);
+}
 
 const claudeTools = ["Read", "Edit", "Write", "Glob", "Grep"];
 
@@ -122,6 +129,7 @@ async function omp(backend, context) {
     if (!turns || !session.sessionId) throw new Error("OMP returned no completed turn or session");
     return { ...(capture ? { output: output || null, tools: [...tools] } : {}), sessionId: session.sessionId, model: model.model, costCents: rpc.child.cost?.() ?? costCents, costBasis: backend.protocol ? "reserved" : "reported" };
   } catch (error) {
+    if (!signal.aborted) throwAuthFailure(rpc.child);
     if (diagnostics) throw new Error(error.message + ": " + redact(diagnostics));
     throw error;
   } finally {
@@ -163,6 +171,7 @@ async function claude(backend, context) {
     }
     const [code] = await closed;
     signal.throwIfAborted();
+    if (code !== 0 || !result || result.is_error || !Number.isFinite(result.total_cost_usd)) throwAuthFailure(child);
     // Claude Code 가 오류 결과를 냈으면(예: 모델에 비해 CLI 버전이 낮음) 그 이유를 그대로 남겨 관제 화면에서 보이게 한다.
     if (result?.is_error && typeof result.result === "string" && result.result) {
       throw new Error("Claude Code 실행 실패: " + redact(result.result).slice(0, 600));

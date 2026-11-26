@@ -206,3 +206,6 @@
 #wf-map-follow[aria-pressed="true"] { border-color: #7fb8ff; background: #20344d; color: #e6f1ff; }
 #wf-map-follow[aria-pressed="true"]::before { content: "● "; color: #7fb8ff; }
 #wf-map-follow:disabled { opacity: .55; }
+
+/* 실행 환경 인증 경고(Claude Code 로그인 만료·임박) */
+#workflow-launch-status[data-tone="warn"] { color: #f3c77a; }

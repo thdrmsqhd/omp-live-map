@@ -6,7 +6,8 @@ export function bindRuntimeControls({ find, request, report, status, formValues 
   function render(current) {
     const busy = ["checking", "building"].includes(current.status);
     signingIn = current.signingIn;
-    find("runtime-status").textContent = current.detail;
+    find("runtime-status").textContent = current.detail + engineeringLoginExpiry(current);
+    find("runtime-status").dataset.tone = current.status === "login-expired" || engineeringLoginWarning(current, 30 * 60000) ? "warn" : "";
     find("prepare-runtime").disabled = busy || current.status === "ready";
     find("check-runtime").disabled = busy;
     find("console-login-status").textContent = current.loginStatus;

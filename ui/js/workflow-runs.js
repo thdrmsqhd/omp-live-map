@@ -132,6 +132,9 @@ export function bindWorkflowRuns({ el, request, report, current, projectId, onSt
     const input = { project: projectId(), workflow: workflow.id, version: workflow.version, title: form.get("title"),
       timeoutMs: Number(form.get("minutes")) * 60000, budgetCents: Number(form.get("budget")) };
     const identity = JSON.stringify(input);
+    // Claude Code 로그인이 실행 도중 만료될 수 있으면 시작 전에 알린다(갱신은 Claude Code 가 한다).
+    const warning = engineeringLoginWarning(await request("runtime").catch(() => null), input.timeoutMs);
+    if (warning && !window.confirm(warning + "\n\n그래도 실행할까요?")) return;
     if (pending?.identity !== identity) pending = { identity, key: crypto.randomUUID() };
     submitting = submitRun.disabled = true;
     launchStatus.textContent = "";

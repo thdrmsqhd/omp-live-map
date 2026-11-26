@@ -3,6 +3,7 @@
 // 최신 모델을 앞에 둔다(모델 선택 목록이 이 순서로 나온다). 이전 모델은 이미 저장된 정의가 계속 실행되도록 남긴다.
 const models = new Set(["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
   "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]);
+const { LOGIN_EXPIRED, AUTH_REJECTED } = require("./claude-code-oauth");
 const endpoint = "https://api.anthropic.com";
 const inputCap = 100000;
 const countFields = new Set(["model", "messages", "system", "tools", "tool_choice", "thinking"]);
@@ -44,9 +45,15 @@ function allowedBetas(value) {
 
 function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstream = fetch }) {
   let remaining = budgetCents;
-  function call(path, body, headers) {
-    return upstream(endpoint + path, { method: "POST", headers, body: JSON.stringify(body),
-      redirect: "error", signal });
+  // 인증 때문에 호출을 못 한 이유. CLI 에는 일반 거부로만 보이므로 실행기가 이 값으로 실패 사유를 남긴다.
+  let authFailure = null;
+  const rejected = (response) => {
+    if (response.status === 401 && !key) authFailure ??= oauth?.subscription ? LOGIN_EXPIRED : AUTH_REJECTED;
+    return response;
+  };
+  async function call(path, body, headers) {
+    return rejected(await upstream(endpoint + path, { method: "POST", headers, body: JSON.stringify(body),
+      redirect: "error", signal }));
   }
   return {
     async request(input) {
@@ -57,7 +64,12 @@ function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstrea
       const headers = { "content-type": "application/json",
         "anthropic-version": key ? "2023-06-01" : oauth.apiVersion ?? "2026-10-21" };
       if (key) headers["x-api-key"] = key;
-      else headers.authorization = "Bearer " + await oauth(signal);
+      else {
+        try { headers.authorization = "Bearer " + await oauth(signal); } catch (error) {
+          if (error.code === LOGIN_EXPIRED) authFailure ??= LOGIN_EXPIRED;
+          throw error;
+        }
+      }
       const betas = allowedBetas(input.beta);
       if (betas.length) headers["anthropic-beta"] = betas.join(",");
       const countBody = Object.fromEntries(Object.entries(body).filter(([key]) => countFields.has(key)));
@@ -77,6 +89,7 @@ function createAnthropicBroker({ model, key, oauth, budgetCents, signal, upstrea
       return call(path, body, headers);
     },
     spent: () => budgetCents - remaining,
+    authFailure: () => authFailure,
   };
 }
 

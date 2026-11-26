@@ -92,3 +92,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   box-shadow: 0 10px 48px #0008;
 }
 #workflow-profile-dialog::backdrop { background: #090a10b8; }
+
+/* 실행 환경 인증 경고(Claude Code 로그인 만료·임박) */
+#runtime-status[data-tone="warn"] { color: #f3c77a; }
