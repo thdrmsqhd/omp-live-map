@@ -62,13 +62,17 @@ function wfPersistPosition() {
   writeJSON("omp-workflow-map-positions-v2", cache);
 }
 
-function wfFit() {
+function wfFitView() {
   const box = boundsOf(workflowMapBoxes());
-  if (!box) return;
+  if (!box) return null;
   const stage = $("stage").getBoundingClientRect();
   const width = Math.max(160, stage.width - $("workflow-inspector").offsetWidth - 30);
   const k = Math.min(1.2, Math.max(0.12, Math.min((width - 24) / box.w, (stage.height - 90) / box.h)));
-  animateView({ k, x: (width - box.w * k) / 2 - box.x * k, y: (stage.height - box.h * k) / 2 - box.y * k }, 170);
+  return { k, x: (width - box.w * k) / 2 - box.x * k, y: (stage.height - box.h * k) / 2 - box.y * k };
+}
+function wfFit() {
+  const fitted = wfFitView();
+  if (fitted) animateView(fitted, 170);
 }
 
 // ---- 실행 따라가기 --------------------------------------------------------------
@@ -85,11 +89,17 @@ function wfActiveNode(detail = wfMap.run) {
 function wfFocusNode(id, dur = 260) {
   const node = wfNodes().find((item) => item.id === id);
   if (!node) return false;
+  wfMap.followTarget = id;
+  // 그래프 전체가 읽을 수 있는 배율로 들어가면(단계가 적은 Workflow) 전체를 보여 주고 움직이지 않는다.
+  const fitted = wfFitView();
+  if (fitted && fitted.k >= WF_READABLE) {
+    if (Math.abs(fitted.k - view.k) > .01 || Math.abs(fitted.x - view.x) > 2 || Math.abs(fitted.y - view.y) > 2) animateView(fitted, dur);
+    return true;
+  }
   const point = wfPoint(node), w = wfWidth(node), h = wfHeight(node);
   const stage = $("stage").getBoundingClientRect();
   const width = Math.max(160, stage.width - $("workflow-inspector").offsetWidth - 30);
   const k = Math.min(1.25, Math.max(WF_READABLE, view.k));
-  wfMap.followTarget = id;
   animateView({ k, x: (width - w * k) / 2 - point.x * k, y: Math.max(24, (stage.height - h * k) / 2) - point.y * k }, dur);
   return true;
 }
