@@ -1,120 +1,96 @@
 # OMP Live Map
 
-OMP와 Claude Code 세션을 한 화면에서 관제하고, 에이전트와 함께 개발 작업을 수행하는 로컬 워크스테이션입니다.
+> OMP와 Claude Code 에이전트를 지도 한 장에서 관제하고, 같은 앱에서 개발 업무를 Workflow로 맡기는 Windows 로컬 워크스테이션입니다.
 
-[현재 상태](#현재-상태) · [실행 방법](#실행) · [화면 조작](#화면) · [자동 검증](#검증) · [실제 화면 캡처 원본](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45509666670)
+[![Windows CI](https://github.com/thdrmsqhd/omp-live-map/actions/workflows/v2-phase-0.yml/badge.svg?branch=main)](https://github.com/thdrmsqhd/omp-live-map/actions/workflows/v2-phase-0.yml)
+[![Release](https://img.shields.io/github/v/release/thdrmsqhd/omp-live-map?display_name=tag)](https://github.com/thdrmsqhd/omp-live-map/releases/latest)
 
-## 현재 상태
+[주요 화면](#주요-화면) · [시작하기](#시작하기) · [Engineering](docs/guide/engineering.md) · [문서](#문서)
 
-2026-11-26에 `main`(`298c1df`)을 클론해 `node server.js --port 7806 --hours 24`로 직접 띄워 확인한 내용입니다. 시간이 지나면 달라질 수 있으니 날짜를 기준으로 읽어 주세요.
+## 한눈에 보기
 
-| 항목 | 확인한 상태 |
-|---|---|
-| 서버 실행 | 정상. 첫 화면이 200으로 열리고 `/api/graph`가 응답하며, `index.html`이 적재하는 스크립트 95개가 모두 200입니다. |
-| 첫 화면 | 프로젝트 관제(Overview). 상단에서 프로젝트 · 워크스페이스 · Live Map(관제) 모드를 바꿉니다(Alt+1/2/3). |
-| 일반 브라우저의 Engineering | `/engineering.html`은 열려 "기초 생성" 화면이 보이지만, "데스크톱 앱에서 Engineering을 열어 주세요."가 표시되고 `/api/engineering/*`는 403입니다. Engineering 데이터는 데스크톱 앱에서만 읽고 씁니다. |
-| 최신 버전 | 태그 `v8.2.1`(정식 릴리스). `desktop/package.json`의 버전은 아직 `8.2.1-preview.1`입니다. |
-| 로컬 회귀 테스트 | `node --test`가 모두 통과합니다(Node 26.5, Windows). 자세한 내용은 [검증](#검증)을 보세요. |
+| | 관제 (Live Map) | Engineering |
+|---|---|---|
+| **무엇을 하나** | 이 PC에서 도는 세션·서브에이전트의 상태, 토큰·비용·컨텍스트, 프로세스 자원을 실시간으로 보고 프롬프트 전송·셸 명령·프로세스 정리를 합니다. | 프로필 → 하네스 → 루프 → Workflow → 개발 Task로 업무를 정의하고, 승인·개입 지점을 두고 에이전트에게 실행시킵니다. |
+| **대상** | omp 세션, Claude Code 세션 | omp, Claude Code (컨테이너에서 격리 실행) |
+| **쓰는 곳** | 웹 모드와 데스크톱 앱 | 데스크톱 앱 |
+| **원본 데이터** | 세션 기록(JSONL)을 읽기만 함. 서버가 상태를 따로 저장하지 않음 | 앱 사용자 데이터 폴더의 SQLite. 버전·실행·승인·감사 이벤트 |
 
-## V4 주요 화면
+- **한 지도에 모든 세션**: 프로젝트별로 묶어 비교하고, 열어 둔 카드를 자유롭게 배치합니다. 실행 중인 서브에이전트는 메인 카드에 자동으로 붙었다가 끝나면 닫힙니다.
+- **업무를 Workflow로**: 계획 → 설계 승인 → 작업 및 검증 → 리뷰 → 최종 승인 같은 흐름을 그래프로 그리고 버전으로 고정합니다. 과거 실행은 시작한 버전을 유지합니다.
+- **사람이 개입하는 지점이 분명**: 승인 대기, 실패한 검증, 확인이 필요한 실행이 **개입 필요**에 모이고, 재검증·구현 보완 요청·승인·반려를 그 자리에서 처리합니다.
+- **안전하게 실행**: 에이전트는 네트워크 없는 컨테이너와 별도 Git worktree에서 돌고, 시간·예산 한도가 있으며, 결과가 불확실한 단계는 다시 실행하지 않습니다.
+- **가볍게 로컬로**: 웹 모드는 Node 내장 모듈만 쓰고 `127.0.0.1`에만 바인드합니다. 로그인이 없는 1인 로컬 사용을 전제로 합니다.
 
-### 1. 프로젝트 관제 (Overview)
+## 주요 화면
 
-![V4 프로젝트 관제: 10개 테스트 세션, Attention Queue, 리소스 지표](docs/media/v4/01-overview.png)
+아래 화면은 실제 앱을 데모 데이터로 실행해 캡처했습니다. 세션과 프로젝트는 가상의 예시이고, 자원 수치는 캡처한 PC의 값입니다.
 
-프로젝트별 세션을 그룹화하고 CPU·RAM·토큰·비용·컨텍스트를 비교합니다. 표시 밀도(Compact / Standard / Detailed), 정렬, 메모리 경고 기준, 다중 선택 및 고정을 지원합니다. 등록된 Engineering 프로젝트의 Task 및 승인 상태도 연동합니다.
+### 관제: 지금 무슨 일이 일어나는지
 
-### 2. 워크스페이스 (Workspace)
+![프로젝트 관제](docs/media/v8/01-overview.png)
 
-![V4 워크스페이스: 활성 카드, 채팅과 편집기](docs/media/v4/02-workspace.png)
+**프로젝트 관제.** 프로젝트별로 세션을 묶어 상태, 하네스(omp·Claude), 토큰·비용·컨텍스트, CPU·RAM을 한눈에 비교합니다. 표시 밀도(Compact·Standard·Detailed)와 정렬(고정 순서·주의 우선·메모리·최근 활동·이름)을 고르고, 주의가 필요한 항목은 **주의 필요**에 따로 모읍니다.
 
-선택한 카드에 집중하여 채팅·Git Bash 터미널을 이용합니다. Monaco 편집기는 코드 버튼으로 필요할 때 엽니다. 블록별 접기·집중 보기·슬롯 이동 및 카드별 편집기 폭을 설정할 수 있습니다.
+![워크스페이스](docs/media/v8/02-workspace.png)
 
-### 3. Live Map
+**워크스페이스.** 카드 하나에 집중해 대화, Git Bash 터미널, 세션 폴더의 파일을 한 화면에서 다룹니다. 서브에이전트의 작업은 대화 안에서 접어 볼 수 있고, Monaco 코드 편집기는 **코드** 버튼으로 필요할 때만 엽니다.
 
-![V4 Live Map: 열린 카드, HOST 자원, 지도 조작](docs/media/v4/03-live-map.png)
+![Live Map](docs/media/v8/03-live-map.png)
 
-열린 카드와 인프라를 공간적으로 배치합니다. Shift+헤더 클릭으로 큰 카드를 다중 선택하고, 격자·가로·세로 정렬, 배치 저장·복원, Undo/Redo를 사용합니다.
+**Live Map.** 열어 둔 카드와 HOST·WSL·Docker 자원 카드를 한 캔버스에 배치합니다. 격자·가로·세로 정렬, 배치 저장·복원, Undo/Redo, 미니맵을 지원합니다.
 
-> 위 이미지는 GitHub Actions에서 실제 V4 브라우저를 1440×900 해상도로 실행한 캡처입니다. 테스트용 10개 세션을 사용했으므로 실제 운영 자원·비용·SDLC 진행률을 나타내지 않습니다.
+### Engineering: 업무를 정의하고 맡기기
 
-## V4 변경점
+![Workflow 캔버스](docs/media/v8/13-engineering-workflow.png)
 
-| 영역 | 기능 |
-|---|---|
-| 관제 | 3개 화면 모드, 프로젝트 그룹, Attention Queue, 자원 경고 |
-| 카드 | 닫기와 세션 종료 분리, 활성 카드, 공통 제어 메뉴 |
-| 블록 | 공통 헤더, 슬롯 이동, 접기, 집중 보기, 카드별 편집기 폭 |
-| 배치 | 다중 선택, 정렬 프리셋, 저장·복원, Undo/Redo |
-| 성능 | 비활성 카드 경량화, Monaco 인스턴스 해제, 채팅·로그 페이지 분할, 선택적 iframe 해제 |
-| Engineering | V3 프로젝트·Task·Workflow·하네스·루프 화면 연결 |
+**Workflow 캔버스.** 기본 제공 8종(신규 기능, 버그 수정, 리팩토링, 코드 리뷰, 테스트 작성, 기술 문서, 릴리스, 장애 분석) 중 하나로 시작하거나 노드와 연결을 직접 그립니다. 위 화면은 **버그 수정** 템플릿입니다. 계획 → 설계 승인 → 작업 및 검증(Loop) → 코드 리뷰 → 최종 승인으로 이어집니다.
 
-이 PC에서 도는 OMP 세션·서브에이전트의 상태, 토큰·비용·컨텍스트 소비, 프로세스 자원을 실시간으로 보여 주고, 브라우저에서 바로 프롬프트 전송·셸 명령·프로세스 정리를 합니다.
+![하네스 편집](docs/media/v8/12-engineering-harness.png)
 
-- 의존성 없음. Node 내장 모듈만 씁니다(Node 22 이상. 컨텍스트 상한 조회에 `node:sqlite`를 씁니다. 없으면 사용률만 빠집니다).
-- `127.0.0.1`에만 바인드합니다. 로컬 1인 사용을 전제로 하며 로그인은 없습니다.
-- Windows + Git Bash + WSL 환경에 맞춰져 있습니다.
-- 두 가지로 쓸 수 있습니다. 브라우저로 여는 **웹 모드**(`node server.js`)와, Engineering(프로젝트·하네스·루프·Workflow·개발 Task)까지 쓰는 **Windows 데스크톱 앱**입니다. 웹 모드에서 Engineering은 화면만 열립니다([현재 상태](#현재-상태)).
-- 세션을 만들거나 이어가려면 `omp` 또는 `claude` CLI가 PATH에 있어야 합니다. 둘 다 없어도 기록 읽기와 지도 보기는 됩니다.
+**하네스 편집.** 역할, 작업 지시, 모델, 읽을 자료, 스킬, 결과 형식을 정하고 개인·팀·프로젝트 범위로 저장합니다. 실제로 실행기에 전달될 값을 미리 보고, 기준 버전과 초안을 같은 입력으로 비교 실행할 수 있습니다.
 
-## 무엇을 하나
+![개발 Task 칸반](docs/media/v8/14-engineering-tasks.png)
 
-### 세션 전체를 지도 한 장으로
+**개발 Task.** Backlog · 준비 · 진행 중 · 승인 대기 · 보류 · 완료 칸반에서 업무를 관리합니다. Task마다 Workflow 버전과 시간·예산 한도를 고정해 실행하고, 승인 요청은 **승인 대기함**에 모입니다.
 
-![전체 지도: 세션 클러스터, HOST 자원 카드](docs/media/map.png)
+### 관제와 Engineering이 만나는 곳
 
-왼쪽 세션 목록에 최근 활동한 세션이 한 묶음씩 나오고(main 한 줄, 그 아래 서브에이전트 들여쓴 줄), 지도에는 줄을 눌러 연 큰 카드만 올라옵니다. HOST 카드는 이 PC의 RAM·CPU·디스크·가동 시간을, WSL·Docker 카드는 배포판과 컨테이너 상태를 보여 줍니다. 위쪽 `활성`·`2시간`·`24시간`·`전체` 버튼으로 기간을 고르고, 휠로 확대·축소하고 빈 바탕을 끌어 이동합니다. 오른쪽 위 미니맵에 지금 보는 범위가 표시됩니다.
+![Engineering이 연동된 관제](docs/media/v8/15-overview-engineering.png)
 
-Compose 프로젝트 카드에서 `start`를 누르면 해당 프로젝트를 `docker compose up -d`로 실행합니다. WSL·Compose·컨테이너 동작 버튼은 요청과 상태 조회가 끝날 때까지 진행 상태를 표시하고 중복 실행을 막습니다. 실패하면 오류를 알립니다.
+**승인이 필요한 일을 놓치지 않기.** 등록한 프로젝트에는 SDLC Task 진행률과 승인 대기가 붙고, **주의 필요**에 `승인: Modbus 재접속 수정 · 계획 승인`처럼 바로 보입니다.
 
-### 에이전트 카드
+![승인 대기 중인 Workflow 실행](docs/media/v8/16-live-map-workflow.png)
 
-![main과 서브에이전트 작은 카드](docs/media/agent-cards.png)
+**같은 캔버스에서 승인·반려.** 실행 중인 Workflow가 세션 카드와 같은 Live Map에 노드와 연결선으로 나타납니다. 노드를 눌러 결과와 산출물을 확인하고, 메모와 함께 승인하거나 반려합니다.
 
-목록의 한 줄이 에이전트 하나입니다. 상태 점(진행 중·대기·끝남), 이름, 하네스 칩, 답 대기·주의 배지, 지금 돌고 있는 툴과 경과 시간이 한 줄에 보이고, 토큰·모델·컨텍스트는 줄 위에 마우스를 올리면(title) 나옵니다. 자세한 지표·스파크라인·프로세스 자원은 큰 카드에 있습니다. 끝난 서브에이전트는 목록에서 접혀 있고 `완료 서브 N개 보기`로 펼칩니다. 패널은 접을 수 있고 오른쪽 가장자리를 끌어 폭을 바꿉니다(접힘·폭은 저장).
+## 시작하기
 
-### 카드를 열어 대화·지표 보기
+### Windows 데스크톱 앱 (Engineering 포함)
 
-![카드를 열어 큰 카드로 보는 모습](docs/media/card-open.gif)
+1. [Releases](https://github.com/thdrmsqhd/omp-live-map/releases/latest)에서 `OMP-Live-Map-<버전>-Windows-x64-Setup.exe`를 받고, 같은 릴리스의 `SHA256SUMS.txt`로 체크섬을 확인합니다. 설치 파일에는 코드 서명이 없습니다.
+2. 설치 후 실행하면 앱이 로컬 서버를 빈 포트로 띄우고 같은 창에서 관제와 Engineering을 엽니다. 7800 포트의 기존 서비스는 건드리지 않고, 앱은 하나만 실행됩니다.
+3. Engineering을 쓰려면 Docker Desktop(Linux 엔진)이 필요합니다. 처음 쓰는 순서는 [Engineering 가이드](docs/guide/engineering.md#처음-쓰기)를 보세요.
 
-![열린 세션 카드: 위는 지표, 아래는 채팅·터미널·파일 블록](docs/media/session-card.png)
-
-목록 줄을 클릭하면 현재 화면 안 빈 자리에 큰 카드가 열립니다(이미 열려 있으면 그 카드로 화면이 이동). 메인 큰 카드를 열면 실행 중인 서브에이전트 큰 카드가 오른쪽에 자동으로 붙고, 끝나면 닫힙니다. 위쪽에는 누적 토큰 구성·비용·ttft·컨텍스트 구성(대화·툴 스키마·시스템)·세션 안 에이전트별 컨텍스트·툴 사용 횟수·프로세스 자원이, 아래쪽에는 블록이 놓입니다. 세션 카드의 기본 블록은 대화 기록(채팅), Git Bash 터미널, 세션 폴더의 파일 트리입니다.
-
-대화 블록은 응답 생성이나 도구 작업이 진행 중일 때 입력창 위에 상태를 표시합니다. 터미널에서 시작한 세션은 실시간 활동 확장이 보낸 이벤트를 기준으로 표시합니다.
-
-### 하네스 선택: omp · Claude Code
-
-카드에는 그 세션을 만든 하네스 칩(`omp` / `Claude`)이 붙습니다. 새 세션 창의 **하네스**에서 고르고, 마지막 선택은 브라우저에 기억됩니다.
-
-- **omp**(기본): 지금까지와 같습니다. `omp --mode rpc-ui --append-system-prompt server/main-card-prompt.md`로 띄우고 압축·비우기·모델 변경·ask를 모두 씁니다. `main-card-prompt.md`는 메인 카드 세션이 작업을 `task` 서브에이전트에 넘기고 `wait` 없이 턴을 바로 끝내 사용자 메시지를 계속 받게 하는 지시입니다. omp는 이 지시를 서브에이전트에 넘기지 않습니다. 이 플래그가 `~/.omp/agent/APPEND_SYSTEM.md`를 대신하므로, 그 파일을 만들면 내용을 `main-card-prompt.md`에 합칩니다.
-- **Claude Code**: `~/.claude/projects/<슬러그>/<sessionId>.jsonl`을 **읽기 전용**으로 읽어 카드로 그립니다(제목·대화·cwd·토큰·비용·툴). 서브에이전트 기록(`<sessionId>/subagents/agent-*`)도 메인 아래 카드로 그려 실행 중이면 자동 도킹·완료 시 자동 닫힘합니다.
-- 프롬프트는 `claude -p --output-format stream-json --include-partial-messages`로 보내고, 이어가기는 `--resume <sessionId>`, 취소는 프로세스 종료입니다. 모델 변경은 다음 실행에 `--model <별칭>`으로 넘깁니다(카드별 저장). 첨부 이미지는 stream-json 입력의 이미지 블록으로, 일반 파일은 임시 경로에 저장해 `@경로`로 참조합니다.
-- **비우기**는 계보(lineage)에 다음 세션 파일을 적어 카드 id·자리·메모를 유지한 채 빈 세션으로 잇습니다. **압축**은 `/compact [지시문]`을 프롬프트로 보냅니다(Claude Code `-p` 모드의 슬래시 명령 지원 여부는 [미확인]). **ask**는 스트림의 `AskUserQuestion` tool_use를 기존 질문 카드로 띄우고, 고른 답을 다음 프롬프트로 보냅니다.
-- Claude Code에는 없는 기능: 컨텍스트 구성 조회(대화·툴 스키마·시스템 토큰 분해). 이 블록은 Claude 카드 메뉴에 나오지 않습니다.
-- **하네스 전환**: 카드 우클릭 메뉴에서 반대 하네스로 옮길 수 있습니다. 원래 세션의 요약(요약 모델 실패 시 대화 발췌)을 넘겨 같은 cwd 에 새 세션을 시작하고, 계보(lineage)로 카드 id·별칭·메모·위치·블록을 그대로 유지합니다. 원래 기록은 지도에서 숨고(파일은 남음), 원래 omp rpc 는 자원을 정리합니다. 도는 턴이 있으면 전환하지 않습니다. 양방향 반복 전환할 수 있습니다.
-- Claude Code 실행에는 `claude` CLI가 PATH에 있어야 합니다. 없으면 카드에서 "claude 실행 실패"로 알립니다.
-
-### 브라우저 블록
-
-![로컬 html을 띄운 브라우저 블록](docs/media/browser-block.png)
-
-개발 서버 주소(`http://127.0.0.1:8080` 등)나 로컬 html 경로를 넣으면 카드 안 iframe으로 띄웁니다. 블록을 추가하면 카드가 1920×1080 크기로 맞춰집니다. 위 화면은 `docs/omp-live-map.architecture.html`을 연 모습입니다.
-
-### 로컬 작업 카드: 터미널과 파일 트리
-
-![로컬 작업 카드의 터미널과 파일 트리](docs/media/files-terminal.png)
-
-세션과 상관없는 작업 카드를 Ctrl+N이나 빈 바탕 우클릭으로 만듭니다. 터미널은 Git Bash로 명령을 실행하고(Shift+Enter는 백그라운드 잡), 편집기 블록의 탐색기가 카드 폴더를 펼쳐 보여 줍니다. 블록은 카드 우클릭 메뉴에서 더하고 뺍니다(편집기·터미널·백그라운드 잡·브라우저·DB 조회). 빈 바탕 우클릭의 **새 브라우저 카드**는 브라우저 블록 하나만 가진 로컬 카드(제목 `브라우저 N`)를 만듭니다.
-
-카드 닫기(✕)는 화면만 닫고 세션은 유지합니다. 명시적인 `세션 종료` 및 `프로세스 정리만`은 별도 명령입니다. 프로세스 정리는 해당 카드에서 맵이 실행한 백그라운드 잡과 그 자식만 대상으로 합니다. 같은 폴더의 다른 터미널이나 세션은 폴더 경로만으로 종료하지 않습니다. 맵이 소유한 OMP 세션은 명시적인 세션 종료 요청에서 별도로 종료합니다.
-
-## 실행
+### 웹 모드 (관제만)
 
 ```bash
 node server.js --port 7800 --hours 24
 # http://127.0.0.1:7800
 ```
+
+웹 모드에서도 `/engineering.html`은 열리지만 "데스크톱 앱에서 Engineering을 열어 주세요."가 표시되고 `/api/engineering/*`는 403입니다.
+
+### 준비물
+
+| 항목 | 필요한 경우 |
+|---|---|
+| Node.js 22 이상 | 웹 모드. 컨텍스트 상한 조회에 `node:sqlite`를 씁니다(없으면 사용률만 빠집니다). 데스크톱 앱에는 포함됩니다. |
+| Git Bash | 카드의 터미널과 백그라운드 잡. 기본 경로 `C:\Program Files\Git\bin\bash.exe` |
+| `omp` 또는 `claude` CLI(PATH) | 맵에서 세션을 만들거나 이어갈 때. 둘 다 없어도 기록 읽기와 지도 보기는 됩니다. |
+| Docker Desktop(Linux 엔진) | Engineering 실행. 앱의 **실행 환경 준비**가 런타임 이미지를 만듭니다. |
+
+### 설정
 
 | 옵션·환경변수 | 기본값 | 내용 |
 |---|---|---|
@@ -122,200 +98,46 @@ node server.js --port 7800 --hours 24
 | `--hours` | 24 | 스냅샷에 넣을 세션의 최근 활동 범위(시간) |
 | `OMP_MAP_BASH` | `C:\Program Files\Git\bin\bash.exe` | 터미널·백그라운드 잡에 쓰는 bash |
 | `OMP_MAP_CWD` | 프로젝트 폴더의 부모 | 새 로컬 카드의 기본 폴더 |
-| `OMP_USD_KRW` | 1390 | 비용 원화 환산 환율 |
-| `OMP_LLM_BASE_URL`, `OMP_LLM_API_KEY`, `OMP_LLM_MODEL` | `~/.omp/agent/models.yml`의 provider | 세션 요약(`/api/summary`)에 쓰는 OpenAI 호환 엔드포인트 |
-| `OMP_SUMMARY_MODEL` | provider 기본 모델 | 요약 모델만 따로 지정 |
 | `OMP_MAP_STATE` | 프로젝트의 `data/` | Claude 카드별 모델 선택과 비우기 계보를 저장하는 폴더 |
 | `OMP_MAP_CLAUDE_MODEL` | `default` | Claude Code 카드에서 "CLI 기본 모델"로 넘길 `--model` 값 |
 | `OMP_MAP_CLAUDE_MAX_RUNS` | 4 | 동시에 실행할 Claude Code 프로세스 수(1~32) |
-| `OMP_PYRIGHT` | PATH에서 탐색 | `pyright-langserver` 실행 파일 경로 |
+| `OMP_USD_KRW` | 1390 | 비용 원화 환산 환율 |
+| `OMP_LLM_BASE_URL`, `OMP_LLM_API_KEY`, `OMP_LLM_MODEL` | `~/.omp/agent/models.yml`의 provider | 세션 요약(`/api/summary`)에 쓰는 OpenAI 호환 엔드포인트 |
+| `OMP_SUMMARY_MODEL` | provider 기본 모델 | 요약 모델만 따로 지정 |
+| `OMP_PYRIGHT` | PATH에서 탐색 | 코드 편집기의 Python 언어 서버(`pyright-langserver`) 경로 |
 
 `ui/` 파일은 요청할 때마다 디스크에서 읽으므로 새로고침하면 반영됩니다. `server.js`와 `server/`를 고치면 서버를 다시 띄워야 합니다.
 
-### Windows 데스크톱 앱
+## 어떻게 동작하나
 
-- 설치 파일은 [GitHub Releases](https://github.com/thdrmsqhd/omp-live-map/releases)의 `OMP-Live-Map-<버전>-Windows-x64-Setup.exe`입니다. 같은 릴리스의 `SHA256SUMS.txt`로 체크섬을 확인하세요. 프리릴리스 설치 파일에는 코드 서명이 없습니다.
-- 앱은 `server.js`를 `--port 0`(빈 포트 자동 선택)으로 자식 프로세스로 띄우고, 같은 창에서 `/`(관제)와 `/engineering.html`을 엽니다. 7800 포트의 기존 서비스는 건드리지 않습니다. 앱 하나만 실행할 수 있습니다.
-- `/api/engineering/*`는 앱이 만든 토큰(`x-omp-engineering-token`)을 가진 요청만 받습니다. Engineering 데이터는 앱의 사용자 데이터 폴더(SQLite)에 저장됩니다.
-- 소스에서 실행·빌드: `cd desktop` 후 `npm install`, `npm start`(Electron), `npm run build:windows`(NSIS 설치 파일). 이번 점검에서는 실행하지 않았습니다. CI의 Electron 검증은 `tests/verification/electron.cjs`가 맡습니다.
-
-## 터미널 세션 실시간 표시(확장)
-
-TUI에서 연 omp 세션의 기록 파일은 0.3초 안에 읽히지만, 진행 중인 bash 출력은 툴이 끝날 때 한 번에 기록에 남습니다. 그래서 omp 확장 `extension/live-map.ts`가 세션 안에서 툴 진행 프레임(백그라운드 잡 포함)과 에이전트 글을 직접 받아 `~/.omp/live-map/<세션>.jsonl`로 흘리고, 서버의 `server/ext-live.js`가 그 파일을 tail 해 기존 live 이벤트로 방송합니다.
-
-설치(omp가 `~/.omp/agent/extensions/`를 자동으로 읽으므로 설정 파일은 건드리지 않습니다):
-
-```bash
-node extension/install.js
+```mermaid
+flowchart LR
+  R["세션 기록<br/>~/.omp · ~/.claude<br/>(읽기 전용 JSONL)"] --> S["Node 서버<br/>증분 읽기 → 스냅샷"]
+  X["omp 확장<br/>터미널 세션 실시간 이벤트"] --> S
+  S -- "SSE · REST" --> U["브라우저 UI<br/>관제 · 워크스페이스 · Live Map"]
+  U -- "프롬프트 · 셸 · 정리" --> S
+  D["Electron 앱"] -- "자식 프로세스로 실행" --> S
+  D -- "토큰 인증 IPC" --> E["Engineering<br/>SQLite · Workflow 엔진"]
+  E --> C["Docker 컨테이너<br/>omp · Claude Code · 검증 명령"]
+  E --> G["GitHub PR · CI"]
 ```
 
-적용은 **새로 연 세션부터**입니다. 이미 떠 있는 TUI 세션은 다시 시작해야 확장이 붙습니다. 서버도 `server/ext-live.js`를 읽도록 재시작해야 합니다.
+- 세션 상태의 원본은 JSONL 하나입니다. 서버를 다시 띄우면 기록에서 그대로 복원합니다([ADR-0002](docs/adr/0002-jsonl-single-source-no-server-state.md)).
+- 맵이 직접 만든 omp 세션은 세션마다 상주하는 `omp --mode rpc-ui` 프로세스가 맡고([ADR-0001](docs/adr/0001-map-session-per-rpc-process.md)), Claude Code는 기록을 읽기 전용으로 그립니다.
+- 화면은 번들러와 프레임워크 없이 계층(core → model → viewmodel → view)으로 나눈 Vanilla JS입니다. 자세한 구조는 [구조와 설계 규칙](docs/reference/architecture.md)을 보세요.
 
-- 기록은 툴 호출별로 늘어난 출력의 끝 8000자, 파일 하나가 2MB를 넘으면 새로 시작합니다. 확장은 TUI와 같은 프로세스에서 도므로 처리를 모두 try/catch로 감싸고 디스크 쓰기만 비동기 큐로 묶습니다.
-- 맵이 직접 띄운 rpc 세션은 프레임이 원천이므로 확장 기록은 건너뜁니다(중복 표시 없음). 서버를 새로 켜도 최근 10분 활동은 새로 붙은 화면에 되살아납니다.
+## 문서
 
-## 화면
-
-요소 계층은 사이드 목록 + 스테이지(맵) → 큰 카드 → 블록입니다. 맵의 클러스터는 HOST·WSL/Docker·로컬 작업 카드만 남았습니다.
-
-- **세션 목록**: 세션마다 main 한 줄 + 서브 들여쓴 줄. 열린 항목은 강조되고, 검색으로 고정한 세션도 여기에 나옵니다.
-- **클러스터**: WSL·Docker, HOST(RAM·CPU·디스크·가동 시간), 로컬 작업 카드. 세션 에이전트는 클러스터 테두리·작은 카드·미러 카드가 없습니다.
-- **큰 카드**: 목록에서 열린 에이전트 하나. 위쪽(chrome)은 토큰·비용·ttft·컨텍스트·툴 사용·자원 지표, 아래쪽(body)은 블록입니다. 열린 세션의 백그라운드 잡 카드는 그 큰 카드 아래에 붙습니다.
-- **블록**: `chat`(대화 기록, 프롬프트 전송·취소·요약), `terminal`(Git Bash), `bg`(백그라운드 잡 출력), `browser`(개발 서버 미리보기), `db`(SQLite·MySQL·MariaDB·Oracle 조회), `context`(지금 세션이 실어 나르는 컨텍스트 — 압축 요약·메시지·툴 결과를 순서대로, 항목별 토큰 수와 함께. 작업 가이드 전송·선택 항목을 뺀 압축). 카드 우클릭 메뉴에서 추가·제거하고, 블록마다 접기·순서 변경·높이 조절을 합니다.
-
-| 조작 | 동작 |
+| 문서 | 내용 |
 |---|---|
-| 세션 목록 줄 클릭 | 큰 카드 열기(열려 있으면 그 카드로 이동). 줄 오른쪽 ✕: 카드만 닫기(세션 유지) |
-| 세션 목록 줄 우클릭 | 카드 메뉴 |
-| 클러스터 제목 클릭 | HOST·인프라·로컬 클러스터 선택 (Shift+클릭: 다중 선택) |
-| 로컬·인프라 작은 카드 더블클릭 | 큰 카드 열기. 큰 카드의 ✕: 닫기 |
-| 클러스터 제목·로컬·인프라 카드 끌기 | 선택된 클러스터 이동 |
-| 큰 카드 끌기 | 그 큰 카드(+붙은 서브 카드)만 이동 |
-| Ctrl+Z / Ctrl+Shift+Z | 배치 Undo / Redo |
-| Alt+1 / Alt+2 / Alt+3 | 관제 / 워크스페이스 / Live Map |
-| Alt+N / Alt+F | 새 세션 / 활성 카드 집중 보기 |
-| Shift+큰 카드 헤더 클릭 | 다중 선택 후 함께 이동 |
-| Ctrl+휠 / 일반 휠 / `+` `-` `0` `1` | 지도 확대·축소 / 이동 / 키보드 확대·축소·전체 보기·100%. 카드 내부 일반 휠은 카드에서만 처리 |
-| 빈 바탕 끌기, Space+끌기, 가운데 버튼 | 화면 이동 |
-| 우클릭 | 카드 메뉴(블록, 세션 프로세스 종료, 숨기기, 고정) / 빈 바탕 메뉴 |
-| Ctrl+N | 로컬 작업 카드 추가 |
-| 터미널 Enter / Shift+Enter / ↑↓ | 실행 / 백그라운드 실행 / 명령 기록 |
-| 채팅 Ctrl+Enter | 그 세션에 프롬프트 전송(`omp -p -r <세션 파일>`) |
-| 채팅·새 세션 입력창 Ctrl+V / 파일 끌어 놓기 | 이미지·파일 첨부(입력창 아래 칩, ×로 빼기). 전송한 이미지는 대화 기록에도 표시합니다. 파일당 20MB, 합계 60MB, 10개까지. 넘으면 칩에 오류를 띄우고 보내지 않음 |
-| 토큰 바 클릭 | 세션 누적 ↔ 최근 1시간 |
-| 툴 칩 클릭 | 대화를 그 툴을 쓴 턴으로 거르기 |
-| 세션 컨텍스트 행 클릭 | 그 에이전트 카드로 이동 |
-| 이름 더블클릭 또는 ✎ | 카드 이름 바꾸기(비우면 원래 이름) |
-
-배치·숨김·고정·이름·블록 구성은 브라우저 `localStorage`(`omp-map-*`)에 저장됩니다.
-
-## 구조
-
-```
-server.js              진입점: 주기 스캔, fs.watch, listen
-server/
-  config.js            경로·포트·상수
-  tail.js ingest.js turns.js     기록 수집: 증분 읽기 → 이벤트 반영 → 대화·시간당 토큰
-  snapshot.js models.js          세션/노드 그래프, 컨텍스트 상한 조회, 요약 호출
-  proc.js owner.js sys.js infra.js   프로세스·세션 소유 프로세스·호스트·WSL/Docker 관측
-  shell.js prompt.js             Git Bash 실행, 백그라운드 잡, omp 프롬프트 전송·취소
-  sse.js http.js routes*.js      SSE 방송, 요청 가드, 라우트
-  active.js ext-live.js          실시간 방송: 기록 이벤트, 확장 기록(~/.omp/live-map) tail
-  uploads.js                     프롬프트 첨부: 작은 이미지는 rpc `images`, 나머지는 %TEMP%\omp-live-map-uploads\ 에 저장해 경로를 메시지에 붙임
-  harness/                       Claude Code 하네스: claude.js(기록 읽기) · claude-run.js(실행) · switch.js(하네스 전환) · session-profiles.js 등
-  engineering/                   Engineering(데스크톱 전용): 프로젝트·하네스·루프·Workflow·개발 Task, SQLite(schema*.sql), 실행기(runner·docker-runner), routes.js
-extension/
-  live-map.ts          omp 확장: 세션의 툴 출력·글을 ~/.omp/live-map 으로(설치: install.js)
-desktop/               Electron 데스크톱 앱(main.cjs · preload.cjs · credentials.cjs · 설치 파일 빌드 설정)
-tests/                 node --test 회귀 테스트(*.test.js, fake-omp·fake-claude 가짜 하네스) · verification/ Windows·Electron·브라우저 검증 스크립트
-.github/workflows/     CI: V3 Windows verification(v2-phase-0.yml) 외 3개
-ui/
-  index.html           스크립트를 계층 순서로 적재(번들러·프레임워크 없음)
-  engineering.html     Engineering 화면(기초 생성 · 프로필 · 하네스 · 루프 · Workflow · 개발 Task · 실행). js/engineering*.js, workflow-*.js, harness-*.js, sdlc.js
-  css/                 tokens · shell · sessions · cards · panel · blocks
-  js/core/             format · dom · state(가변 상태 단일 소유) · persist(localStorage)
-  js/model/            layout(배치 계산, DOM 접근 없음)
-  js/viewmodel/        map · session-rows · store · term · files · dbui · chat · context
-  js/view/             맵(render-map, patch-nodes, stage*, edges, minimap, menu, search, topbar)
-                       카드(card-compact, card-session, card-metrics, charts, spark-hover, panel), 세션 목록(session-list)
-                       블록(blocks, block-controls, block-chat/term/bg/editor/browser/db/context, editor-*(탐색기·탭·Monaco 상태바))
-  js/app.js            부트스트랩: 첫 스냅샷 → SSE → 폴러
-docs/                  archify 구조 다이어그램(architecture · components · layers · ui), adr/, 릴리스 노트(release-v*.md), media/(README 이미지·GIF)
-```
-
-규칙:
-
-- 의존 방향은 core → model → viewmodel → view → app 한쪽입니다. model은 DOM을 모르고 view만 DOM을 만집니다.
-- 파일 하나는 200줄 미만을 원칙으로 합니다. 2026-11-26 기준 JS 229개 중 12개가 넘고, 가장 큰 파일은 `ui/js/workflow-editor.js`(468줄)입니다.
-- 서버의 가변 상태는 모듈 하나가 소유하고 함수로만 내보냅니다(예: 파일 상태 Map은 `tail.js`).
-- 화면은 `renderMap()`이 조각 목록을 만들고 `patchPieces()`가 마크업이 바뀐 조각만 바꿉니다. 큰 카드는 스냅샷이 올 때 chrome만 교체하고, 블록이 사는 body는 블록 구성이 같으면 DOM을 유지합니다. 그래서 입력 포커스·스크롤·트리 펼침이 갱신에 끊기지 않습니다.
-- 새 블록은 `ui/js/view/block-<이름>.js`에서 `registerBlock({ type, slot, flex, render, mount, paint })`로 등록하고 `index.html`에 스크립트를 추가합니다. `render`는 바디를 만들 때, `mount`는 그 직후 1회, `paint`는 스냅샷 갱신 때 불립니다.
-
-## 데이터와 API
-
-기록의 원본은 `~/.omp/agent/sessions/<폴더>/<세션>.jsonl`과 서브에이전트 `<세션>/<Agent>.jsonl`입니다. 서버는 읽기만 하고 상태를 메모리에만 둡니다. 서버를 다시 띄우면 기록에서 다시 만듭니다. 예외는 Claude 카드별 모델 선택과 비우기 계보(`data/` 또는 `OMP_MAP_STATE`)와, 데스크톱 앱의 Engineering 데이터(앱 사용자 데이터 폴더의 SQLite)입니다.
-
-| 경로 | 내용 |
-|---|---|
-| `GET /api/graph` | 스냅샷 `{generatedAt, fx, env, sessions[]}` |
-| `GET /api/events` | SSE. 스냅샷(바뀔 때만)과 `{chat: {node, kind: req\|delta\|done, text, code, cancelled}}` |
-| `POST /api/prompt` `{node, text, files?[{name, mimeType, data(base64)}]}` | 세션에 프롬프트 전송. 노드당 1개만 실행(`busy`). PNG·JPEG·GIF·WebP 는 base64 합계 900KB까지 omp rpc `images` 로 싣고(rpc v1 입력 프레임 1MiB), 그 밖의 파일·넘친 이미지는 `%TEMP%\omp-live-map-uploads\<id>\` 에 저장해 메시지 끝에 절대 경로를 붙임. 본문 상한 100MB(다른 API는 1MB). `POST /api/session/new` `{cwd, text, files?}` 도 같음 |
-| `POST /api/prompt/cancel` `{node}` | 실행 중인 프롬프트의 프로세스 트리를 끝냄. 대기 중인 `/api/prompt` 응답과 SSE가 `code 130, cancelled`로 끝남 |
-| `POST /api/session/models` `{node}` | 사용 가능한 모델 목록과 현재 모델 `{ok, models[{provider,id,name}], current, busy}`. 맵 세션이 아니면 이어 붙이고, 터미널이 쥔 세션은 `{ok:false, held:true}` |
-| `POST /api/session/model` `{node, provider, id}` | 모델 변경(omp rpc `set_model`). 응답 `{ok, model, busy}`. 도는 중이면 다음 턴부터 적용 |
-| `GET /api/context?node=` | 그 세션의 지금 컨텍스트 `{ok, items[{i, kind, label, text, tokens, chars, trunc, tool?, tools?, error?}], count, totalTokens, owned}`. 기록에서 마지막 `compaction`(없으면 `reset_boundary`) 이후만 복원하고, 토큰은 표시용 근사치(한글·CJK 1자≈1, 그 외 4자≈1) |
-| `POST /api/context` `{node, mode, text, omit?}` | `mode:"guide"` = 작업 가이드를 프롬프트로 전송(도는 중이면 steer). `mode:"compact"` = omp `compact` 에 `customInstructions` 로 가이드+제외 항목 설명을 넘겨 압축(맵이 쥔 세션만, 터미널이 쥐면 `{ok:false, held:true}`) |
-| `POST /api/summary` `{node}` | 최근 대화 3줄 요약 |
-| `POST /api/exec` `{cwd, cmd}` | Git Bash 명령 실행(20초 제한). 서버는 cwd를 기억하지 않고, `cd`는 새 cwd를 응답으로 돌려줌 |
-| `POST /api/db/query` `{type, host, port, database, user, password, path, sql}` | DB 조회 한 문장. 응답 `{ok, columns, rows, total, truncated, changes, ms, error, reason, hint}`. `type`은 `sqlite`\|`mysql`\|`mariadb`\|`oracle`, `path`는 SQLite 파일. SQLite는 내장 `node:sqlite`(없으면 `sqlite3` CLI), MySQL·MariaDB는 `mysql`/`mariadb` 클라이언트, Oracle은 `sqlplus`를 부릅니다. 비밀번호는 요청에만 쓰고 저장하지 않음 |
-| `POST /api/bg/start` `{node, cwd, cmd}` · `GET /api/bg/list?node=` · `GET /api/bg/all` · `POST /api/bg/stop` `{id}` | 백그라운드 잡 |
-| `GET /api/tree?p=&d=` | 디렉터리 트리 |
-| `POST /api/editor/read` `{path}` | 파일 읽기 `{ok, path, text, mtime}`. 절대 경로만 받고 2MB 상한, 폴더·바이너리는 거부 |
-| `POST /api/editor/write` `{path, text, mtime}` | 파일 저장 `{ok, mtime}`. 보낸 `mtime` 이 현재와 다르면 409(다른 곳에서 바뀜), `mtime:null` 이면 덮어씀 |
-| `POST /api/editor/definition` `{path, text, line, character}` | Python 정의 위치 `{ok, locations[{path, line, character}]}`. pyright-langserver 를 워크스페이스 루트별로 띄워 처리(0-based) |
-| `POST /api/editor/diagnostics` `{path, text}` | Python 진단 `{ok, items[{line, character, endLine, endCharacter, severity, message}]}`. `publishDiagnostics` 를 15초까지 기다림 |
-| `GET /api/editor/status` | `{ok, pyright}` — Python 언어 서버(pyright-langserver) 발견 여부 |
-| `POST /api/release` `{node}` | 이 카드에서 띄운 백그라운드 잡과, 명령줄에 세션 폴더가 들어간 프로세스(자식 포함)를 종료. 세션을 돌리는 omp 프로세스와 그 자식(MCP 서버·실행기)은 건드리지 않음 |
-| `GET /api/res?cwd=&node=` · `GET /api/proc` · `GET /api/sys` | 자원·프로세스·호스트 |
-| `GET /api/infra` · `POST /api/infra/action` `{kind, target}` | WSL 배포판·Docker 컨테이너 조회와 start/stop/restart, Compose 프로젝트 실행(`project-start`) |
-| `GET /api/performance` | 서버 프로세스 메모리·CPU·이벤트 루프 지연(P95), SSE 지표, 데스크톱 프로세스 지표, 세션별 자원 |
-| `GET /api/claude/status` | Claude Code CLI 상태 `{ok, installed, version, auth{loggedIn, method}}` |
-| `POST /api/claude/options` · `/api/claude/project-info` · `/api/claude/queue` | Claude Code 카드용 옵션·프로젝트 정보·프롬프트 대기열 |
-| `POST /api/session/stop` · `/api/session/switch` | 세션 종료 · 하네스 전환(omp ↔ Claude Code) |
-| `GET`·`POST /api/session-harnesses` | 세션 하네스 프로필 목록·변경 `{ok, profiles[]}` |
-| `POST /api/chat/activity` · `/api/chat/answer` · `/api/chat/diff` | 대화 블록 보조: 턴별 활동 기록, 질문 카드 답변, 세션 폴더의 파일 diff |
-| `/api/engineering/*` | 데스크톱 앱 전용. 앱의 토큰 헤더가 없으면 403 |
-
-컨텍스트 편집은 omp 가 실제로 지원하는 두 경로만 씁니다(rpc 에 메시지 삭제·수정·시스템 프롬프트 교체 명령이 없습니다): 작업 가이드 프롬프트/steer 와 `compact` + `customInstructions`. 기록 파일(.jsonl)은 직접 고쳐 쓰지 않습니다.
-
-스냅샷 노드의 주요 필드: `id`(기록 파일 경로), `kind`(main\|sub), `parent`, `status`(live\|idle\|done), `tokens`, `tokens1h`, `cost`, `auxCost`, `ctx`, `ctxWindow`, `series`, `tools`, `messages[{role, text, ts, tools?, n?}]`, `res{cpu, mb, proc, procs, owner, hist}`.
-
-세션과 프로세스는 omp 본체 프로세스의 명령줄(세션 id·파일 경로) 또는 생성 시각(세션 시작 15초 전~3초 후)으로 잇습니다. 카드의 CPU·메모리는 이 프로세스와 자식 전체의 합입니다. omp 안에서 `/new`로 만든 세션이나 id 없이 이어 쓴 세션은 소유 프로세스를 찾지 못해 공유 프로세스 합계만 보이고, 그 omp 프로세스는 처음 시작한 세션 카드에 계속 잡힙니다.
-
-## 코드 편집기
-
-main 세션·로컬 카드의 코드 편집기는 기본 블록이 아닙니다. 카드의 `코드` 버튼 또는 블록 메뉴에서 명시적으로 열 수 있습니다(서브에이전트 카드에는 없음). 대화(chat)가 있는 카드에서는 대화 오른쪽에 나란히 놓이고(경계를 끌어 폭 비율 조절, 카드별 저장), 대화가 없는 로컬 카드에서는 전체 폭입니다. 왼쪽 액티비티 바(탐색기 접기/펼치기)·탐색기 사이드바(세션 cwd 기준 파일 트리: 폴더 펼침/접힘·지연 로드·경로 필터·새로고침·상위 폴더, 폭 조절)·상단 탭(미저장 ●, ×, 미리보기 탭은 이탤릭)·브레드크럼·Monaco 본문·파란 상태바(문제 수·저장 상태·줄/열·언어·LSP)로 이루어집니다. 파일 클릭은 미리보기 탭, 더블클릭은 고정 탭이고, 탐색기 우클릭 메뉴는 **경로 복사(절대경로)**·**이름 복사**·**터미널 cwd를 이 폴더로**를 줍니다. 카드마다 Monaco·탭·미저장 내용을 따로 가지며 재렌더·카드 이동·크기 조절에도 유지되고 카드를 닫으면 정리됩니다. Monaco Editor 를 jsDelivr CDN 에서 파일을 처음 열 때만 받으므로 npm 의존성은 없고, 오프라인이면 열리지 않습니다. 옛 저장 블록 구성의 `files` 는 `editor` 로 합쳐집니다.
-
-- `Ctrl+S`: 저장. 읽을 때 받은 `mtime` 과 현재가 다르면(다른 곳에서 수정) 409 로 알리고 덮어쓸지 묻습니다.
-- `F12`·`Ctrl+클릭`: 정의로 이동. Python 은 `pyright-langserver --stdio`(PATH, 환경변수 `OMP_PYRIGHT`, 또는 `%LOCALAPPDATA%\Programs\Python\Python39\Scripts\pyright-langserver.exe` 순서로 찾음)를 파일의 프로젝트 루트마다 하나 띄워 씁니다. 다른 파일의 정의면 그 파일을 탭으로 열고 위치로 이동합니다. JS/TS 는 Monaco 내장 TypeScript 서비스로 같은 파일의 정의로 이동합니다.
-- 진단: Python 은 입력이 멈춘 뒤 약 600ms 후 서버에 물어 빨간 밑줄을 긋고, JS/TS 문법 오류는 Monaco 가 스스로 표시합니다. 그 밖의 언어는 구문 강조만 합니다.
-- Python 언어 서버가 없으면 편집·저장은 그대로 되고 상단에 `Python 언어 서버 없음` 이 표시됩니다. 언어 서버 프로세스는 5분 유휴 시 스스로 종료합니다.
+| [Engineering 가이드](docs/guide/engineering.md) | 프로필·하네스·루프·Workflow·개발 Task·실행, 안전장치, 처음 쓰기 |
+| [관제와 Live Map 사용법](docs/guide/live-map.md) | 세션 목록, 카드와 블록, 단축키·마우스 조작, 코드 편집기 |
+| [하네스: omp와 Claude Code](docs/guide/harness.md) | 하네스별 동작, 하네스 전환, 터미널 세션 실시간 표시 확장 |
+| [API와 보안](docs/reference/api.md) | 관측·제어 API, 접근 방어 |
+| [구조와 설계 규칙](docs/reference/architecture.md) | 디렉터리 구조, 계층 규칙 |
+| [개발과 검증](docs/development.md) | 테스트, CI, 스크린샷 다시 만들기, 릴리스 |
+| [용어집](docs/glossary.md) · [ADR](docs/adr) | 용어와 설계 결정 기록 |
 
 ## 보안
 
-이 서버는 셸 명령 실행과 에이전트 프롬프트 전송을 그대로 받습니다. 방어는 네 가지입니다.
-
-- `127.0.0.1`에만 바인드합니다. 다른 PC에서는 접속할 수 없습니다.
-- 모든 요청에서 `Host`가 `127.0.0.1:<포트>` 또는 `localhost:<포트>`인지 확인합니다(DNS rebinding 차단).
-- `/api/*`는 `Origin`·`Sec-Fetch-Site`가 같은 출처일 때만 받고, POST는 `Content-Type: application/json`만 받습니다. 브라우저에서 연 다른 사이트가 이 서버로 명령을 보낼 수 없습니다.
-- `/api/engineering/*`는 데스크톱 앱이 만든 토큰 헤더가 있어야 합니다. 웹 모드에서는 403입니다.
-
-이 PC에 로그인한 다른 프로그램은 막지 못합니다. 포트를 외부에 열거나 프록시 뒤에 두지 마세요.
-
-DB 연결 프로필은 브라우저 `localStorage`(`omp-map-dbprofiles`)에 유형·host·port·database·user·path 만 저장하고 비밀번호는 저장하지 않습니다. 비밀번호는 `/api/db/query` 요청 본문으로만 오가며, MySQL·MariaDB 에서는 프로세스 목록에 남지 않도록 `MYSQL_PWD` 환경변수로, Oracle 은 `sqlplus` 인자로 넘깁니다.
-
-## 검증
-
-**로컬 회귀 테스트**: `node --test`는 2026-11-26에 Node 26.5(Windows)에서 모두 통과했습니다.
-
-**Windows CI**: `main`에 push하면 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다.
-
-V4 시점의 기록은 [Windows CI #34](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45507478308)의 40건 통과, 테스트용 10개 세션에서 scan → SSE → DOM 반영 지연 P95 29.4ms(허용 기준 1,000ms)입니다. 과거 측정값이며 현재 `main`의 결과가 아닙니다. 실제 에이전트 프로세스의 메모리 절감량과 설치 프로그램은 별도 검증 대상입니다.
-
-로컬에서는 다음 명령으로 회귀 테스트 및 서버 실행을 확인합니다.
-
-```bash
-node --test
-node tests/verification/browser.cjs # Playwright 및 Monaco 테스트 의존성 설치 필요
-node tests/verification/engineering-desktop.cjs # Electron·Playwright 필요(CI 설치 방법은 워크플로의 "Prepare Electron and Chromium" 단계)
-```
-
-추가 구문 검사:
-
-```bash
-for f in server.js server/*.js ui/js/*.js ui/js/*/*.js; do node --check "$f"; done
-wc -l server.js server/*.js ui/js/*.js ui/js/*/*.js | sort -rn | head   # 200줄 미만
-node server.js --port 7806      # 운영 포트와 다른 포트로 띄워 화면에서 확인
-```
-
-프롬프트 전송을 실제 비용 없이 확인하려면, JSON 줄을 출력하는 가짜 `omp.exe`를 PATH 맨 앞에 두고 테스트 서버를 띄웁니다. 테스트용 가짜 하네스는 `tests/fake-omp`, `tests/fake-claude`에 있습니다.
+이 서버는 셸 명령 실행과 에이전트 프롬프트 전송을 받습니다. `127.0.0.1`에만 바인드하고, `Host`·`Origin`·`Sec-Fetch-Site`·`Content-Type`을 검사해 브라우저의 다른 사이트가 명령을 보낼 수 없게 막습니다. 이 PC에 로그인한 다른 프로그램은 막지 못하므로 포트를 외부에 열거나 프록시 뒤에 두지 마세요. 자세한 내용은 [API와 보안](docs/reference/api.md#보안)을 보세요.
