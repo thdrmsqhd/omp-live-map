@@ -381,7 +381,9 @@ function wfResultOf(node, execution) {
   if (outcome.checks?.length) parts.push("검증 " + outcome.checks.filter(({ passed }) => passed).length + "/" + outcome.checks.length + " 통과");
   const tools = [...new Set((outcome.attempts ?? []).flatMap(({ tools }) => tools ?? []))];
   if (tools.length) parts.push("도구 " + tools.slice(0, 4).join(", "));
-  if (outcome.costCents) parts.push(wfCost(outcome.costCents));
+  // 격리 런타임은 호출 전에 잡은 예약액(reserved)을 남긴다. 청구 금액으로 읽히지 않게 구분한다(구독 로그인은 청구 없음).
+  const reserved = (outcome.attempts ?? []).some(({ costBasis }) => costBasis === "reserved");
+  if (outcome.costCents) parts.push((reserved ? "호출 예약 " : "") + wfCost(outcome.costCents));
   if (outcome.port && outcome.port !== "next") parts.push(wfPortNames[outcome.port] ?? outcome.port);
   if (outcome.reason) parts.push(outcome.reason.slice(0, 60));
   return parts.join(" · ");
@@ -608,7 +610,9 @@ if (window.engineeringDesktop) {
     void openMapWorkflowLaunch(address.get("project") || undefined, address.get("launch"));
   }, { once: true });
   const last = readJSON("omp-workflow-map-run", null);
+  // 마지막으로 본 실행을 다시 연다. 주소로 설계 모드를 열었으면(design-mode.js 가 먼저 바꾼다) 모드를 빼앗지 않는다.
   if (last && mapMode === "map") document.addEventListener("DOMContentLoaded", () => {
+    if (mapMode !== "map") return;
     const selected = readJSON("omp-workflow-map-selection", null);
     void openMapWorkflow(last, selected?.id === last ? selected.node : undefined);
   }, { once: true });
