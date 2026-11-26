@@ -28,7 +28,8 @@ const endpoints = new Set([
 
 const liveMapReads = new Set(["projects", "tasks", "workflow-approvals", "workflow-live-map", "workflow-runs", "workflow-run", "workflow-transcript",
   "workflows", "workflow", "definitions", "definitions/version", "workflows/presets", "runtime", "workflow-review", "workflow-artifact"]);
-const liveMapWrites = new Set(["workflows/launch", "workflows/save-canvas", "workflows/plan", "workflow-runs/retry", "workflow-runs/approval", "workflow-runs/action"]);
+const liveMapWrites = new Set(["workflows/launch", "workflows/save-canvas", "workflows/plan", "workflow-runs/retry", "workflow-runs/approval", "workflow-runs/action",
+  "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging"]);
 
 function startServer() {
   const data = app.getPath("userData");

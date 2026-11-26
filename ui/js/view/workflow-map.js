@@ -597,6 +597,16 @@ if (window.engineeringDesktop) {
     wfPollTick++;
     if (["running", "queued"].includes(wfMap.run?.run.status) || wfPollTick % 2 === 0) void refreshMapWorkflow();
   }, 800);
+  // 다른 화면에서 넘어온 주소: ?run=<실행>(그 실행을 연다), ?launch=<Workflow>&project=<프로젝트>(새 실행 대화상자).
+  const address = new URLSearchParams(location.search);
+  if (address.get("run")) writeJSON("omp-workflow-map-run", address.get("run"));
+  if (address.has("run") || address.has("launch")) {
+    if (mapMode !== "map") setMapMode("map", false);
+    history.replaceState(null, "", location.pathname);
+  }
+  if (address.get("launch")) document.addEventListener("DOMContentLoaded", () => {
+    void openMapWorkflowLaunch(address.get("project") || undefined, address.get("launch"));
+  }, { once: true });
   const last = readJSON("omp-workflow-map-run", null);
   if (last && mapMode === "map") document.addEventListener("DOMContentLoaded", () => {
     const selected = readJSON("omp-workflow-map-selection", null);

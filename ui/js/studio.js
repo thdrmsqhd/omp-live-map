@@ -1,6 +1,7 @@
 // 노드 캔버스: 모델 → 하네스 → 루프 → Workflow 단계, 에이전트 프로필 → Agent 를 한 캔버스에서 연결해 엔지니어링한다.
 // 저장 형식은 기존 화면과 같다(정의 API·프로필 API·Workflow API). 이 화면만의 상태는 노드 위치(localStorage)뿐이다.
 import { bindStudioCanvas } from "./studio-canvas.js";
+import { bindStudioInspect } from "./studio-inspect.js";
 import { loadModelOptions } from "./engineering-model-options.js";
 import {
   h, KIND_LABELS, STEP_TYPES, STEP_HINTS, SCOPE_LABELS, HARNESS_TEMPLATES,
@@ -32,7 +33,7 @@ function readLayout() {
   } catch { return {}; }
 }
 
-export function bindStudio({ find, request, report, currentProject, changed: notifyChanged, openWorkflow, openHarness, profilesChanged }) {
+export function bindStudio({ find, request, report, currentProject, changed: notifyChanged, openWorkflow, profilesChanged }) {
   const el = (id) => find("studio-" + id);
   const viewport = el("viewport"), surface = el("surface"), layer = el("nodes"), lines = el("lines");
   const statusLine = el("status"), menu = el("menu"), menuList = el("menu-list"), menuSearch = el("menu-search");
@@ -91,6 +92,16 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   let catalogRequest = null;
   const canvas = bindStudioCanvas({ viewport, surface, scaleOutput: el("scale"), onBackground: () => select(""), onChange: () => closeMenu() });
   const resize = new ResizeObserver(() => scheduleDraw());
+  // 정의 노드 상세(버전 기록·실제 적용값·사용 중 Workflow·비교 실행). 폼 화면 대신 노드 메뉴에서 연다.
+  const inspect = bindStudioInspect({ root: el("inspect"), h, request, project: () => project?.id ?? "", say,
+    payloadOf: (node) => payloadOf(node),
+    loadVersion(node, payload) {
+      node.draft = payload;
+      if (node.kind === "harness") node.ref.model = payload.model ? "def:" + payload.model : "";
+      if (node.kind === "loop") node.ref.harness = payload.harness ? "def:" + payload.harness : "";
+      render();
+    } });
+  const reinspect = () => { const node = inspect.current(); if (node && nodes.get(node.key) === node) inspect.open(node); else inspect.close(); };
 
   // ---- 소유 범위 ---------------------------------------------------------------
   const ownerOf = (node) => node.record ? { scope: node.record.scope, project: node.record.project ?? null, team: node.record.team ?? null } : node.owner;
@@ -819,7 +830,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
         copy.ref = { ...node.ref };
         return copy;
       }]);
-      if (node.kind === "harness" && !node.isNew) items.push(["미리보기·비교 실행(상세 화면)", () => openHarness(node.record.id, node.record.version)]);
+      items.push([node.kind === "harness" ? "상세 · 버전 기록 · 실제 적용값 · 비교 실행" : "상세 · 버전 기록", () => { select(node.key); inspect.open(node); }]);
       if (isDirty(node) && !node.isNew) items.push(["되돌리기", () => revert(node)]);
       if (wf && mode !== "all" && pinned.has(node.key)) items.push(["캔버스에서 숨기기", () => { pinned.delete(node.key); render(); }]);
       items.push([node.isNew ? "삭제(저장 안 함)" : node.kind === "profile" ? "프로필 삭제" : "정의 삭제", () => removeNode(node)]);
@@ -919,6 +930,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     }
     if (!batch) {
       render();
+      reinspect();
       say(`${nameOf(node)} · v${node.record.version} 저장됨` + (bumped ? ` · Workflow 단계 ${bumped}개가 새 버전을 쓰도록 바뀌었습니다(Workflow 저장 필요).` : ""), "ok");
       notifyChanged?.();
     }
@@ -941,6 +953,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
         message += (message ? " · " : "") + `Workflow ‘${saved.name}’ v${saved.version} 저장`;
       }
       render();
+      if (count) reinspect();
       say(message ? message + "됨" : "저장할 변경이 없습니다.", message ? "ok" : "");
       if (count) notifyChanged?.();
     } finally {
@@ -1161,6 +1174,65 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   });
   el("defaults").addEventListener("click", () => void addDefaults());
   el("defaults").hidden = !desktop();
+  // Workflow ⋯ : 기본 Workflow 8종 추가, JSON 내보내기·가져오기(예전 Workflow 폼 화면의 기능).
+  async function openSaved(id) {
+    await loadWorkflows();
+    fillWorkflowPicker(id);
+    workflowPicker.dispatchEvent(new Event("change"));
+    // 선택 변경 처리(비동기)가 끝나 그 Workflow 가 열릴 때까지 기다린다(그 처리가 상태 줄을 비우므로 뒤에 알린다).
+    for (let index = 0; index < 60 && wf?.record?.id !== id; index++) await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  function workflowMenu(event) {
+    event.stopPropagation();
+    const items = [
+      ["기본 Workflow 8종 추가", async () => {
+        if (!project) throw new Error("작업 프로젝트를 선택하세요.");
+        const { created, skipped } = await request("workflows/presets/all", {}, { project: project.id });
+        await loadWorkflows();
+        fillWorkflowPicker(wf ? wf.record?.id ?? "new" : "");
+        say(`기본 Workflow ${created.length}개를 추가했습니다.` + (skipped.length ? ` 이미 있는 ${skipped.length}개는 건너뛰었습니다.` : ""), "ok");
+        notifyChanged?.();
+      }],
+    ];
+    if (wf?.record) items.push(["이 Workflow를 JSON으로 내보내기", async () => {
+      const template = await request("workflows/export", { project: project.id, id: wf.record.id, version: String(wf.record.version) });
+      const resource = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: "application/json" }));
+      const link = h("a", { href: resource, download: wf.record.name.replace(/[<>:"/\\|?*]/g, "-") + ".workflow.json" });
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(resource), 1000);
+    }]);
+    items.push(["JSON에서 Workflow 가져오기…", () => {
+      if (!project) throw new Error("작업 프로젝트를 선택하세요.");
+      el("import-file").click();
+    }]);
+    const bounds = el("graph").getBoundingClientRect(), anchor = event.currentTarget.getBoundingClientRect();
+    menuState = { at: canvas.center(), items: [] };
+    menu.hidden = false;
+    menu.style.left = Math.max(0, Math.min(anchor.left - bounds.left, bounds.width - 300)) + "px";
+    menu.style.top = "8px";
+    el("menu-title").textContent = "Workflow";
+    menuSearch.hidden = true;
+    menuList.replaceChildren(...items.map(([label, run]) => h("li", { role: "none" }, h("button", { type: "button", role: "menuitem",
+      onclick: guard(async () => { closeMenu(); await run(); }) }, h("span", {}, label)))));
+    menuList.querySelector("button")?.focus();
+  }
+  el("wf-more").addEventListener("click", workflowMenu);
+  el("import-file").addEventListener("change", guard(async () => {
+    const file = el("import-file").files[0];
+    el("import-file").value = "";
+    if (!file || !project) return;
+    if (file.size > 60 * 1024) throw new Error("60KiB 이하의 Workflow 템플릿 JSON을 고르세요.");
+    const template = JSON.parse(await file.text());
+    // 같은 이름의 Workflow 가 있으면 '(가져옴)'을 붙여 새로 만든다.
+    await loadWorkflows();
+    const base = String(template?.payload?.name || file.name.replace(/(\.workflow)?\.json$/i, "")).slice(0, 200);
+    const taken = new Set(workflows.map(({ name }) => name));
+    let name = base, index = 1;
+    while (taken.has(name)) name = base + " (가져옴" + (index++ > 1 ? " " + index : "") + ")";
+    const record = await request("workflows/import", {}, { project: project.id, name, template });
+    await openSaved(record.id);
+    say(`Workflow ‘${record.name}’ v${record.version}을(를) 가져왔습니다.`, "ok");
+  }));
   viewport.addEventListener("dblclick", (event) => {
     if (event.target.closest(".studio-node, g[data-link]")) return;
     openMenu(event.clientX, event.clientY, null);
@@ -1227,6 +1299,16 @@ export function bindStudio({ find, request, report, currentProject, changed: not
 
   return {
     mayReplace,
+    // 다른 화면(관제의 'Workflow 편집')에서 저장된 Workflow 를 열어 달라고 할 때 쓴다.
+    async showWorkflow(id) {
+      if (!project) return false;
+      await loadWorkflows();
+      if (!workflows.some((item) => item.id === id)) return false;
+      fillWorkflowPicker(wf?.record?.id ?? "");
+      workflowPicker.value = id;
+      workflowPicker.dispatchEvent(new Event("change"));
+      return true;
+    },
     async activate() {
       active = true;
       if (loadedFor === (project?.id ?? "") && loadedFor !== null) {

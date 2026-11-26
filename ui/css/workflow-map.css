@@ -259,3 +259,10 @@
 .inbox-run-status { color: #ffd489; font-size: 11.5px; }
 .inbox-run-status:empty { display: none; }
 #workflow-queue details summary { cursor: pointer; color: #abbecf; font-size: 12.5px; margin-top: 10px; }.wf-node-actions { pointer-events: auto; }
+
+/* 실행 제어·결과 전달 */
+#wf-map-run-controls .wf-actions { margin: 4px 0 8px; }
+#wf-map-run-controls details { margin: 6px 0 10px; }
+#wf-map-run-controls input, #wf-map-run-controls select { width: 100%; box-sizing: border-box; margin: 4px 0 6px; padding: 5px; border: 1px solid #526575; border-radius: 4px; background: #111923; color: inherit; font: inherit; }
+.wf-run-controls-status:empty { display: none; }
+.wf-run-controls-status { color: #ffaaa8; }

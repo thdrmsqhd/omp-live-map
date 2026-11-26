@@ -203,3 +203,26 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-menu-group { padding: .45rem .55rem .15rem; color: #7d8398; font-size: .74rem; font-weight: 700; }
 .studio-help { margin: .45rem .1rem 0; color: var(--muted); font-size: .84rem; }
 .studio-help kbd { padding: 0 .3em; border: 1px solid var(--border); border-radius: .25rem; font: inherit; font-size: .8rem; }
+
+/* 노드 상세 패널(버전 기록·실제 적용값·사용 중 Workflow·비교 실행) */
+.studio-inspect { position: absolute; z-index: 6; top: 10px; right: 10px; bottom: 10px; width: min(460px, 46%); overflow: auto; box-sizing: border-box;
+  padding: 12px 14px; border: 1px solid #3a3f4b; border-radius: 10px; background: #1c1f26; color: #e8edf3; box-shadow: 0 14px 40px #000a; font-size: 12.5px; }
+.studio-inspect[hidden] { display: none; }
+.studio-inspect-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.studio-inspect-head span { display: grid; }
+.studio-inspect-head small { color: #9da2b6; }
+.studio-inspect details { margin: 8px 0; border-top: 1px solid #2e323d; padding-top: 6px; }
+.studio-inspect summary { cursor: pointer; font-weight: 600; }
+.studio-inspect-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: end; margin: 6px 0; }
+.studio-inspect-pre, .studio-inspect pre { max-height: 22em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; border-radius: 6px;
+  background: #14161c; border: 1px solid #2e323d; font: 11.5px/1.45 var(--mono, Consolas, monospace); }
+.studio-inspect dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; }
+.studio-inspect dt { color: #9da2b6; }
+.studio-inspect dd { margin: 0; overflow-wrap: anywhere; }
+.studio-inspect textarea, .studio-inspect select, .studio-inspect input { padding: 3px 6px; border-radius: 5px; background: #16181e; color: inherit; border: 1px solid #3a3f4b; font: inherit; }
+.studio-inspect textarea { width: 100%; box-sizing: border-box; }
+.studio-inspect-list { padding-left: 18px; }
+.studio-inspect-list li { margin: 4px 0; }
+.studio-inspect-status { color: #c9cddc; }
+.studio-inspect-trial { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.studio-inspect-trial article { padding: 8px; border: 1px solid #2e323d; border-radius: 6px; }

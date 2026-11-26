@@ -57,7 +57,7 @@ function bindMapWorkflowLaunch() {
     definitions = [];
     saved = [];
     source.replaceChildren();
-    $("workflow-launch-engineering").href = "/engineering.html?" + new URLSearchParams({ project: value, view: "design" });
+    $("workflow-launch-engineering").href = "/engineering.html?" + new URLSearchParams({ project: value, view: "studio" });
     if (!value) return refreshControls();
     try {
       const data = await Promise.all(["definitions", "workflows"].map((endpoint) => mapWorkflowRequest(endpoint, { project: value })));
@@ -161,7 +161,7 @@ function bindMapWorkflowLaunch() {
       dialog.close();
       if (typeof refreshWorkflowQueue === "function") void refreshWorkflowQueue();
       if (typeof openMapWorkflow === "function") void openMapWorkflow(run.id);
-      else location.href = "/engineering.html?" + new URLSearchParams({ project: run.project, view: "workflow", run: run.id });
+      else location.href = "/?" + new URLSearchParams({ run: run.id });
     } catch (error) { status.textContent = error.message; }
     finally { pending = false; refreshControls(); }
   };

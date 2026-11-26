@@ -4,7 +4,7 @@ function paintWorkflowMap() {
   $("wf-map-title").textContent = detail.run.title;
   $("wf-map-version").textContent = wfMap.edit ? "Workflow 편집 · v" + wfMap.edit.record.version + " 기준" : graph.name + " · v" + detail.run.version;
   $("wf-map-engineering").href = "/engineering.html?" + new URLSearchParams({
-    project: detail.run.project, view: "workflow", run: detail.run.id,
+    project: detail.run.project, view: "studio", workflow: detail.run.workflow,
   });
   if (!wfMap.edit) $("wf-map-status").textContent = [wfLabel(detail.run.status), detail.run.error, wfMap.notice].filter(Boolean).join(" · ");
   const executions = new Map((wfMap.edit ? [] : detail.nodes).map((item) => [item.node, item]));
@@ -29,6 +29,7 @@ function paintWorkflowMap() {
   wfPaintNodeActions(executions);
   wfPaintFollow();
 
+  paintWorkflowRunControls();
   if (wfMap.edit) { $("wf-map-live").hidden = true; return; }
   const step = graph.nodes.find(({ id }) => id === wfMap.selected);
   const state = executions.get(wfMap.selected);

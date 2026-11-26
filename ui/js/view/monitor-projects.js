@@ -68,7 +68,8 @@ async function refreshMonitorProjects() {
   finally { monitorLoading=false; if(mapMode==="overview")paintOverview(filteredSessions()); }
 }
 const monStatus = {live:"실행 중",idle:"유휴",done:"완료",running:"실행 중",waiting_approval:"승인 대기",blocked:"차단",failed:"실패",interrupted:"확인 필요",completed:"완료",backlog:"백로그",ready:"준비"};
-const monEngLink = (project,view,run) => "/engineering.html?"+new URLSearchParams({project:project.id,view,...(run?{run}:{})}).toString();
+// 실행은 관제(Live Map)에서 열고, 정의·Workflow 는 노드 캔버스에서 고친다(폼 화면은 없다).
+const monEngLink = (project,view,run) => view==="workflow"&&run ? "/?"+new URLSearchParams({run}).toString() : "/engineering.html?"+new URLSearchParams({project:project.id,view:["sdlc","execution"].includes(view)?view:"studio"}).toString();
 function monitorTaskHTML(g) {
   if (!g.project) return '<p class="mon-muted">등록 프로젝트와 연결되지 않음 · SDLC 진행률 미수집</p>';
   const detail=MON_DETAILS.get(g.project.id);
@@ -84,7 +85,7 @@ function monitorTaskHTML(g) {
     ${current?`<p class="mon-task">${esc(monStatus[current.status]||current.status)} · ${esc(current.title)} ${current.latest_run?`<a href="${esc(monEngLink(g.project,"workflow",current.latest_run))}">실행 그래프</a>`:""}</p>`:""}
     ${runList.length ? `<div class="mon-workflow-runs" aria-label="최근 Workflow 실행">${runList.map(run =>
       `<button type="button" data-map-workflow="${esc(run.id)}">${esc(run.title)} · ${esc(monStatus[run.status] || run.status)}</button>`).join("")}</div>` : ""}
-    <div class="mon-links"><a href="${esc(monEngLink(g.project,"sdlc"))}">개발 Task</a><a href="${esc(monEngLink(g.project,"workflow",latestRun?.id))}">Workflow / 실행 이력</a><a href="${esc(monEngLink(g.project,"design"))}">하네스·루프</a><a href="${esc(monEngLink(g.project,"execution"))}">실행</a></div>`;
+    <div class="mon-links"><a href="${esc(monEngLink(g.project,"sdlc"))}">개발 Task</a><a href="${esc(monEngLink(g.project,"workflow",latestRun?.id))}">Workflow / 실행 이력</a><a href="${esc(monEngLink(g.project,"design"))}">노드 캔버스</a><a href="${esc(monEngLink(g.project,"execution"))}">실행</a></div>`;
 }
 function monitorSessionHTML(s) {
   const st=monitorSessionStats(s,overviewMemory), n=st.main;
