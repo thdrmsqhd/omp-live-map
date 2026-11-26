@@ -217,7 +217,7 @@ async function captureEngineering() {
     await step("프로필", async () => {
       await page.locator("#session-harnesses-nav").click();
       await sleep(1500);
-      await page.locator("#session-harness-list").selectOption({ label: "기본 · 심층 개발 · v1" });
+      await page.locator("#session-harness-list").selectOption({ label: "기본 · 심층 디버깅 · v1" });
       await sleep(1000);
       await shot(page, "11-engineering-profile.png");
     });
@@ -225,7 +225,7 @@ async function captureEngineering() {
       await page.locator("#design-nav").click();
       await sleep(1500);
       await page.locator("#definition option").first().waitFor({ state: "attached", timeout: 8000 });
-      await page.locator("#definition").selectOption({ label: "기본 · 개발" }).catch(() => {});
+      await page.locator("#definition").selectOption({ label: "기본 · Node 개발" }).catch(() => {});
       await sleep(1200);
       await page.evaluate(() => window.scrollTo(0, 0));
       await shot(page, "12-engineering-harness.png");
@@ -233,7 +233,7 @@ async function captureEngineering() {
     await step("루프", async () => {
       await page.locator("#loop-nav").click();
       await sleep(1500);
-      await page.locator("#definition").selectOption({ label: "기본 · 개발 및 테스트" }).catch(() => {});
+      await page.locator("#definition").selectOption({ label: "기능 개발 · Node" }).catch(() => {});
       await sleep(1200);
       await page.evaluate(() => window.scrollTo(0, 0));
       await shot(page, "17-engineering-loop.png");
@@ -243,6 +243,10 @@ async function captureEngineering() {
       await click("Workflow");
       await page.getByText("기본 제공 Workflow", { exact: true }).click();
       const preset = page.locator("#workflow-preset-form");
+      await preset.locator("[name=preset]").selectOption("bugfix");
+      console.log("preset loop (bugfix):", (await preset.locator("[name=loop] option:checked").textContent()).trim());
+      await preset.locator("[name=preset]").selectOption("tests");
+      console.log("preset loop (tests):", (await preset.locator("[name=loop] option:checked").textContent()).trim());
       await preset.locator("[name=preset]").selectOption("bugfix");
       await preset.locator("[name=name]").fill("Modbus 버그 수정");
       await preset.locator("[name=create]").click();

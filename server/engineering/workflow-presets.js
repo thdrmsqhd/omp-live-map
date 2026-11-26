@@ -2,7 +2,7 @@
 
 const { problem } = require("./state");
 const { transaction } = require("./database");
-const { MODELS, HARNESSES, PROFILES, LOOPS } = require("./default-definitions");
+const { MODELS, HARNESSES, PROFILES, LOOPS, PRESET_LOOPS, assetsOf } = require("./default-definitions");
 
 function addPresetDefinitions(db, catalog, project) {
   return transaction(db, () => {
@@ -12,12 +12,16 @@ function addPresetDefinitions(db, catalog, project) {
     const ensure = (kind, payload) => existing.find((entry) => entry.kind === kind && entry.name === payload.name)
       ?? catalog.writeDefinition({ scope, project, kind, payload });
     const models = Object.fromEntries(Object.entries(MODELS).map(([key, payload]) => [key, ensure("model", payload)]));
-    const harnesses = Object.fromEntries(Object.entries(HARNESSES).map(([key, { name, model, role, instructions }]) =>
-      [key, ensure("harness", { name, adapter: "claude", model: models[model].id, role, instructions })]));
+    const harnesses = Object.fromEntries(Object.entries(HARNESSES).map(([key, spec]) => {
+      const assets = assetsOf(spec);
+      return [key, ensure("harness", { name: spec.name, adapter: "claude", model: models[spec.model].id, role: spec.role,
+        instructions: spec.instructions, ...(assets ? { assets } : {}) })];
+    }));
     const loops = Object.fromEntries(Object.entries(LOOPS).map(([key, { harness, ...payload }]) =>
       [key, ensure("loop", { ...payload, harness: harnesses[harness].id })]));
-    // 프리셋 Workflow 는 Node 용 표준 루프를 쓴다. 다른 루프는 노드 설정에서 바꿔 고른다.
-    return { author: harnesses.author.id, reviewer: harnesses.reviewer.id, loop: loops.node.id };
+    // loop 는 기본값, loops 는 템플릿마다 처음 고를 루프(신규 기능·버그 수정·리팩토링·테스트 작성). 화면에서 바꿔 고를 수 있다.
+    return { author: harnesses.author.id, reviewer: harnesses.reviewer.id, loop: loops.feature.id,
+      loops: Object.fromEntries(Object.entries(PRESET_LOOPS).map(([preset, key]) => [preset, loops[key].id])) };
   });
 }
 

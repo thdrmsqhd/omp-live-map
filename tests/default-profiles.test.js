@@ -39,13 +39,13 @@ test("기본 프로필은 하네스마다 하나씩 같은 이름·역할·지�
 
 test("프로필을 다시 만들어도 중복되지 않고 사용자가 고친 프로필은 덮어쓰지 않는다", () => {
   const before = ensureProfiles();
-  const target = profiles.list().find(({ name }) => name === HARNESSES.developer.name);
+  const target = profiles.list().find(({ name }) => name === HARNESSES.devNode.name);
   const edited = profiles.save({ ...target, instructions: "사용자가 고친 지시" });
   assert.equal(edited.version, target.version + 1);
   assert.deepEqual(ensureProfiles(), before);
   assert.equal(profiles.list().length, Object.keys(HARNESSES).length);
-  assert.equal(profiles.list().find(({ name }) => name === HARNESSES.developer.name).instructions, "사용자가 고친 지시");
-  profiles.save({ ...edited, instructions: HARNESSES.developer.instructions });
+  assert.equal(profiles.list().find(({ name }) => name === HARNESSES.devNode.name).instructions, "사용자가 고친 지시");
+  profiles.save({ ...edited, instructions: HARNESSES.devNode.instructions });
 });
 
 test("프로필 → 하네스 → 루프가 이름과 내용으로 이어지고, 기본 프로필은 Workflow 에이전트 노드에 연결된다", () => {

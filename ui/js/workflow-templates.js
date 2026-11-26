@@ -30,7 +30,8 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
       const options = definitions().filter(({ kind }) => kind === (field === "loop" ? "loop" : "harness"));
       const placeholder = !selected?.[field] ? "사용 안 함" : options.length ? "선택" : "등록된 항목 없음";
       select.replaceChildren(new Option(placeholder, ""), ...options.map((entry) => new Option(engineeringDefinitionLabel(entry), entry.id)));
-      const previous = current || (selected?.[field] ? preferred[field] : "");
+      const wanted = field === "loop" ? (preferred.loops?.[selected?.id] ?? preferred.loop) : preferred[field];
+      const previous = current || (selected?.[field] ? wanted : "");
       if (options.some(({ id }) => id === previous)) select.value = previous;
       select.required = Boolean(selected?.[field]);
       select.disabled = !selected?.[field] || !projectId() || isArchived();
@@ -45,7 +46,12 @@ export function bindTemplateButtons({ el, request, report, definitions, current,
     }
     showPreset();
   }));
-  presetForm.elements.preset.onchange = showPreset;
+  presetForm.elements.preset.onchange = () => {
+    // 앱이 제안한 루프를 그대로 두었다면 새 템플릿에 맞는 루프로 바꾼다. 직접 고른 루프는 유지한다.
+    const loop = presetForm.elements.loop;
+    if ([preferred.loop, ...Object.values(preferred.loops ?? {})].includes(loop.value)) loop.value = "";
+    showPreset();
+  };
   for (const field of fields) presetForm.elements[field].onchange = updatePresetActions;
   defaults.onclick = report(async () => {
     const project = projectId();

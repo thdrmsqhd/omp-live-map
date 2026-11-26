@@ -9,7 +9,7 @@ const { models: allowed } = require("../server/engineering/anthropic");
 const { openDatabase } = require("../server/engineering/database");
 const { catalog } = require("../server/engineering/catalog");
 const { addPresetDefinitions } = require("../server/engineering/workflow-presets");
-const { MODELS, HARNESSES } = require("../server/engineering/default-definitions");
+const { MODELS, HARNESSES, LOOPS, SKILLS } = require("../server/engineering/default-definitions");
 
 test("기본 하네스는 최신 Claude 모델을 쓰고 설계와 리뷰는 서로 다른 모델이다", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-defaults-"));
@@ -35,12 +35,14 @@ test("기본 하네스는 최신 Claude 모델을 쓰고 설계와 리뷰는 서
       assert.equal(saved.adapter, "claude");
       assert.equal(saved.model, modelOf(key));
       assert.ok(saved.instructions.length > 40, `${spec.name} needs working instructions`);
+      assert.deepEqual(saved.assets.skills.map(({ name }) => name), (spec.skills ?? []).map((skill) => SKILLS[skill].name), `${spec.name}: skills`);
+      assert.equal(saved.assets.agents, spec.agents ?? "", `${spec.name}: AGENTS.md rules`);
     }
     assert.notEqual(harnesses.get(HARNESSES.author.name).payload.model, harnesses.get(HARNESSES.reviewer.name).payload.model);
     assert.equal(first.author, harnesses.get(HARNESSES.author.name).id);
     assert.equal(first.reviewer, harnesses.get(HARNESSES.reviewer.name).id);
-    const loop = byName("loop").get("기본 · 개발 및 테스트");
-    assert.equal(loop.payload.harness, harnesses.get(HARNESSES.developer.name).id);
+    const loop = byName("loop").get(LOOPS.feature.name);
+    assert.equal(loop.payload.harness, harnesses.get(HARNESSES[LOOPS.feature.harness].name).id);
 
     const before = entries().length;
     assert.deepEqual(addPresetDefinitions(db, catalogues, null), first);
