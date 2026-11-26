@@ -171,7 +171,7 @@
 .wf-bar i[data-section="feedback"], .wf-legend [data-section="feedback"]::before { background: var(--c-bad); }
 .wf-node .wf-stream {
   display: flex; flex-direction: column; justify-content: flex-end;
-  min-height: 2.9em; height: 6.3em; overflow: hidden; mask-image: linear-gradient(to bottom, transparent, #000 1.4em); padding: 5px 8px; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere;
+  min-height: 2.9em; height: 9.2em; overflow: hidden; mask-image: linear-gradient(to bottom, transparent, #000 1.4em); padding: 5px 8px; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere;
   font: 11px/1.45 var(--mono); color: #d8f0ff; background: #0f141b; border: 1px solid #23415a;
 }
 .wf-caret { display: inline-block; width: 7px; height: 1.05em; margin-left: 2px; vertical-align: text-bottom; background: var(--c-run); animation: wf-blink 1s steps(1) infinite; }
@@ -210,3 +210,23 @@
 /* 실행 환경 인증 경고(Claude Code 로그인 만료·임박) */
 #workflow-launch-status[data-tone="warn"] { color: #f3c77a; }
 #workflow-launch .budget-hint { display: block; margin-top: 3px; color: #9fb3c4; font-size: 11.5px; line-height: 1.4; }
+
+/* 작업 지시 수행 내역: 넓힐 수 있는 상세 패널과 전체 기록 창 */
+#workflow-inspector { width: min(440px, 46%); }
+#wf-inspector-grip { position: absolute; left: -4px; top: 0; bottom: 0; width: 9px; cursor: ew-resize; z-index: 2; }
+#wf-inspector-grip:hover, #wf-inspector-grip:active { background: linear-gradient(90deg, transparent 3px, #7fb8ff 3px, #7fb8ff 5px, transparent 5px); }
+#wf-map-live .wf-live-stream { max-height: max(15em, 42vh); font-size: 12px; }
+.wf-live-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wf-live-head h3 { margin: 0 0 6px; }
+.wf-transcript-open { font-size: 12px; }
+#wf-map-details > .wf-transcript-open { margin: 0 0 8px; }
+#wf-transcript { width: min(1180px, calc(100vw - 48px)); height: calc(100vh - 64px); max-height: none; padding: 14px 16px; box-sizing: border-box;
+  border: 1px solid #3a3f4b; border-radius: 10px; background: #15181f; color: #e8edf3; display: none; flex-direction: column; gap: 6px; }
+#wf-transcript[open] { display: flex; }
+#wf-transcript::backdrop { background: #000a; }
+.wf-transcript-head { display: flex; align-items: center; gap: 10px; }
+.wf-transcript-head h2 { flex: 1; margin: 0; font-size: 16px; }
+#wf-transcript-meta { margin: 0; color: #9da2b6; font-size: 12px; }
+#wf-transcript-tools { margin: 0; max-height: 4.6em; overflow: auto; }
+#wf-transcript-text { flex: 1; min-height: 0; margin: 0; padding: 12px 14px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 13px/1.55 var(--mono); color: #d8f0ff; background: #0f141b; border: 1px solid #23415a; border-radius: 8px; }

@@ -359,7 +359,7 @@ function wfPaintNode(button, node, execution, live) {
     parts["wf-phase"].textContent = parts["wf-phase"].dataset.label + " · " + wfClock(Date.now() - started);
     wfPaintBar(parts["wf-bar"], live?.sections ?? []);
     // 최신 출력이 아래에 붙고 위로 밀려 올라가게 한다(넘치는 윗줄은 가려진다).
-    const stream = wfTail(live?.text, 4) || (preview ? "▸ " + wfTail(preview, 2, 90) : "");
+    const stream = wfTail(live?.text, 6) || (preview ? "▸ " + wfTail(preview, 2, 90) : "");
     const line = wfText("span", stream, "wf-stream-text");
     line.append(wfText("span", "", "wf-caret"));
     parts["wf-stream"].replaceChildren(line);

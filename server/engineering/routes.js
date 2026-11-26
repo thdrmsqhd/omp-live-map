@@ -59,6 +59,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
   let services;
   function initialize() {
     if (services) return services;
+    workflowLive.configure({ directory: path.resolve(directory) });
     const db = openDatabase(path.resolve(directory, "engineering.sqlite"));
     try {
       const definitions = catalog(db);
@@ -108,6 +109,8 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         if (endpoint === "workflows") result = workflows.list(query("project"));
         if (endpoint === "workflows/presets") result = listPresets();
         if (endpoint === "workflow-runs") result = flowRuns.list(query("project"));
+        // 단계의 전체 수행 기록(실행 중·완료 후). 실행이 있는지 먼저 확인해 없는 id 로 파일을 찾지 않는다.
+        if (endpoint === "workflow-transcript") { flowRuns.get(query("id")); result = workflowLive.transcript(query("id"), query("node")); }
         if (endpoint === "workflow-run") {
           const id = query("id");
           const run = flowRuns.get(id);

@@ -76,7 +76,16 @@
       <div class="wf-actions"><button type="submit">실행 시작</button><button type="button" id="workflow-launch-close">닫기</button></div>
     </form>
   </dialog>
-  <div id="ctxmenu"></div>
+  <dialog id="wf-transcript" aria-labelledby="wf-transcript-title" data-workflow-controls>
+    <div class="wf-transcript-head">
+      <h2 id="wf-transcript-title"></h2>
+      <select id="wf-transcript-entry" aria-label="실행 기록 선택" hidden></select>
+      <button id="wf-transcript-close" type="button">닫기</button>
+    </div>
+    <p id="wf-transcript-meta"></p>
+    <p id="wf-transcript-tools" class="wf-tools" aria-label="도구 호출 순서"></p>
+    <pre id="wf-transcript-text" tabindex="0"></pre>
+  </dialog>  <div id="ctxmenu"></div>
   <div id="minimap"><svg id="mmsvg" width="204" height="142"></svg></div>
   <div id="workarea">
     <aside id="sessions">
@@ -245,6 +254,7 @@
   <script src="js/view/workflow-launch.js"></script>
   <script src="js/view/workflow-map.js"></script>
   <script src="js/view/workflow-map-inspector.js"></script>
+<script src="js/view/workflow-transcript.js"></script>
   <script src="js/engineering-scope-label.js"></script>
 <script src="js/engineering-auth.js"></script>
   <script src="js/view/workflow-map-fields.js"></script>

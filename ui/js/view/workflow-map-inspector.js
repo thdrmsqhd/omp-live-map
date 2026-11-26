@@ -51,7 +51,9 @@ function paintWorkflowLive(node, execution, live) {
     task.append(wfText("summary", "작업 지시"), wfText("pre", ""));
     const stream = wfText("pre", "", "wf-live-stream");
     const tools = wfText("p", "", "wf-tools");
-    panel.replaceChildren(wfText("h3", "지금 실행 중인 프롬프트"), phase, bar, legend, task, stream, tools);
+    const head = wfText("div", "", "wf-live-head");
+    head.append(wfText("h3", "지금 실행 중인 프롬프트"), wfTranscriptButton(node) ?? "");
+    panel.replaceChildren(head, phase, bar, legend, task, stream, tools);
   }
   const [, phase, bar, legend, task, stream, tools] = panel.children;
   const started = live?.startedAt ?? execution.updated ?? Date.now();
@@ -87,6 +89,11 @@ function paintWorkflowEvidence(node, execution, history) {
   frame.replaceChildren();
   if (!node) return;
   frame.append(wfText("h3", node.label + " · " + wfLabel(execution?.status)));
+  // 끝난 단계도 작업 지시 수행 내역(출력·도구 호출)을 큰 창으로 다시 볼 수 있다.
+  if (execution && execution.status !== "running") {
+    const open = wfTranscriptButton(node);
+    if (open) frame.append(open);
+  }
   const outcome = execution?.outcome ?? {};
   if (run.workspace) frame.append(workflowEvidencePreview("작업 공간 변경분", "workflow-review", { id: run.id }));
   for (const { path, sha256 } of outcome.artifacts ?? []) {
