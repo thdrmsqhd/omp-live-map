@@ -227,6 +227,14 @@ async function captureEngineering() {
       await page.evaluate(() => window.scrollTo(0, 0));
       await shot(page, "12-engineering-harness.png");
     });
+    await step("루프", async () => {
+      await page.locator("#loop-nav").click();
+      await sleep(1500);
+      await page.locator("#definition").selectOption({ label: "기본 · 개발 및 테스트" }).catch(() => {});
+      await sleep(1200);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await shot(page, "17-engineering-loop.png");
+    });
     await step("Workflow 캔버스", async () => {
       await page.locator("#project").selectOption({ label: "modbus-gateway" }).catch(() => {});
       await click("Workflow");

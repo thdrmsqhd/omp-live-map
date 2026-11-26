@@ -2,7 +2,7 @@
 
 const { problem } = require("./state");
 const { transaction } = require("./database");
-const { MODELS, HARNESSES } = require("./default-definitions");
+const { MODELS, HARNESSES, LOOPS } = require("./default-definitions");
 
 function addPresetDefinitions(db, catalog, project) {
   return transaction(db, () => {
@@ -12,14 +12,12 @@ function addPresetDefinitions(db, catalog, project) {
     const ensure = (kind, payload) => existing.find((entry) => entry.kind === kind && entry.name === payload.name)
       ?? catalog.writeDefinition({ scope, project, kind, payload });
     const models = Object.fromEntries(Object.entries(MODELS).map(([key, payload]) => [key, ensure("model", payload)]));
-    const harness = ({ name, model, role, instructions }) => ensure("harness", { name, adapter: "claude", model: models[model].id, role, instructions });
-    const author = harness(HARNESSES.author);
-    const reviewer = harness(HARNESSES.reviewer);
-    const developer = harness(HARNESSES.developer);
-    harness(HARNESSES.triage);
-    const loop = ensure("loop", { name: "기본 · 개발 및 테스트", harness: developer.id, attempts: 3,
-      timeoutMs: 300000, budgetCents: 100, checks: [{ command: "node", args: ["--test"], code: 0 }] });
-    return { author: author.id, reviewer: reviewer.id, loop: loop.id };
+    const harnesses = Object.fromEntries(Object.entries(HARNESSES).map(([key, { name, model, role, instructions }]) =>
+      [key, ensure("harness", { name, adapter: "claude", model: models[model].id, role, instructions })]));
+    const loops = Object.fromEntries(Object.entries(LOOPS).map(([key, { harness, ...payload }]) =>
+      [key, ensure("loop", { ...payload, harness: harnesses[harness].id })]));
+    // 프리셋 Workflow 는 Node 용 표준 루프를 쓴다. 다른 루프는 노드 설정에서 바꿔 고른다.
+    return { author: harnesses.author.id, reviewer: harnesses.reviewer.id, loop: loops.node.id };
   });
 }
 

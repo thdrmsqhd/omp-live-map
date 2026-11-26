@@ -34,7 +34,7 @@ node tests/verification/readme-screenshots.cjs all   # main | engineering | all
 ```
 
 - `main`: 가짜 omp·Claude Code 세션 기록을 둔 HOME 으로 서버를 띄워 관제·워크스페이스·Live Map(`docs/media/v8/01~03`)을 찍습니다.
-- `engineering`: 같은 HOME 으로 데스크톱 앱(Electron)을 띄워 Engineering 화면과 승인 대기 실행(`12~16`)을 찍습니다. 사용자 데이터 폴더도 데모용으로 따로 둡니다.
+- `engineering`: 같은 HOME 으로 데스크톱 앱(Electron)을 띄워 Engineering 화면과 승인 대기 실행(`12~17`)을 찍습니다. 사용자 데이터 폴더도 데모용으로 따로 둡니다.
 - 캡처 대상 화면의 요소 이름이 바뀌면 스크립트의 선택자를 고치세요. 실패한 단계는 `[skip]`으로 표시하고 나머지를 계속 찍습니다.
 - CI에서는 실행하지 않습니다. 자원 수치(CPU·RAM)는 캡처한 PC의 값입니다.
 

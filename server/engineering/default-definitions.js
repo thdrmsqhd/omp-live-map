@@ -40,6 +40,15 @@ const HARNESSES = Object.freeze({
       "문제가 없으면 근거와 함께 '지적 없음'이라고 쓴다. 요약이나 칭찬으로 분량을 채우지 않는다.",
       "결과는 지정된 OUTPUT FILE에 Markdown으로 저장한다."),
   },
+  deep: {
+    name: "기본 · 심층 개발", model: "opus", role: "원인 분석이 필요한 구현 및 테스트",
+    instructions: lines(
+      "코드를 고치기 전에 실패 재현과 근본 원인을 확인하고, 원인을 한두 문장으로 먼저 적는다.",
+      "증상만 가리는 수정(예외 삼키기, 테스트 완화, 시간 늘리기)은 하지 않는다.",
+      "승인된 계획과 인수 기준의 범위 안에서 구현하고, 회귀를 막는 테스트를 추가한다.",
+      "검증이 실패하면 이전 시도의 가설이 틀렸는지부터 따진다. 같은 접근을 반복하지 않는다.",
+      "끝나면 원인, 바꾼 파일, 추가한 테스트, 남은 위험을 지정된 OUTPUT FILE에 적는다."),
+  },
   triage: {
     name: "기본 · 빠른 점검", model: "haiku", role: "분류·요약·로그 점검",
     instructions: lines(
@@ -49,4 +58,17 @@ const HARNESSES = Object.freeze({
   },
 });
 
-module.exports = { MODELS, HARNESSES };
+// 루프 = 하네스 + 시도 횟수 + 시간·예산 한도 + 검증 명령. 검증 명령은 컨테이너가 허용하는 3가지뿐이다(docker-runner 의 permitted).
+// 예산(센트)은 모델 호출 전에 토큰 수와 출력 한도로 계산해 보수적으로 "예약"하는 상한이라 실제 비용보다 훨씬 크게 잡아야 한다.
+// 컨텍스트 20K 토큰 호출 1회가 약 228센트를 예약하므로 6000센트면 시도당 약 26회, 15000센트면 약 65회를 호출할 수 있다.
+const standard = { attempts: 3, timeoutMs: 1_200_000, budgetCents: 6000 };
+const LOOPS = Object.freeze({
+  node: { name: "기본 · 개발 및 테스트", harness: "developer", ...standard, checks: [{ command: "node", args: ["--test"], code: 0 }] },
+  npm: { name: "기본 · 개발 및 테스트 (npm)", harness: "developer", ...standard, checks: [{ command: "npm", args: ["test"], code: 0 }] },
+  python: { name: "기본 · 개발 및 테스트 (Python)", harness: "developer", ...standard,
+    checks: [{ command: "python3", args: ["-m", "unittest", "discover"], code: 0 }] },
+  deep: { name: "집중 · 어려운 버그 수정", harness: "deep", attempts: 5, timeoutMs: 2_400_000, budgetCents: 15000,
+    checks: [{ command: "node", args: ["--test"], code: 0 }] },
+});
+
+module.exports = { MODELS, HARNESSES, LOOPS };
