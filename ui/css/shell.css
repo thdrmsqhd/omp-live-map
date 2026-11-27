@@ -48,3 +48,7 @@
   #nodes { position: absolute; left: 0; top: 0; }
 
   #search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #topbar .zoom { padding-left: 8px; border-left: 1px solid var(--border); }
+  #topbar #new-session-action, #topbar #workflow-new-run { background: #24496c; border-color: var(--accent); color: var(--fg); font-weight: 650; }
+  #topbar #workflow-queue-toggle.has-items { background: #3a2c13; border-color: var(--idle); color: #ffd489; font-weight: 650; }
