@@ -80,6 +80,11 @@ jobs:
       - name: Product desktop UI and protected API
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/engineering-desktop.cjs
+      - name: Desktop first run and unified workflow canvas
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: |
+          node --test tests/verification/desktop-first-run.cjs
+          node --test tests/verification/unified-workflow-desktop.cjs
   graph-performance:
     if: github.ref_name == 'v8/incremental-performance'
     runs-on: windows-2025

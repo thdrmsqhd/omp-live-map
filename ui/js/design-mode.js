@@ -4,6 +4,7 @@
 //  - 캔버스의 '관제에서 실행' → 관제로 돌아가 새 실행 대화상자를 연다.
 // 주소: /?mode=design&project=<프로젝트>&workflow=<Workflow>
 import { bindStudio } from "./studio.js";
+import { bindFirstRun } from "./first-run.js";
 
 const find = (id) => document.getElementById(id);
 const PROJECT_KEY = "omp-design-project";
@@ -32,6 +33,13 @@ if (window.engineeringDesktop) {
     },
   });
 
+  const firstRun = bindFirstRun({
+    find, request,
+    currentProject: () => projects.find(({ id }) => id === picker.value),
+    reloadProjects: async (chosen) => { await loadProjects(chosen); await studio.reload(); },
+    openWorkflow: (id) => studio.showWorkflow(id),
+  });
+
   async function loadProjects(chosen) {
     projects = await request("projects");
     const value = chosen ?? picker.value ?? readJSON(PROJECT_KEY, "");
@@ -41,6 +49,7 @@ if (window.engineeringDesktop) {
     await studio.selectProject(picker.value, projects.find(({ id }) => id === picker.value));
     loaded = picker.value;
     if (active) window.OMPIndependentEvaluation?.show(picker.value); window.UnifiedProjectContext?.show(loaded);
+    void firstRun.refresh();
   }
   // 모드 전환 이벤트와 '설계에서 편집'이 동시에 부를 수 있으므로 진행 중인 준비를 함께 기다린다
   // (그렇지 않으면 캔버스 새로 고침이 방금 연 Workflow 선택을 되돌린다).
@@ -71,6 +80,7 @@ if (window.engineeringDesktop) {
     loaded = picker.value;
     if (active) window.UnifiedProjectContext?.show(loaded);
     window.UnifiedWorkflow?.paint();
+    void firstRun.refresh();
   }));
   document.addEventListener("omp-mode", (event) => { if (event.detail === "design") void enter(); else leave(); });
   addEventListener("beforeunload", (event) => { if (studio.dirty()) event.preventDefault(); });
@@ -95,6 +105,10 @@ if (window.engineeringDesktop) {
   };
 
   document.querySelector('#viewModes [data-mode="design"]').hidden = false;
+  // 처음 실행(저장된 화면 모드 없음)이고 등록 프로젝트가 없으면 첫 실행 안내가 있는 설계 화면에서 시작한다.
+  if (localStorage.getItem("omp-map-view-mode-v2") === null && !location.search) {
+    void request("projects").then((list) => { if (!list.length) setMapMode("design"); }).catch(() => {});
+  }
   const address = new URLSearchParams(location.search);
   if (address.get("mode") === "design" || address.get("workflow")) {
     history.replaceState(null, "", location.pathname);

@@ -29,3 +29,17 @@
 #design [hidden] { display: none !important; }
 /* 지도 전용 도구(배치·줌)는 설계 모드에서 숨긴다. */
 #app[data-view="design"] .zoom { display: none; }
+
+/* 설계 모드 첫 실행 안내 */
+#first-run { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
+#first-run[hidden] { display: none; }
+.first-run-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.first-run-head h2 { margin: 0; font-size: 15px; }
+#first-run-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; counter-reset: step; }
+#first-run-steps li { display: grid; gap: 4px; align-content: start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; counter-increment: step; }
+#first-run-steps li strong::before { content: counter(step) ". "; }
+#first-run-steps li[data-done="1"] { border-color: var(--live); }
+#first-run-steps li[data-done="1"] strong { color: var(--live); }
+#first-run-steps li span { color: var(--muted); font-size: var(--fs-small, 11px); }
+.first-run-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+#first-run-status:empty { display: none; }

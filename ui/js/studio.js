@@ -1481,6 +1481,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       if (active) await refresh();
     },
     dirty: () => dirtyCount() > 0,
+    // 캔버스 밖에서 정의·Workflow 를 만들었을 때(첫 실행 안내) 같은 프로젝트를 다시 읽는다.
+    async reload() { if (active) await refresh({ keepView: true }); },
     projectId: () => project?.id ?? "",
     currentWorkflow: () => wf?.record ?? null,
     focusStep(id) {

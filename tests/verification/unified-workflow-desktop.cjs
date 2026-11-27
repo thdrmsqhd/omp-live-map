@@ -23,7 +23,7 @@ test('Desktop: one canvas with a real workflow saved, launched, approved and rec
     await page.setViewportSize({width:1480,height:1050});
     page.setDefaultTimeout(12000);
     const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => void d.accept());
-    await page.getByRole('button', { name: 'Workflow 관제', exact:true }).waitFor();
+    await page.getByRole('button', { name: '설계', exact:true }).waitFor();
     const origin = new URL(page.url()).origin;
     const request = async (name, params, body) => {
       const result = await page.evaluate(([n,p,b]) => window.engineeringDesktop.request(n,p,b), [name,params??{},body]);
