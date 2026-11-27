@@ -155,7 +155,14 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     await page.mouse.move(bounds.x + 90, bounds.y + 40, { steps: 6 });
     await page.mouse.up();
     const moved = await start.evaluate((node) => parseFloat(node.style.left));
-    assert.ok(moved > originalX);
+    if (!(moved > originalX)) {
+      const at = await page.evaluate(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        const describe = (node) => node ? node.tagName.toLowerCase() + (node.id ? "#" + node.id : "") + (node.className && typeof node.className === "string" ? "." + node.className.trim().split(/\s+/).join(".") : "") : "none";
+        return { hit: describe(hit), parent: describe(hit?.parentElement), viewport: [innerWidth, innerHeight], dpr: devicePixelRatio };
+      }, [bounds.x + 30, bounds.y + 10]);
+      assert.fail(`노드를 끌어도 움직이지 않았습니다. before=${originalX} after=${moved} bounds=${JSON.stringify(bounds)} at=${JSON.stringify(at)} errors=${JSON.stringify(pageErrors.slice(-10))}`);
+    }
     await page.locator("#studio-check").click();
     await page.locator("#studio-status").filter({ hasText: "검사 통과" }).waitFor();
     await page.locator("#studio-save").click();
