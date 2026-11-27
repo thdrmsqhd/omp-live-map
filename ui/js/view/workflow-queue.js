@@ -34,14 +34,6 @@ function paintInboxButton() {
 }
 
 // ---- 에이전트 질문 -------------------------------------------------------------
-const workflowAskCards = new WeakMap();
-function trackWorkflowAskCards(host, id, list) {
-  for (const card of host.querySelectorAll("[data-ask-card]")) {
-    const request = list[+card.dataset.askCard];
-    if (request) workflowAskCards.set(card, { id, request });
-    for (const button of card.querySelectorAll("button")) button.type = "button";
-  }
-}
 function paintInboxAsks() {
   paintInboxButton();
   if (wfQueuePanel.hidden) return;
@@ -68,47 +60,6 @@ function paintInboxAsks() {
   }
   updateAskDeadlines(inboxAsks);
 }
-function bindWorkflowAskControls(host, authorized = () => true) {
-  const requestHit = (element) => {
-    const card = element.closest("[data-ask-card]"), hit = workflowAskCards.get(card);
-    return hit && host.contains(card) && authorized(hit.id) && asksOf(hit.id).includes(hit.request) ? hit : null;
-  };
-  const later = (node) => setTimeout(() => paintWorkflowAskSurfaces(node), 0);
-  host.addEventListener("submit", event => event.preventDefault());
-  host.addEventListener("change", (event) => {
-    const hit = requestHit(event.target);
-    if (!hit) return;
-    const field = event.target.dataset;
-    if (field.askOpt != null) askPick(hit.id, hit.request.id, +field.askOpt, field.askLabel);
-    else if (field.askSel != null) askSelect(hit.id, hit.request.id, +field.askSel);
-    later(hit.id);
-  });
-  host.addEventListener("input", (event) => {
-    const hit = requestHit(event.target);
-    if (!hit) return;
-    const field = event.target.dataset;
-    if (field.askCustom != null) askCustom(hit.id, hit.request.id, +field.askCustom, event.target.value);
-    else if (field.askValue != null) askValue(hit.id, hit.request.id, event.target.value);
-    // 입력 중인 두 화면을 같은 모델 상태에 맞추되, 포커스를 빼앗지 않는다.
-    later(hit.id);
-  });
-  host.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || event.isComposing) return;
-    const hit = requestHit(event.target);
-    if (!hit) return;
-    event.preventDefault();
-    if (hit.request.method === "confirm") askConfirm(hit.id, hit.request.id, true); else askSend(hit.id, hit.request.id);
-    later(hit.id);
-  });
-  host.addEventListener("click", (event) => {
-    const button = event.target.closest("button"), hit = requestHit(event.target);
-    if (!button || !hit) return;
-    if (button.dataset.askSend != null) askSend(hit.id, hit.request.id);
-    else if (button.dataset.askCancel != null) askCancel(hit.id, hit.request.id);
-    else if (button.dataset.askConfirm != null) askConfirm(hit.id, hit.request.id, button.dataset.askConfirm === "1");
-    later(hit.id);
-  });
-}
 bindWorkflowAskControls(inboxAsks);
 inboxAsks.addEventListener("click", (event) => {
   const open = event.target.closest("[data-open-node]");
@@ -120,12 +71,6 @@ inboxAsks.addEventListener("click", (event) => {
 function paintWorkflowAskSurfaces(node) {
   paintInboxAsks();
   if (isWorkflowAskSession(node)) window.UnifiedWorkflow?.paintAsk(node);
-}
-{
-  const touched = askTouched;
-  askTouched = (node) => { touched(node); paintWorkflowAskSurfaces(node); };
-  const chat = paintChat;
-  paintChat = (id) => { chat(id); if (!wfQueuePanel.hidden || isWorkflowAskSession(id)) paintWorkflowAskSurfaces(id); };
 }
 
 // ---- Workflow -----------------------------------------------------------------
