@@ -3,7 +3,7 @@
 // 카드가 실제로 그려지기 전까지(#nodes 안의 지도 레이어) 사용자가 새 카드가 생길 자리를 보게 한다.
 // renderMap 은 #nodes 자식을 전부 갈아 끼우므로 자리표시를 piece 로 넘겨 매 렌더마다 다시 그린다.
 
-const PENDS = [];            // { id, x, y, cwd, node, err, timer }
+const PENDS = [];            // { id, x, y, cwd, node, err, wait, timer }
 const PEND_TIMEOUT = 45000;  // 응답이 와도 카드가 안 보이면 이만큼 기다린 뒤 오류로 바꾼다
 
 // at(지도 좌표)이 없으면 화면 중앙 근처에 놓는다.
@@ -22,7 +22,7 @@ function folderName(cwd) {
 // 창을 닫았어도 요청은 살아 있으므로 자리표시는 따로 관리한다.
 function addPending(at, cwd) {
   const spot = pendingSpot(at);
-  const p = { id: "pend_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), x: spot.x, y: spot.y, cwd: cwd || "", node: null, err: "", timer: 0 };
+  const p = { id: "pend_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), x: spot.x, y: spot.y, cwd: cwd || "", node: null, err: "", wait: "", timer: 0 };
   p.timer = setTimeout(() => {
     if (PENDS.indexOf(p) < 0) return;
     p.err = "카드가 아직 나타나지 않았습니다 (서버 상태를 확인해 보세요)";
@@ -42,8 +42,16 @@ function dropPending(p) {
 }
 
 // postJSON 결과를 자리표시에 반영한다. 성공하면 카드 id 를 기억해 두고 카드가 그려질 때 사라진다.
+// 서버가 실행을 대기열에 넣었으면(queued) 대기 사유를 자리표시에 보여 주고 카드가 생길 때까지 둔다.
 function settlePending(p, out) {
   if (!p || PENDS.indexOf(p) < 0) return;
+  if (out && out.ok && out.queued) {
+    p.node = out.node;
+    p.wait = out.out || "실행 대기";
+    clearTimeout(p.timer);
+    renderMap(false, true);
+    return;
+  }
   if (out && out.ok) {
     if (out.node) { p.node = out.node; renderMap(false, true); return; }
     dropPending(p);
@@ -58,10 +66,12 @@ function pendingHTML(p) {
   const cwd = p.cwd || "작업 폴더 미지정";
   const tail = p.err
     ? `<div class="perr">${esc(p.err)}</div><div class="phint">클릭하여 닫기</div>`
-    : `<div class="phint">카드가 나타나면 사라집니다</div>`;
+    : p.wait
+      ? `<div class="pwait">${esc(p.wait)}</div><div class="phint">자원이 확보되면 자동으로 시작합니다</div>`
+      : `<div class="phint">카드가 나타나면 사라집니다</div>`;
   return `<div class="pendcard${p.err ? " err" : ""}" data-pend="${esc(p.id)}" style="left:${p.x}px;top:${p.y}px;width:${AG.W}px">
     <button class="px2" data-pendx="1" title="닫기" aria-label="닫기">✕</button>
-    <div class="pt">${p.err ? `<i class="px">!</i>` : `<i class="sp"></i>`}${p.err ? "새 세션을 열지 못했습니다" : "새 세션 여는 중…"}</div>
+    <div class="pt">${p.err ? `<i class="px">!</i>` : `<i class="sp"></i>`}${p.err ? "새 세션을 열지 못했습니다" : p.wait ? "실행 대기 중…" : "새 세션 여는 중…"}</div>
     <div class="pcwd" title="${esc(cwd)}">${esc(folderName(p.cwd))}</div>
     ${tail}
   </div>`;

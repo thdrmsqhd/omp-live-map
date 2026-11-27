@@ -16,6 +16,7 @@
   .pendcard .pcwd { margin-top: 5px; color: #7d95aa; font-size: var(--fs-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pendcard .phint { margin-top: 4px; color: var(--dim); font-size: var(--fs-small); }
   .pendcard .perr { margin-top: 5px; color: #ff8d86; font-size: var(--fs-small); }
+  .pendcard .pwait { margin-top: 5px; color: var(--live, #2fbf9b); font-size: var(--fs-small); }
   .pendcard.err { border-style: solid; border-color: #e3564f99; animation: none; cursor: pointer; }
   .pendcard.err:hover { border-color: #e3564f; }
   @keyframes pendspin { to { transform: rotate(360deg); } }

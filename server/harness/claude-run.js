@@ -229,7 +229,7 @@ function newSession(cwd, text, images, profile) {
   const file = claude.fileFor(dir, id);
   if (profile) profiles.assign(file, profile);
   cwds.set(norm(file), dir);
-  const r=startTurn(file,text,images);if(r.retryable){const q=queue.enqueue(file,text,images);return {...q,node:file,queued:true};}return r;
+  const r=startTurn(file,text,images);if(r.retryable){const q=queue.enqueue(file,text,images);return q.ok?{...q,node:file,queued:true,out:r.out}:q;}return r;
 }
 
 // 하네스 전환 뒤 카드 id 로도 같은 작업 폴더·도는 턴을 쓰게 한다(resume 은 cwd 로 프로젝트를 찾는다).
