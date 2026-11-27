@@ -40,7 +40,7 @@ function liveTouch(node) {
       LIVE_DIRTY.clear();
       for (const k of nodes) {
         const id = liveNodeId(k);
-        if (id && !document.hidden && cardContentVisible(id) && typeof paintChat === "function") paintChat(id);
+        if (id && !document.hidden) viewUpdates.visibleChat?.(id);
       }
     });
   }
@@ -70,7 +70,7 @@ function scheduleSubDockCheck(node) {
   if (!id || !openIds.has(id)) return;
   const n = typeof nodeById === "function" ? nodeById(id) : null;
   if (!n || n.kind !== "sub") return;
-  setTimeout(() => { if (openIds.has(id) && typeof renderMap === "function") renderMap(false); }, 500);
+  setTimeout(() => { if (openIds.has(id) && typeof viewUpdates.map === "function") viewUpdates.map?.(false); }, 500);
 }
 
 // SSE live 이벤트 {node, kind, id?, name?, args?, text?, status?, error?} 를 항목 배열에 반영한다.
