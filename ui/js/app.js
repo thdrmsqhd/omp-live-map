@@ -1,5 +1,21 @@
 /* omp-live-map · app · 부트스트랩(첫 스냅샷·SSE·폴러·입력 배선) */
 
+// State notifications are wired here, after the view scripts are loaded.
+viewUpdates.map = (...args) => renderMap(...args);
+viewUpdates.graph = (previous, patch) => {
+  if (!patch || !renderGraphPatch(previous, patch)) renderMap(false);
+};
+viewUpdates.chat = id => {
+  paintChat(id);
+  if (typeof paintWorkflowAskSurfaces === "function") paintWorkflowAskSurfaces(id);
+};
+viewUpdates.visibleChat = id => { if (cardContentVisible(id)) viewUpdates.chat(id); };
+viewUpdates.ask = id => {
+  if (ELS.has(id) && openIds.has(id)) paintChat(id);
+  renderMap(false);
+  if (typeof paintWorkflowAskSurfaces === "function") paintWorkflowAskSurfaces(id);
+};
+
 // 첫 스냅샷. 서버가 아직 안 떴으면 3초마다 다시 시도한다.
 async function firstGraph() {
   for (;;) {
