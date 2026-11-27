@@ -1,5 +1,23 @@
 /* omp-live-map · app · 부트스트랩(첫 스냅샷·SSE·폴러·입력 배선) */
 
+// 상태 알림(viewUpdates)을 화면에 연결한다. 모든 view 스크립트가 적재된 뒤 boot()가 부른다.
+function wireViewUpdates() {
+  viewUpdates.map = (...args) => renderMap(...args);
+  viewUpdates.graph = (previous, patch) => {
+    if (!patch || !renderGraphPatch(previous, patch)) renderMap(false);
+  };
+  viewUpdates.chat = id => {
+    paintChat(id);
+    if (typeof paintWorkflowAskSurfaces === "function") paintWorkflowAskSurfaces(id);
+  };
+  viewUpdates.visibleChat = id => { if (cardContentVisible(id)) viewUpdates.chat(id); };
+  viewUpdates.ask = id => {
+    if (ELS.has(id) && openIds.has(id)) paintChat(id);
+    renderMap(false);
+    if (typeof paintWorkflowAskSurfaces === "function") paintWorkflowAskSurfaces(id);
+  };
+}
+
 // 첫 스냅샷. 서버가 아직 안 떴으면 3초마다 다시 시도한다.
 async function firstGraph() {
   for (;;) {
@@ -36,6 +54,7 @@ function applyGraphPatch(previous, patch) {
 }
 
 async function boot() {
+  wireViewUpdates();
   bindStageInput();
   bindCardDrag();
   bindCardResize();

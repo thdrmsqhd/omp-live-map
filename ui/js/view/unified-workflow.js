@@ -65,7 +65,6 @@
       delete form.__html;
     }
     paintChatAsk(host, key);
-    trackWorkflowAskCards(form, key, list);
   }
   function runtimeCard(card, node, status) {
     card.dataset.runtimeStatus = status;

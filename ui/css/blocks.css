@@ -4,7 +4,7 @@
     opacity: .45; transition: opacity .12s; }
   .node.big .blk:hover > .bctl, .node.big .blk.collapsed > .bctl { opacity: 1; }
   .node.big .bctl button { background: transparent; border: 0; border-radius: 4px; padding: 0 4px;
-    font-size: 10px; line-height: 14px; color: var(--dim); }
+    font-size: var(--fs-small); line-height: 14px; color: var(--dim); }
   .node.big .bctl button:hover { background: #1d2936; color: var(--fg); }
   .node.big .bctl .bgrip { cursor: grab; letter-spacing: -2px; padding-right: 6px; }
   .node.big .bctl .bgrip:active { cursor: grabbing; }
@@ -23,7 +23,7 @@
 
   .node.big .blk.collapsed[data-blk] { min-height: 0; height: 18px; padding-top: 0; }
   .node.big .blk.collapsed > :not(.bctl) { display: none; }
-  .node.big .blk.collapsed::before { content: attr(data-blk); font-family: var(--mono); font-size: 10px;
+  .node.big .blk.collapsed::before { content: attr(data-blk); font-family: var(--mono); font-size: var(--fs-small);
     line-height: 18px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
   .node.big .blk.collapsed > .bctl { top: 2px; }
 
@@ -50,7 +50,7 @@
 
   /* 끝난 턴의 활동은 한 줄 요약으로 접어 둔다. 눌러서 펼친다. */
   .lvsum { display: flex; align-items: center; gap: 6px; width: 100%; margin: 1px 0 3px; padding: 2px 6px;
-    font-family: var(--mono); font-size: 10px; text-align: left; color: var(--muted);
+    font-family: var(--mono); font-size: var(--fs-small); text-align: left; color: var(--muted);
     background: #0a1017; border: 1px solid #182533; border-radius: 5px; cursor: pointer; }
   .lvsum:hover { color: var(--fg); border-color: #2f5d85; }
   .lvsum .lvk { color: var(--dim); }
@@ -63,14 +63,14 @@
   .db select, .db button, .db input, .db textarea { font-family: var(--mono); font-size: 11px; color: var(--fg);
     background: #0a1017; border: 1px solid #1c2a39; border-radius: 5px; padding: 2px 5px; }
   .db select:focus, .db input:focus, .db textarea:focus { border-color: #2f5d85; outline: none; }
-  .db button { cursor: pointer; background: #14202c; font-size: 10px; }
+  .db button { cursor: pointer; background: #14202c; font-size: var(--fs-small); }
   .db button:hover { border-color: #2f5d85; }
   .db button:disabled { opacity: .5; cursor: progress; }
   .db .dbtype { width: 84px; flex: none; }
   .db .dbsel { flex: 1; min-width: 0; }
   .db .dbnet, .db .dbpath { display: flex; gap: 5px; flex-wrap: wrap; }
   .db .dbnet[hidden], .db .dbpath[hidden] { display: none; }
-  .db .dbf { display: flex; align-items: center; gap: 3px; min-width: 0; color: var(--dim); font-size: 10px;
+  .db .dbf { display: flex; align-items: center; gap: 3px; min-width: 0; color: var(--dim); font-size: var(--fs-small);
     font-family: var(--mono); }
   .db .dbf input { width: 78px; }
   .db .dbf .dh { width: 96px; }
@@ -78,11 +78,11 @@
   .db .dbpath .dbf { flex: 1; }
   .db .dsql { flex: none; height: 56px; min-height: 40px; resize: vertical; padding: 4px 6px; line-height: 1.35; }
   .db .dres { flex: 1; min-height: 0; overflow: auto; }
-  .db .dbmsg { font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 2px 0; }
+  .db .dbmsg { font-family: var(--mono); font-size: var(--fs-small); color: var(--muted); padding: 2px 0; }
   .db .dbmsg.x { color: var(--error); }
   .db .dbmsg.x b { font-weight: 600; }
   .db .dbraw { white-space: pre-wrap; word-break: break-word; color: #a9bccd; margin-top: 2px; }
-  .db .dbn { font-family: var(--mono); font-size: 10px; color: var(--dim); padding: 2px 0; }
+  .db .dbn { font-family: var(--mono); font-size: var(--fs-small); color: var(--dim); padding: 2px 0; }
   .db .dbwrap { overflow: auto; max-height: 220px; border: 1px solid #182533; border-radius: 6px; }
   .db .dbtab { border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
   .db .dbtab th { position: sticky; top: 0; background: #0d1620; color: #9fc0d8; text-align: left;
@@ -91,7 +91,7 @@
     max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
   .db .dbtab td.nul { color: #45607a; }
   .db .dhist { display: flex; flex-wrap: nowrap; gap: 4px; flex: none; overflow-x: auto; overflow-y: hidden;
-    font-family: var(--mono); font-size: 10px; }
+    font-family: var(--mono); font-size: var(--fs-small); }
   .db .dbhl { color: var(--dim); align-self: center; flex: none; }
   .db .dbh { max-width: 100%; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     background: #101a24; color: var(--muted); border: 1px solid #1c2a39; border-radius: 4px; padding: 1px 6px; }
@@ -101,10 +101,10 @@
   .node.big .blk[data-blk="context"] { padding-top: 14px; min-height: 150px; }
   .ctxblk { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 5px; }
   .ctxblk .cthead { display: flex; align-items: center; gap: 8px; flex: none; padding-right: 40px;
-    font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+    font-family: var(--mono); font-size: var(--fs-small); color: var(--muted); }
   .ctxblk .cthead .ctsum { color: #bfe0ff; }
   .ctxblk .cthead .ctown { color: var(--dim); }
-  .ctxblk .cthead button { margin-left: auto; padding: 0 6px; font-size: 10px; }
+  .ctxblk .cthead button { margin-left: auto; padding: 0 6px; font-size: var(--fs-small); }
   .ctxblk .ctlist { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 4px 6px; background: #070b10;
     border: 1px solid #182533; border-radius: 6px; display: flex; flex-direction: column; gap: 4px;
     user-select: text; -webkit-user-select: text; }
@@ -115,7 +115,7 @@
   .cti .ctpick { flex: none; padding-top: 2px; }
   .cti .ctpick input { margin: 0; width: 11px; height: 11px; accent-color: var(--accent); }
   .cti .ctb, .cti .ctd { flex: 1; min-width: 0; }
-  .cthd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-family: var(--mono); font-size: 10px; }
+  .cthd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-family: var(--mono); font-size: var(--fs-small); }
   .cthd .k { color: #9fc0d8; }
   .cti.k-user .cthd .k { color: var(--c-in); }
   .cti.k-ai .cthd .k { color: var(--live); }
@@ -127,8 +127,8 @@
   .cttext { white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 11px;
     line-height: 1.35; color: #cfdae6; max-height: 150px; overflow: auto; }
   .cti.k-tool summary { cursor: pointer; display: flex; align-items: center; gap: 6px;
-    font-family: var(--mono); font-size: 10px; color: var(--muted); }
-  .cti.k-tool pre { margin: 3px 0 0; white-space: pre-wrap; word-break: break-word; font-size: 10.5px;
+    font-family: var(--mono); font-size: var(--fs-small); color: var(--muted); }
+  .cti.k-tool pre { margin: 3px 0 0; white-space: pre-wrap; word-break: break-word; font-size: var(--fs-small);
     color: #9fb3c5; max-height: 180px; overflow: auto; }
   .ctxblk .ctedit { flex: none; display: flex; flex-direction: column; gap: 4px; }
   .ctxblk .ctin { width: 100%; min-height: 40px; max-height: 90px; resize: vertical; padding: 4px 6px;
@@ -136,9 +136,9 @@
     border: 1px solid #1c2a39; border-radius: 5px; }
   .ctxblk .ctin:focus { border-color: #2f5d85; outline: none; }
   .ctxblk .ctrow { display: flex; align-items: center; gap: 5px; min-width: 0; }
-  .ctxblk .ctrow button { font-size: 10px; padding: 2px 7px; flex: none; }
+  .ctxblk .ctrow button { font-size: var(--fs-small); padding: 2px 7px; flex: none; }
   .ctxblk .ctrow button:disabled { opacity: .5; cursor: progress; }
-  .ctxblk .ctmsg { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 0;
+  .ctxblk .ctmsg { font-family: var(--mono); font-size: var(--fs-small); color: var(--dim); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ctxblk .ctmsg.err { color: var(--error); }
   /* assistant 답변 속 링크(span[data-plink]) · 복사 알림 */

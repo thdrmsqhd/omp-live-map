@@ -6,7 +6,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { randomUUID } = require("node:crypto");
 const { test } = require("node:test");
-const { dockerRunner } = require("../../server/infrastructure/docker");
+const { dockerRunner } = require("../../server/engineering/runtime");
 
 function providerFixture(url, options, calls) {
   const body = JSON.parse(options.body);

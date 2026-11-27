@@ -32,11 +32,15 @@
 <div id="app">
   <div id="topbar">
     <span class="brand"><b>omp</b> / live map</span>
-    <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">프로젝트</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">Live Map · 관제</button><button data-mode="design" hidden>Workflow 관제</button></nav>
+    <nav id="viewModes" aria-label="화면 모드"><button data-mode="overview">프로젝트</button><button data-mode="workspace">워크스페이스</button><button data-mode="map">맵</button><button data-mode="design" hidden>설계</button></nav>
     <button id="workflow-new-run" hidden>＋ 새 실행</button>
     <button id="workflow-queue-toggle" aria-controls="workflow-queue" aria-expanded="false" hidden>개입 필요</button>
     <button id="new-session-action" title="새 세션">＋ 세션</button>
     <button id="power-save" title="화면 밖 카드의 무거운 블록을 해제합니다">절전</button>
+    <div class="zoom"><select id="layout-preset" aria-label="배치 프리셋"><option value="grid">격자</option><option value="horizontal">가로</option><option value="vertical">세로</option></select><button id="layout-apply">정렬</button><button id="layout-save">배치 저장</button><button id="layout-restore">복원</button><button id="layout-undo">Undo</button><button id="layout-redo">Redo</button>
+      <button id="zout" title="축소 (-)">−</button><button id="zk" title="현재 배율 · 클릭: 100% (1)">100%</button><button id="zin" title="확대 (+)">+</button>
+      <button id="zfit" title="전체 보기 (0)">fit</button>
+    </div>
     <div class="filters" id="filters">
       <button data-f="live" class="on" title="실행 중이거나 30분 안에 활동한 세션">활성</button>
       <button data-f="2h">2시간</button>
@@ -44,18 +48,14 @@
       <button data-f="all">전체</button>
     </div>
     <div class="searchwrap">
-      <input id="search" placeholder="비활성 세션 검색…" autocomplete="off">
+      <input id="search" aria-label="비활성 세션 검색" placeholder="비활성 세션 검색…" autocomplete="off">
       <div id="searchResults"></div>
     </div>
-    <button id="unhide" title="숨긴 세션 복원" hidden></button>
-    <button id="doneSubs" title="완료된 서브에이전트를 맵과 카드 목록에서 숨김"></button>
+    <button id="unhide" title="숨긴 세션 복원" hidden>숨긴 세션 복원</button>
+    <button id="doneSubs" title="완료된 서브에이전트가 숨겨져 있습니다 · 클릭해서 표시">완료 서브 숨김</button>
     <span id="conn" hidden title="서버와의 실시간 연결이 끊겼습니다. 화면 값은 마지막으로 받은 상태입니다.">연결 끊김 · 다시 연결 중…</span>
     <span id="globalResources" aria-label="호스트 자원"></span>
     <span id="spath"></span>
-    <div class="zoom"><select id="layout-preset" aria-label="배치 프리셋"><option value="grid">격자</option><option value="horizontal">가로</option><option value="vertical">세로</option></select><button id="layout-apply">정렬</button><button id="layout-save">배치 저장</button><button id="layout-restore">복원</button><button id="layout-undo">Undo</button><button id="layout-redo">Redo</button>
-      <button id="zout" title="축소 (-)">−</button><button id="zk" title="현재 배율 · 클릭: 100% (1)">100%</button><button id="zin" title="확대 (+)">+</button>
-      <button id="zfit" title="전체 보기 (0)">fit</button>
-    </div>
   </div>
 <!-- shell:workflow -->
   <div id="ctxmenu"></div>

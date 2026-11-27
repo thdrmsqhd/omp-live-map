@@ -66,5 +66,5 @@ async function loadLocalRes() {
       if (JSON.stringify(LOCRES.get(L.id)) !== JSON.stringify(j)) { LOCRES.set(L.id, j); changed = true; }
     } catch { /* ignore */ }
   }
-  if (changed) renderMap(false);
+  if (changed) viewUpdates.map?.(false);
 }

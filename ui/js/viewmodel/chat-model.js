@@ -28,20 +28,20 @@ async function toggleModelPicker(id) {
   const node = nodeById(id);
   if (!node || !capsOf(node).model) return;   // Claude Code 는 모델 변경 없음(버튼도 잠겨 있다)
   const mp = modelPick(id);
-  if (mp.open) { mp.open = false; paintChat(id); return; }
+  if (mp.open) { mp.open = false; viewUpdates.chat?.(id); return; }
   Object.assign(mp, { open: true, loading: true, err: "", q: "", list: [] });
-  paintChat(id);
+  viewUpdates.chat?.(id);
   const out = await postOut("/api/session/models", { node: id });
   mp.loading = false;
   if (out.ok) { mp.list = out.models || []; mp.current = out.current; }
   else mp.err = (out.held ? "바꿀 수 없음: " : "목록 실패: ") + (out.out || "응답 없음");
-  paintChat(id);
+  viewUpdates.chat?.(id);
 }
 
 // 지도 데이터의 해당 노드 모델을 바로 바꿔 카드 표시를 갱신한다. 다음 스냅샷도 같은 값을 가져온다.
 function applyNodeModel(id, m) {
   for (const s of DATA.sessions) for (const n of s.nodes) if (n.id === id) { n.model = m.id; n.provider = m.provider; }
-  renderMap(false, true);
+  viewUpdates.map?.(false, true);
 }
 
 async function pickModel(id, provider, modelId) {
@@ -49,12 +49,12 @@ async function pickModel(id, provider, modelId) {
   const mp = modelPick(id);
   mp.loading = true;
   mp.err = "";
-  paintChat(id);
+  viewUpdates.chat?.(id);
   const out = await postOut("/api/session/model", { node: id, provider, id: modelId });
   mp.loading = false;
   if (!out.ok) {
     mp.err = "변경 실패: " + (out.out || "응답 없음");
-    paintChat(id);
+    viewUpdates.chat?.(id);
     return;
   }
   const m = out.model || { provider, id: modelId, name: modelId };
@@ -63,5 +63,5 @@ async function pickModel(id, provider, modelId) {
   st.modelNote = `모델을 ${m.name || m.id}(으)로 바꿨습니다`
     + (out.busy || st.busy ? " · 지금 도는 턴이 끝나고 다음 턴부터 적용됩니다" : "");
   applyNodeModel(id, m);
-  paintChat(id);
+  viewUpdates.chat?.(id);
 }
