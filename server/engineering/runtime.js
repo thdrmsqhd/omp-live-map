@@ -4,11 +4,25 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
-const { dockerRunner } = require("../infrastructure/docker");
+const { dockerRunner: dockerBackend, permitted } = require("../infrastructure/docker");
+const { createAnthropicBroker, models } = require("./anthropic");
+const { adaptersFor } = require("./adapters");
+const { commandRunner } = require("./command-runner");
 const { consoleOAuth } = require("./anthropic-oauth");
 const { claudeCodeLogin, savedToken, LOGIN_EXPIRED } = require("./claude-code-oauth");
 const { secureRunner } = require("./runner");
 const { problem } = require("./state");
+
+// Compose engineering policy with the isolated process backend here, not in infrastructure.
+function dockerRunner({ key, oauth, upstream, ...options }) {
+  const { backend, shutdown } = dockerBackend({
+    ...options, problem,
+    supports: (name, model) => Boolean((key || oauth) && model.provider === "anthropic" && models.has(model.model) &&
+      (!model.reasoning || name === "omp")),
+    createBroker: (request) => createAnthropicBroker({ ...request, key, oauth, upstream }),
+  });
+  return { ...secureRunner(adaptersFor(backend), commandRunner(backend, permitted)), shutdown };
+}
 
 const tag = "omp-live-map-runtime:v2.2";
 const execute = promisify(execFile);
@@ -158,4 +172,4 @@ function runtime(directory, key, consoleAuth = consoleOAuth(), claudeCode = proc
   };
 }
 
-module.exports = { runtime, liveAuthState };
+module.exports = { runtime, liveAuthState, dockerRunner };
