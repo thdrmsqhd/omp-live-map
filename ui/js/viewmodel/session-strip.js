@@ -109,7 +109,7 @@ function sessionStripAskGroups() {
 }
 
 function sessionStripSnapshot() {
-  if (typeof mapMode === "undefined" || mapMode !== "design") return null;
+  if (mapMode !== "design") return null;
   if (!sessionStripHasData()) return { ready: false, sessions: [], groups: [] };
   return { ready: true, sessions: sessionStripSessions(), groups: sessionStripAskGroups() };
 }

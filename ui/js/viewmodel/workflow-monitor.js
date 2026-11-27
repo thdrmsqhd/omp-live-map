@@ -31,8 +31,8 @@ function inboxAskGroups() {
 }
 
 // 같은 질문 키를 두 단계가 나누면 어느 카드도 소유하지 않는다.
-function workflowMonitorAskKey(detail, node, status) {
-  if (typeof mapMode === "undefined" || mapMode !== "design" || typeof wfMap === "undefined" || wfMap.edit) return null;
+function workflowMonitorAskKey(detail, node, status, editing = false) {
+  if (mapMode !== "design" || editing) return null;
   if (!detail || detail.run.status !== "running" || status !== "running") return null;
   if (!node || !["agent", "loop"].includes(node.type)) return null;
   const key = detail.live?.[node.id]?.askSession;

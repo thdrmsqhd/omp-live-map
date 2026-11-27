@@ -5,49 +5,13 @@
 //   DOCK_OFF  사용자가 직접 닫은 서브(메인을 다시 열 때까지 자동으로 열지 않는다)
 // 셋 다 localStorage 에 남겨 새로고침 뒤에도 같은 모습을 유지한다. 배치·이력은 BIGPOS 규칙을 그대로 쓴다.
 
-const SUBDOCK = new Map();
-const DOCK_FREE = new Set();
-const DOCK_OFF = new Set();
 const DOCK_GAP = 40;
 const DOCK_ROWS = 3;
 
-(function loadDock() {
-  const v = readJSON("omp-map-subdock", {});
-  const map = (v && v.map) || {};
-  for (const [sub, main] of Object.entries(map)) {
-    if (typeof sub === "string" && typeof main === "string" && sub !== main) SUBDOCK.set(sub, main);
-  }
-  for (const id of strList(v && v.off)) DOCK_OFF.add(id);
-  for (const id of strList(v && v.free)) DOCK_FREE.add(id);
-})();
 
-const saveDock = () => writeJSON("omp-map-subdock", { map: Object.fromEntries(SUBDOCK), off: [...DOCK_OFF], free: [...DOCK_FREE] });
 
-function sessionOf(id) {
-  return GRAPH_NODES.get(id)?.session || null;
-}
 
-// 화면 노드(NODES)가 아직 갱신 전일 수 있으므로 스냅샷(DATA)을 먼저 본다.
-function nodeInData(id) {
-  return GRAPH_NODES.get(id)?.node || nodeById(id) || null;
-}
 
-// 실행 중 판정: 스냅샷 상태(live) 또는 이 탭의 실시간 활동(마지막 턴 미종료). 서버가 끝났다고 한(done) 서브는 실시간 목록과 상관없이 끝난 것이다.
-function subRunning(n) {
-  if (!n || n.kind !== "sub") return false;
-  if (n.status === "live") return true;
-  if (n.status === "done") return false;
-  try { return typeof actItems === "function" && actItems(n.id).running; } catch { return false; }
-}
-
-// 그 메인이 속한 세션의 실행 중 서브에이전트. 시작 순서대로.
-function runningSubsOf(mainId) {
-  const s = sessionOf(mainId);
-  return !s ? [] : s.nodes
-    .filter((n) => n.kind === "sub" && subRunning(n))
-    .sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0) || String(a.id).localeCompare(String(b.id)))
-    .map((n) => n.id);
-}
 
 // 렌더마다(placeBigCards 앞): 열린 메인마다 실행 중 서브를 연결·자동으로 연다. 자동으로 붙인 서브가 완료되면 카드를 닫는다.
 // 닫기 판정은 저장되는 SUBDOCK 이 기준이다 — 새로고침 뒤에도, 스냅샷 방송을 놓친 뒤에도 닫힌다. 손으로 연 완료 카드는 SUBDOCK 에 없으므로 유지된다.
@@ -172,8 +136,6 @@ function dockTag(n) {
   return `<span class="docktag" title="메인 카드에 연결된 실행 중 서브에이전트">연결 · 실행 중</span>`;
 }
 
-// 연결 서브 카드의 대화 블록은 읽기 전용(입력·전송·비우기·압축 숨김).
-const dockReadOnly = (id) => SUBDOCK.has(id);
 
 // 메인 오른쪽 변 → 서브 왼쪽 변 곡선. 실행 중이면 움직이는 대시, 끝났으면 정적.
 function dockEdgeHTML(S) {

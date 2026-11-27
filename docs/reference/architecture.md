@@ -26,8 +26,8 @@ ui/
   engineering.html     Engineering 화면(기초 생성 · 프로필 · 하네스 · 루프 · Workflow · 개발 Task · 실행). js/engineering*.js, workflow-*.js, harness-*.js, sdlc.js
   css/                 tokens · shell · sessions · cards · panel · blocks
   js/core/             format · dom · state(가변 상태 단일 소유) · persist(localStorage)
-  js/model/            layout(배치 계산, DOM 접근 없음)
-  js/viewmodel/        map · session-rows · store · term · files · dbui · chat · context
+  js/model/            layout(배치 계산, DOM 접근 없음) · activity(마지막 턴 활동 범위)
+  js/viewmodel/        map · session-rows · store · term · files · dbui · chat · context · dock(서브 도킹 상태) · claude-queue
   js/view/             맵(render-map, patch-nodes, stage*, edges, minimap, menu, search, topbar)
                        카드(card-compact, card-session, card-metrics, charts, spark-hover, panel), 세션 목록(session-list)
                        블록(blocks, block-controls, block-chat/term/bg/editor/browser/db/context, editor-*(탐색기·탭·Monaco 상태바))
@@ -37,7 +37,7 @@ docs/                  archify 구조 다이어그램(architecture · components
 
 규칙:
 
-- 의존 방향은 core → model → viewmodel → view → app 한쪽입니다. model은 DOM을 모르고 view만 DOM을 만집니다.
+- 의존 방향은 core → model → viewmodel → view → app 한쪽입니다. model은 DOM을 모르고 view만 DOM을 만집니다. viewmodel은 view를 부르지 않고 `viewUpdates`(core/state.js)로 화면 갱신을 알리며, `app.js`가 구독을 연결합니다. `index.html`은 이 순서로 적재하고 `app.js`가 마지막 일반 스크립트입니다(`tests/ui-layers.test.js`).
 - 파일 하나는 200줄 미만을 원칙으로 합니다. 2026-11-27 기준 JS 239개 중 20개가 넘고, 가장 큰 파일은 `ui/js/studio.js`(1,493줄)입니다. 새 파일은 500줄을 넘기지 않고, 이미 넘은 파일은 더 키우지 않습니다(`tests/file-size.test.js`).
 - 서버의 가변 상태는 모듈 하나가 소유하고 함수로만 내보냅니다(예: 파일 상태 Map은 `tail.js`).
 - 화면은 `renderMap()`이 조각 목록을 만들고 `patchPieces()`가 마크업이 바뀐 조각만 바꿉니다. 큰 카드는 스냅샷이 올 때 chrome만 교체하고, 블록이 사는 body는 블록 구성이 같으면 DOM을 유지합니다. 그래서 입력 포커스·스크롤·트리 펼침이 갱신에 끊기지 않습니다.

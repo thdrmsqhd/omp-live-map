@@ -34,7 +34,7 @@
   }
   function askSession(detail, node, status) {
     if (detail !== wfMap.run) return null;
-    return workflowMonitorAskKey(detail, node, status);
+    return workflowMonitorAskKey(detail, node, status, Boolean(wfMap.edit));
   }
   function runtimeAsk(state, node, key) {
     let host = state.querySelector(':scope > .unified-node-ask');

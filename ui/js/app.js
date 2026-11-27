@@ -11,6 +11,14 @@ function wireViewUpdates() {
     if (typeof paintWorkflowAskSurfaces === "function") paintWorkflowAskSurfaces(id);
   };
   viewUpdates.visibleChat = id => { if (cardContentVisible(id)) viewUpdates.chat(id); };
+  viewUpdates.attention = () => paintAttention();
+  viewUpdates.context = (id) => paintContext(id);
+  viewUpdates.db = (id) => paintDb(id);
+  viewUpdates.tree = (id) => paintTree(id);
+  viewUpdates.term = (id, command) => paintTerm(id, command);
+  viewUpdates.bg = (id) => paintBg(id);
+  viewUpdates.cardClosing = (id) => { dockOnClose(id); edDispose(id); };
+  viewUpdates.cardClosed = (id) => cardClosed(id);
   viewUpdates.ask = id => {
     if (ELS.has(id) && openIds.has(id)) paintChat(id);
     renderMap(false);

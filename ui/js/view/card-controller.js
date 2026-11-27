@@ -1,5 +1,4 @@
 /* 공통 카드 활성화·포커스·헤더 제어. 세션 수명과 화면 수명은 분리한다. */
-let activeCardId = null;
 let focusedCardId = null;
 
 function activateCard(id) {

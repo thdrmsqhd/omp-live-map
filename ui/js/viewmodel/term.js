@@ -20,7 +20,7 @@ function termLog(id, lines) {
   st.lines.push(...lines);
   if (lines.some((l)=>l.c==="cmd")) st.historyOffset=0;
   if (st.lines.length > 300) st.lines = st.lines.slice(-300);
-  paintTerm(id, lines.some((l) => l.c === "cmd"));
+  viewUpdates.term?.(id, lines.some((l) => l.c === "cmd"));
 }
 
 async function runTerm(id, cmd) {
@@ -72,7 +72,7 @@ async function loadBg(nodeId) {
       return p ? { ...j, open: p.open, stick: p.stick, top: p.top } : j;
     }));
   } catch { /* ignore */ }
-  paintBg(nodeId);
+  viewUpdates.bg?.(nodeId);
 }
 
 async function loadBgAll() {

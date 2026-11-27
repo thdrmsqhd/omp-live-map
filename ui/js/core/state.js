@@ -112,3 +112,12 @@ let velocity = { x: 0, y: 0, t: 0, raf: 0 };
 
 // View notifications are subscribed by app.js; state transitions do not own rendering.
 const viewUpdates = {};
+
+// 화면 모드(overview·workspace·map·design). 저장값은 persist.js 가 읽는다. design 은 데스크톱 앱에서만 쓴다(design-mode.js).
+let mapMode = "map";
+
+// 지금 조작 중인 큰 카드(워크스페이스 모드에서 보이는 카드).
+let activeCardId = null;
+
+// 열어 둔 잡 카드(출력 펼침). 렌더를 다시 해도 유지한다.
+const JOBOPEN = new Set();

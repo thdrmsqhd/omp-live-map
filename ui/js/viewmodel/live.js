@@ -128,3 +128,7 @@ if (typeof document !== "undefined") {
   setInterval(()=>{const keep=new Set([...openIds].map(liveKey));for(const s of DATA.sessions||[])for(const n of s.nodes)if(n.status==="live"||CHAT.get(n.id)?.busy)keep.add(liveKey(n.id));for(const k of LIVE.keys())if(!keep.has(k))LIVE.delete(k);for(const k of LIVE_HISTORY.keys())if(!keep.has(k))LIVE_HISTORY.delete(k);},60000);
 }
 if (typeof module === "object" && module.exports) module.exports = { liveHistoryItems, handleLiveEvent };
+
+function actItems(nodeId, st) {
+  return actItemsOf(liveItems(nodeId), st, HIDE_DONE_SUBS);
+}
