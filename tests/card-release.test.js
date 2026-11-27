@@ -7,7 +7,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const read = (name) => fs.readFileSync(path.join(__dirname, "../ui/js", name), "utf8");
+// Windows 체크아웃(core.autocrlf)은 CRLF 로 받으므로 줄 끝을 맞춘 뒤 함수를 잘라 낸다.
+const read = (name) => fs.readFileSync(path.join(__dirname, "../ui/js", name), "utf8").replace(/\r\n/g, "\n");
 const pick = (source, start) => {
   const at = source.indexOf(start);
   assert.ok(at >= 0, start);
