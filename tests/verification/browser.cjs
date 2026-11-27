@@ -106,6 +106,16 @@ test("existing map opens a session card, restores panel state and renders update
       assert.equal(await page.locator("#overview .mon-card").count(),10);
       assert.equal(await page.locator("#overview .mon-card .mon-resources").count(),10);
       await page.screenshot({path:"artifacts/v4-ux/01-overview.png"});
+      // 접근성 자동 검사(axe-core): 색 대비·버튼·입력 이름. 프로젝트·워크스페이스·맵 화면.
+      const axeSource = await fs.readFile(require.resolve("axe-core/axe.min.js"), "utf8");
+      for (const mode of ["overview", "workspace", "map"]) {
+        await page.locator(`#viewModes [data-mode="${mode}"]`).click();
+        await page.waitForTimeout(300);
+        await page.evaluate(axeSource);
+        const result = await page.evaluate(() => axe.run(document, { runOnly: ["color-contrast", "button-name", "label", "select-name"] }));
+        assert.deepEqual(result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(", ")}`), [], `axe violations in ${mode}`);
+      }
+      await page.locator('[data-mode="overview"]').click();
       await page.locator("#mon-search").fill("Timing 1");
       assert.equal(await page.locator("#overview .mon-card").count(),1);
       await page.locator("#mon-search").fill("");

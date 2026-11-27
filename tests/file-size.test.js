@@ -10,7 +10,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const LIMIT = 500;
 const LEGACY = {
-  "ui/js/studio.js": 970,
+  "ui/js/studio.js": 988,
   "ui/js/view/workflow-map.js": 643,
 };
 

@@ -73,7 +73,7 @@ function ctxBlock(n) {
     ? badge(" ctxerr", "컨텍스트 상한의 85%를 넘었습니다. 곧 압축되거나 요청이 거절될 수 있습니다", "상한 임박") : ""}${prompt && nonMsg / prompt > 0.6
     ? badge(" ctxwarn", `시스템+툴 스키마 ${fmt(nonMsg)} tok = 프롬프트의 ${pctText(nonMsg, prompt)} — 대화보다 고정 오버헤드가 큼`, "시스템 비중 높음") : ""}</div>
     <div class="ibar ctxbar">
-      ${seg("대화", msgs, "#4aa8ff")}${seg("툴 스키마", schema, "#a98bff")}${seg("시스템", overhead, "#475f74")}
+      ${seg("대화", msgs, "#4aa8ff")}${seg("툴 스키마", schema, "#a98bff")}${seg("시스템", overhead, "#5f7a92")}
       ${use ? th(70) + th(85) : ""}
     </div>
     <div class="nums" style="font-size:9.5px">

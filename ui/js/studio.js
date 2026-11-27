@@ -906,6 +906,24 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       if (event.key.toLowerCase() === "y" || event.shiftKey) editHistory.redo(); else editHistory.undo();
       return;
     }
+    // 고른 노드를 방향키로 옮긴다(8px, Shift 와 함께 40px). 마우스 없이도 배치할 수 있다.
+    const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (arrows[event.key] && !typing && viewport.contains(document.activeElement)) {
+      const node = nodes.get(selected);
+      if (!node || node.x === undefined) return;
+      event.preventDefault();
+      editHistory.begin();
+      const distance = event.shiftKey ? 40 : 8, [dx, dy] = arrows[event.key];
+      node.x = Math.max(0, node.x + dx * distance);
+      node.y = Math.max(0, node.y + dy * distance);
+      place(node);
+      remember(node);
+      saveLayout();
+      scheduleDraw();
+      editHistory.commit();
+      updateToolbar();
+      return;
+    }
     if (!["Delete", "Backspace"].includes(event.key) || typing) return;
     editHistory.begin();
     if (!viewport.contains(document.activeElement) && document.activeElement !== document.body) return;

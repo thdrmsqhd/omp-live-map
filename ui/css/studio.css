@@ -112,6 +112,8 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-node.is-selected { border-color: var(--kind); box-shadow: 0 0 0 2px color-mix(in srgb, var(--kind) 55%, transparent), 0 12px 30px #000a; z-index: 3; }
 .studio-node.has-problem:not(.is-selected) { border-color: #6d5a2c; }
 .studio-node:focus { outline: none; }
+.studio-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.studio-viewport:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .studio-head {
   display: flex; align-items: center; gap: 4px; padding: 5px 6px 5px 4px;

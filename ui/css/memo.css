@@ -26,7 +26,7 @@
   .memo .minput { width: 100%; height: 54px; min-height: 36px; resize: vertical; padding: 3px 5px;
     font-family: var(--mono); font-size: 11px; line-height: 1.4; color: var(--fg);
     background: #0a1017; border: 1px solid #1c2a39; border-radius: 5px; }
-  .memo .minput:focus { border-color: #2f5d85; outline: none; }
+  .memo .minput:focus { border-color: #2f5d85;  }
   .memo .mrow { display: flex; gap: 4px; }
   .memo .mrow button { padding: 1px 8px; font-size: 10px; color: var(--muted); background: #14202c;
     border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }

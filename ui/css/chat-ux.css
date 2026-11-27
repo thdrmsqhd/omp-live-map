@@ -24,7 +24,7 @@
 .chat-composer{flex:none;background:#111d29;border:1px solid #34495e;border-radius:9px;padding:8px;display:flex;flex-direction:column;gap:6px}
 .chat-composer:focus-within{border-color:#68a9e8}
 .node.big .chat-composer .crow{margin:0;display:flex}
-.node.big .chat-composer .cin{width:100%;font-size:14px;line-height:1.6;min-height:52px;padding:8px;background:transparent;border:none;outline:none}
+.node.big .chat-composer .cin{width:100%;font-size:14px;line-height:1.6;min-height:52px;padding:8px;background:transparent;border:none;}
 .chat-compose-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .chat-compose-actions button,.chat-extra summary{font-size:12px;min-height:30px;padding:5px 8px}
 .chat-compose-actions .cmodel{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

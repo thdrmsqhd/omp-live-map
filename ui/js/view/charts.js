@@ -1,6 +1,6 @@
 /* omp-live-map · view · 토큰 테이프와 스파크라인 SVG */
 
-const TOK_COLORS = [["input", "#4aa8ff"], ["output", "#2fbf9b"], ["cacheRead", "#475f74"], ["cacheWrite", "#a98bff"]];
+const TOK_COLORS = [["input", "#4aa8ff"], ["output", "#2fbf9b"], ["cacheRead", "#5f7a92"], ["cacheWrite", "#a98bff"]];
 const TOK_LABELS = { input: "입력", output: "출력", cacheRead: "캐시읽기", cacheWrite: "캐시쓰기" };
 
 function tokTotal(t) {

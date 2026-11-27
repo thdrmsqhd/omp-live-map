@@ -4,7 +4,7 @@
     --bg: #0a0e13; --panel: #111821; --panel2: #16202b; --border: #21303f;
     --fg: #e6edf5; --muted: #8aa0b4; --dim: #91a5b9;
     --live: #2fbf9b; --idle: #e0a83c; --done: #5c7186; --error: #e3564f; --accent: #4aa8ff;
-    --c-in: #4aa8ff; --c-out: #2fbf9b; --c-cache: #475f74; --c-write: #a98bff;
+    --c-in: #4aa8ff; --c-out: #2fbf9b; --c-cache: #5f7a92; --c-write: #a98bff;
     --k-tok: #5fa8ff; --k-out: #35d0a5; --k-cache: #93a9bd; --k-req: #c3a6ff;
     --k-rate: #35d0a5; --k-cost: #ffc46b; --k-ctx: #7fb8ee; --k-cpu: #ff9f6b; --k-mem: #b49bff;
     --mono: "Cascadia Mono", Consolas, "D2Coding", monospace;

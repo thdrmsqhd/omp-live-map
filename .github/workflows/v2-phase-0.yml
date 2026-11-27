@@ -62,7 +62,7 @@ jobs:
         if: ${{ !cancelled() }}
         id: prepare
         run: |
-          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12 monaco-editor@0.52.2
+          npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12 monaco-editor@0.52.2 axe-core@4.10.3
           npx playwright install --only-shell chromium
       - name: Electron desktop lifecycle proof
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
