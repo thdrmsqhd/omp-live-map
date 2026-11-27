@@ -52,7 +52,7 @@ function sessionChrome(n) {
     ${isLocal ? resRow(n, true) : `${summary}<div class="card-metrics-detail"${detail?"":" hidden"}>${tokenSection(n)}
     <div class="sparkwrap" style="height:34px">
       <span class="rate">${n.liveTokPerSec} t/s</span>
-      ${spark(series, BIG_W - 40, 30, "#2fbf9b", true, n.id)}
+      ${spark(series, (SATS.get(n.id)?.w || BIG_W) - 40, 30, "#2fbf9b", true, n.id)}
       <span class="cap">턴당 출력 max ${fmt(maxOut)} · 최근 ${series.length}턴</span>
     </div>
     ${ctxBlock(n)}
@@ -78,7 +78,8 @@ function infraChrome(n) {
 
 function bigCard(n) {
   const box = SATS.get(n.id);
-  const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px;--edcol:${cardSplit(n.id)}%`;
+  // 예전 크기(3200px 안팎)로 저장된 카드는 축소된 배율로 보이므로 대화만 2배로 키운다. 화면에 맞춘 새 카드는 1배.
+  const style = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px;--edcol:${cardSplit(n.id)}%;--chat-zoom:${box.w >= 2400 ? 2 : 1}`;
   const chrome = agentKind(n.kind) || n.kind === "local" ? sessionChrome(n) : infraChrome(n);
   const side = renderBlocks(n, "side");
   const edit = renderBlocks(n, "edit");

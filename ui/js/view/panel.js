@@ -42,7 +42,8 @@ function revealCard(id) {
   const st = $("stage").getBoundingClientRect();
   const x = b.x * view.k + view.x, y = b.y * view.k + view.y;
   const inside = x >= 0 && y >= 0 && x + b.w * view.k <= st.width && y + b.h * view.k <= st.height;
-  if (!inside) fitBox(b, 24, 180);
+  // 새 카드는 읽을 수 있는 배율(최대 100%)로 맞춘다. 카드 기본 크기가 무대에 맞춰져 있어 보통 100%가 된다.
+  if (!inside) fitBox(b, 24, 180, 0.22, 1);
 }
 
 function flashCard(id) {
@@ -67,10 +68,20 @@ function focusCard(id) {
   flashCard(id);
 }
 
+// 새 큰 카드의 기본 크기: 100% 배율에서 지금 무대(세션 목록 제외)에 다 들어오는 크기.
+// 너무 작은 창에서도 블록이 비좁지 않게 960×640 아래로는 줄이지 않는다.
+const BIG_MIN_W = 960, BIG_MIN_H = 640;
+function bigCardSize() {
+  if (readJSON("omp-map-legacy-card-size", false) === true) return { w: BIG_W, h: BIG_H };
+  const st = $("stage").getBoundingClientRect();
+  const clamp = (v, lo, hi) => Math.round(Math.min(hi, Math.max(lo, v)));
+  return { w: clamp(st.width - 48, BIG_MIN_W, 1600), h: clamp(st.height - 48, BIG_MIN_H, 1000) };
+}
+
 // 큰 카드를 처음 열 때의 자리(로컬·인프라): 클러스터 오른쪽. 다른 카드와 겹치면 아래가 아니라 그 카드 오른쪽으로 민다.
 function placeSatellite(anchor) {
   const obstacles = [...CLUSTERS, ...geo.values(), ...SATS.values(), ...JOBS];
-  const box = { x: anchor.x + anchor.w + 80, y: anchor.y, w: BIG_W, h: BIG_H };
+  const box = { x: anchor.x + anchor.w + 80, y: anchor.y, ...bigCardSize() };
   for (let i = 0; i < 400; i++) {
     const hit = obstacles.find((r) => rectsOverlap(box, r));
     if (!hit) break;

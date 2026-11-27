@@ -44,7 +44,8 @@ const ELS = new Map();
 
 const TERM = new Map();
 
-// 대화 + VS Code형 편집기를 나란히 놓아도 답답하지 않은 기본 크기.
+// 예전 기본 크기. 새 카드는 bigCardSize()(view/panel.js)가 화면에 맞춰 정한다.
+// localStorage "omp-map-legacy-card-size"가 true면 이 크기를 그대로 쓴다.
 const BIG_W = 3200, BIG_H = 1920;
 
 const CARD_BLOCKS = new Map();   // nodeId -> {add, remove} (기본 블록 대비 차이)

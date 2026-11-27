@@ -149,7 +149,7 @@ function unfitBrowserCard(id, key = "browser") {
   const box = BIGPOS.get(id);
   if (!box || !f || (!f.w && !f.h)) return;
   pushHistory(layoutSnapshot({ big: [id] }));
-  BIGPOS.set(id, { ...box, w: Math.max(BIG_W, (box.w || BIG_W) - f.w), h: Math.max(BIG_H, (box.h || BIG_H) - f.h) });
+  BIGPOS.set(id, { ...box, w: Math.max(BIG_MIN_W, (box.w || BIG_W) - f.w), h: Math.max(BIG_MIN_H, (box.h || BIG_H) - f.h) });
   saveOpenCards();
 }
 

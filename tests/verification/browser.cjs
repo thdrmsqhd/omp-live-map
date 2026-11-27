@@ -125,6 +125,15 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator(".node.big.active-card [data-bslot=chat]").selectOption("main");
       await page.locator('[data-mode="map"]').click();
       await sessionName("Timing 1").click(filter);
+      // 맵에서 처음 연 카드는 읽을 수 있는 배율로 보인다(대화 본문 실측 12px 이상).
+      await page.waitForTimeout(400);
+      const readable = await page.evaluate(() => {
+        const chat = document.querySelector(".node.big.active-card .cmsgs");
+        const size = chat ? parseFloat(getComputedStyle(chat).fontSize) : 0;
+        const zoom = chat ? parseFloat(getComputedStyle(chat.closest(".chat") || chat).zoom || "1") : 1;
+        return { k: view.k, px: size * zoom * view.k };
+      });
+      assert.ok(readable.k >= 0.8 && readable.px >= 12, `card opened unreadable: ${JSON.stringify(readable)}`);
       await page.screenshot({path:"artifacts/v4-ux/03-live-map.png"});
       // 미니맵은 어떤 폭에서도 상단 바(줌·배치 도구·검색)를 가리지 않는다.
       const minimapClear = () => page.evaluate(() => {

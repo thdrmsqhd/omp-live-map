@@ -71,7 +71,7 @@ function bindCardResize() {
     // 기본 크기 복원도 크기 조절과 같은 이력에 넣는다.
     pushHistory(layoutSnapshot({ big: [id] }));
     const b = BIGPOS.get(id);
-    if (b) BIGPOS.set(id, { ...b, w: BIG_W, h: BIG_H });
+    if (b) BIGPOS.set(id, { ...b, ...bigCardSize() });
     saveOpenCards();
     renderMap(false, true);
   });
