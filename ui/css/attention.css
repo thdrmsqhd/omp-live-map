@@ -14,7 +14,7 @@
     50% { box-shadow: 0 18px 48px #000a, 0 0 0 2px #e7b04cbb, 0 0 26px #d99a2b99; }
   }
   /* 카드 헤더의 작은 배지. 마크업의 .attn-badge 는 늘 있고 클래스가 붙을 때만 보인다. */
-  .node .attn-badge { display: none; flex: none; font-size: 9px; font-weight: 700; line-height: 14px;
+  .node .attn-badge { display: none; flex: none; font-size: var(--fs-small); font-weight: 700; line-height: 14px;
     padding: 0 4px; border-radius: 4px; letter-spacing: .2px; white-space: nowrap; }
   .node.attn-done .attn-badge { display: inline-block; color: #7ef0b8; background: #16352a; border: 1px solid #23543f; }
   .node.attn-done .attn-badge::before { content: "답변 완료"; }
