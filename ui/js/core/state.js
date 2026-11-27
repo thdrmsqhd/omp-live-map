@@ -108,3 +108,6 @@ let BGALL = new Map();
 let spaceDown = false;
 
 let velocity = { x: 0, y: 0, t: 0, raf: 0 };
+
+// View notifications are subscribed by app.js; state transitions do not own rendering.
+const viewUpdates = {};
