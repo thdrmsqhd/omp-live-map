@@ -2,14 +2,14 @@
   :root {
     color-scheme: dark;
     --bg: #0a0e13; --panel: #111821; --panel2: #16202b; --border: #21303f;
-    --fg: #e6edf5; --muted: #8aa0b4; --dim: #5c7186;
+    --fg: #e6edf5; --muted: #8aa0b4; --dim: #91a5b9;
     --live: #2fbf9b; --idle: #e0a83c; --done: #5c7186; --error: #e3564f; --accent: #4aa8ff;
     --c-in: #4aa8ff; --c-out: #2fbf9b; --c-cache: #475f74; --c-write: #a98bff;
     --k-tok: #5fa8ff; --k-out: #35d0a5; --k-cache: #93a9bd; --k-req: #c3a6ff;
     --k-rate: #35d0a5; --k-cost: #ffc46b; --k-ctx: #7fb8ee; --k-cpu: #ff9f6b; --k-mem: #b49bff;
     --mono: "Cascadia Mono", Consolas, "D2Coding", monospace;
     /* 본문 글꼴: 화면 기본, 실시간 흐름·터미널(mono), 대화 */
-    --fs-base: 11.5px; --fs-flow: 10.5px; --fs-chat: 9.5px;
+    --fs-base: 13px; --fs-flow: 12px; --fs-chat: 13px; --fs-small: 11px; --fs-chat-large: 14px;
     /* 큰 카드(3200×1920)는 열 때 fitBox가 0.5~0.65배로 맞춘다. 대화 블록만 이 배율로 키워 그 배율에서 본문이 약 12px로 읽히게 한다. */
     --chat-zoom: 2;
   }
@@ -29,3 +29,8 @@
   button.on { background: #1b2f42; border-color: #2f5d85; color: #bfe0ff; }
   button.go { border-color: #1f6b5b; color: #9ff0d8; }
   button.stop { border-color: #6b2724; color: #ffb0aa; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .node.attn-ask, .node.attn-ask.big, .dot.live, .pendcard, .pendcard .sp { animation: none !important; }
+  }
