@@ -72,11 +72,11 @@
       <h2 id="workflow-launch-title">새 Workflow 실행</h2>
       <label>프로젝트 <select name="project" required></select></label>
       <label>Workflow <select name="source" required></select></label>
-      <label>실행 이름 <input name="title" maxlength="240" placeholder="미입력 시 작업 목표 사용"></label>
       <label>작업 목표 <textarea name="goal" required maxlength="8000" rows="3"></textarea></label>
       <label>완료 조건 <textarea name="acceptance" required maxlength="3500" rows="3"></textarea></label>
       <details id="workflow-launch-settings">
         <summary>실행 설정</summary>
+        <label>실행 이름 <input name="title" maxlength="240" placeholder="미입력 시 작업 목표 사용"></label>
         <label data-role="author">설계·문서 하네스 <select name="author"></select></label>
         <label data-role="reviewer">리뷰 하네스 <select name="reviewer"></select></label>
         <label data-role="triage">점검 하네스 <select name="triage"></select></label>

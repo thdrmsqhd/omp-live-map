@@ -276,6 +276,9 @@ async function verifyLiveMap(page, origin, project) {
   await page.locator("#studio-workflow option:checked").filter({ hasText: "CI workflow · v2" }).waitFor({ state: "attached" });
   await page.locator("#studio-run").click();
   await launch.locator('[name="source"] option:checked').filter({ hasText: "CI workflow · v2" }).waitFor({ state: "attached" });
-  assert.equal(await page.evaluate(() => mapMode), "map");
+  // 설계 화면을 떠나지 않고, 캔버스에서 고른 프로젝트·Workflow는 고정된다.
+  assert.equal(await page.evaluate(() => mapMode), "design");
+  assert.equal(await launch.locator('[name="source"]').isDisabled(), true);
+  assert.equal(await launch.locator('[name="project"]').isDisabled(), true);
   await launch.getByRole("button", { name: "닫기", exact: true }).click();
 }

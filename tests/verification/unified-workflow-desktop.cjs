@@ -40,6 +40,7 @@ test('Desktop: one canvas with a real workflow saved, launched, approved and rec
     await page.getByRole('menu').getByText('평가 하네스', { exact: false }).first().waitFor();
     await page.keyboard.press('Escape');
     await page.locator('#studio-run').click();
+    await page.evaluate(() => { document.getElementById('workflow-launch-settings').open = true; });
     await page.locator('#workflow-launch [name=title]').fill('실제 승인 경로 검증');
     await page.locator('#workflow-launch [name=goal]').fill('임시 프로젝트의 승인 상태를 확인합니다.');
     await page.locator('#workflow-launch [name=acceptance]').fill('검토 후 승인하면 완료 상태를 기록합니다.');
@@ -61,6 +62,7 @@ test('Desktop: one canvas with a real workflow saved, launched, approved and rec
     await review.getByLabel('개입 유형').waitFor();
     assert.equal(await review.getByLabel('개입 유형').inputValue(),'uac');
     await page.locator('#studio-run').click();
+    await page.evaluate(() => { document.getElementById('workflow-launch-settings').open = true; });
     await page.locator('#workflow-launch [name=title]').fill('수동 UAC 중단점 검증');
     await page.locator('#workflow-launch [name=goal]').fill('후속 단계가 수동 확인 전에 시작하지 않음을 확인합니다.');
     await page.locator('#workflow-launch [name=acceptance]').fill('수동 반려를 기록하되 권한을 요청하지 않습니다.');

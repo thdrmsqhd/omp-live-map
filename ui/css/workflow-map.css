@@ -266,3 +266,4 @@
 #wf-map-run-controls input, #wf-map-run-controls select { width: 100%; box-sizing: border-box; margin: 4px 0 6px; padding: 5px; border: 1px solid #526575; border-radius: 4px; background: #111923; color: inherit; font: inherit; }
 .wf-run-controls-status:empty { display: none; }
 .wf-run-controls-status { color: #ffaaa8; }
+#workflow-launch[data-from-design="1"] select:disabled { opacity: .75; cursor: default; }

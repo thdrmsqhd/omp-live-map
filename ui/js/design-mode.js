@@ -26,8 +26,8 @@ if (window.engineeringDesktop) {
   const studio = bindStudio({
     find, request, report,
     currentProject: () => projects.find(({ id }) => id === picker.value),
+    // 설계 화면을 떠나지 않고 같은 자리에서 실행 대화상자를 연다. 프로젝트·Workflow는 지금 캔버스의 것으로 고정한다.
     openWorkflow(id) {
-      setMapMode("map");
       if (typeof openMapWorkflowLaunch === "function") void openMapWorkflowLaunch(picker.value, id, { returnToDesign: true });
     },
   });
