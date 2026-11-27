@@ -30,7 +30,8 @@
   #ctxmenu button:disabled { opacity: .4; cursor: default; background: transparent; }
   #ctxmenu .mh { margin-left: auto; color: var(--dim); }
   #ctxmenu .sep { height: 1px; background: #1b2836; margin: 4px 2px; }
-  #minimap { position: absolute; right: 14px; top: 46px; width: 204px; height: 142px; z-index: 40;
+  /* 상단 바는 화면 폭에 따라 1~3줄로 접히므로 미니맵은 아래쪽에 둔다. Workflow 실행 상세가 열리면 그 왼쪽으로 비킨다. */
+  #minimap { position: absolute; right: 14px; bottom: 14px; width: 204px; height: 142px; z-index: 40;
     background: #0b1219cc; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 22px #0008;
     backdrop-filter: blur(2px); overflow: hidden; cursor: crosshair; touch-action: none; }
   #minimap svg { display: block; }
@@ -52,3 +53,5 @@
   #topbar .zoom { padding-left: 8px; border-left: 1px solid var(--border); }
   #topbar #new-session-action, #topbar #workflow-new-run { background: #24496c; border-color: var(--accent); color: var(--fg); font-weight: 650; }
   #topbar #workflow-queue-toggle.has-items { background: #3a2c13; border-color: var(--idle); color: #ffd489; font-weight: 650; }
+
+  #app:has(#workflow-inspector:not([hidden])) #minimap { right: calc(min(335px, 46%) + 26px); }

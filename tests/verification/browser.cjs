@@ -126,6 +126,16 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator('[data-mode="map"]').click();
       await sessionName("Timing 1").click(filter);
       await page.screenshot({path:"artifacts/v4-ux/03-live-map.png"});
+      // 미니맵은 어떤 폭에서도 상단 바(줌·배치 도구·검색)를 가리지 않는다.
+      const minimapClear = () => page.evaluate(() => {
+        const a = document.getElementById("minimap").getBoundingClientRect(), b = document.getElementById("topbar").getBoundingClientRect();
+        return a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom;
+      });
+      for (const width of [1024, 1440, 1920]) {
+        await page.setViewportSize({ width, height: 900 });
+        assert.equal(await minimapClear(), true, `minimap overlaps the top bar at ${width}px`);
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
       const before = await page.evaluate(()=>JSON.stringify([...BIGPOS]));
       await page.locator("#layout-preset").selectOption("vertical");
       await page.locator("#layout-apply").click();
