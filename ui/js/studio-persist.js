@@ -167,6 +167,7 @@ export function bindStudioPersist(S) {
       } catch (error) {
         throw new Error(/referenced/i.test(error.message) ? "다른 정의나 Workflow가 이 정의를 쓰고 있어 삭제할 수 없습니다. 먼저 연결을 바꿔 저장하세요." : error.message);
       }
+      S.historyClear();   // 서버에서 지운 정의는 되돌릴 수 없다
       S.defs = S.defs.filter(({ id }) => id !== node.record.id);
       S.profiles = S.profiles.filter(({ id }) => id !== node.record.id);
       if (node.kind === "profile") profilesChanged?.(S.profiles);

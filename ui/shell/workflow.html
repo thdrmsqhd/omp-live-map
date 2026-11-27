@@ -19,6 +19,8 @@
         </div>
         <button id="studio-add" type="button">+ 노드</button>
         <button id="studio-arrange" type="button">자동 정렬</button>
+        <button id="studio-undo" type="button" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button>
+        <button id="studio-redo" type="button" title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button>
         <button id="studio-wf-more" type="button" aria-haspopup="menu">Workflow ⋯</button>
         <input id="studio-import-file" type="file" accept=".json,application/json" hidden>
         <span class="studio-spacer"></span>
@@ -65,7 +67,7 @@
           <ul id="studio-menu-list" class="studio-menu-list"></ul>
         </div>
       </div>
-      <p class="studio-help">빈 곳 드래그: 이동 · 휠: 확대·축소 · 빈 곳 더블클릭/우클릭: 노드 추가 · 출력 소켓을 끌어 같은 색 입력에 연결(빈 곳에 놓으면 맞는 노드 추가) · 연결된 입력을 끌면 분리 · 노드 안 셀렉트로도 연결 변경 · <kbd>Delete</kbd> 선택 삭제 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 변경 저장</p>
+      <p class="studio-help">빈 곳 드래그: 이동 · 휠: 확대·축소 · 빈 곳 더블클릭/우클릭: 노드 추가 · 출력 소켓을 끌어 같은 색 입력에 연결(빈 곳에 놓으면 맞는 노드 추가) · 연결된 입력을 끌면 분리 · 노드 안 셀렉트로도 연결 변경 · <kbd>Delete</kbd> 선택 삭제 · <kbd>Ctrl</kbd>+<kbd>Z</kbd> 되돌리기 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 변경 저장</p>
     </section>
     <section id="unified-run-snapshot" aria-label="실행 스냅샷" hidden><h2>실행 스냅샷</h2><p>편집본과 다른 버전입니다. 아래 단계는 이 실행에 고정된 버전입니다.</p><div id="unified-run-steps"></div></section>
     <aside id="independent-evaluation" class="independent-evaluation" aria-label="독립 평가"></aside>

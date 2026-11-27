@@ -6,6 +6,7 @@ import { bindStudioLayout } from "./studio-layout.js";
 import { bindStudioDrag } from "./studio-drag.js";
 import { bindStudioMenu } from "./studio-menu.js";
 import { bindStudioPersist } from "./studio-persist.js";
+import { bindStudioHistory } from "./studio-history.js";
 import { loadModelOptions } from "./engineering-model-options.js";
 import {
   h, KIND_LABELS, STEP_TYPES, STEP_HINTS, SCOPE_LABELS, HARNESS_TEMPLATES, HARNESS_CATALOG,
@@ -198,6 +199,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
 
   // ---- Workflow 문서 ↔ 단계 노드 ------------------------------------------------
   function openDocument(record, payload) {
+    editHistory?.clear();
     clearEdgeSelection();
     for (const node of steps()) nodes.delete(node.key);
     if (!payload) { wf = null; return; }
@@ -573,6 +575,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     el("workflow-name-field").hidden = !wf;
     el("check").disabled = !wf || !project;
     el("run").disabled = !wf?.record;
+    el("undo").disabled = !editHistory?.canUndo();
+    el("redo").disabled = !editHistory?.canRedo();
     workflowPicker.disabled = !project || !desktop();
     el("lanes").hidden = !wf;
     el("lane-workflow").style.left = WORKFLOW_X + "px";
@@ -692,6 +696,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
 
   // ---- 나눈 모듈 연결 ----------------------------------------------------------
   const S = {
+    historyClear: () => editHistory?.clear(),
     loadWorkflows, fillWorkflowPicker, notifyChanged, request,
     get busy() { return busy; }, set busy(value) { busy = value; },
     get defs() { return defs; }, set defs(value) { defs = value; },
@@ -762,6 +767,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   const { cancelLink, finishLink, startLink, startMove } = bindStudioDrag(S);
   const { closeMenu, menuItems, nodeMenu, openMenu, paintMenu, pick, workflowMenu } = bindStudioMenu(S);
   const { payloadOf, profileRequest, rekey, removeNode, revert, saveAll, saveNode, saveWorkflow } = bindStudioPersist(S);
+  // 되돌리기 이력. openDocument·updateToolbar 가 먼저 불릴 수 있어 var 로 선언 전 접근을 허용한다(그때는 undefined).
+  var editHistory = bindStudioHistory(S);
 
   // ---- 이벤트 -----------------------------------------------------------------
   workflowPicker.addEventListener("change", guard(async () => {
@@ -876,6 +883,14 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   document.addEventListener("pointerdown", (event) => {
     if (!menu.hidden && !menu.contains(event.target) && event.target !== el("add")) closeMenu();
   });
+  // 되돌리기 이력: 캔버스·메뉴에서 조작이 시작될 때 찍고, 끝난 뒤 달라졌으면 남긴다.
+  const graph = el("graph");
+  graph.addEventListener("pointerdown", () => editHistory.begin(), true);
+  graph.addEventListener("focusin", () => editHistory.begin(), true);
+  for (const type of ["pointerup", "change", "focusout"]) graph.addEventListener(type, () => setTimeout(() => { editHistory.commit(); updateToolbar(); }), true);
+  graph.addEventListener("click", () => setTimeout(() => { editHistory.commit(); updateToolbar(); }));
+  el("undo").addEventListener("click", () => editHistory.undo());
+  el("redo").addEventListener("click", () => editHistory.redo());
   document.addEventListener("keydown", (event) => {
     if (!active) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
@@ -884,7 +899,15 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       return;
     }
     if (event.key === "Escape") { cancelLink(); closeMenu(); return; }
-    if (!["Delete", "Backspace"].includes(event.key) || event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+    // 입력칸 안에서는 브라우저의 글자 되돌리기를 그대로 둔다.
+    const typing = event.target.closest?.("input, textarea, select, [contenteditable]");
+    if ((event.ctrlKey || event.metaKey) && !typing && ["z", "y"].includes(event.key.toLowerCase())) {
+      event.preventDefault();
+      if (event.key.toLowerCase() === "y" || event.shiftKey) editHistory.redo(); else editHistory.undo();
+      return;
+    }
+    if (!["Delete", "Backspace"].includes(event.key) || typing) return;
+    editHistory.begin();
     if (!viewport.contains(document.activeElement) && document.activeElement !== document.body) return;
     if (selectedEdge) {
       const item = links().find(({ id }) => id === selectedEdge);
