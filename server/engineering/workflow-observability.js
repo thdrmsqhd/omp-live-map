@@ -51,12 +51,12 @@ function workflowObservability(db, runs, workspaceRoot) {
   function approvals(project) {
     return db.prepare(`SELECT r.id AS run,r.title,n.node,n.updated,n.outcome FROM workflow_node n
       JOIN workflow_run r ON r.id=n.run JOIN workflow w ON w.id=r.workflow
-      WHERE w.project=? AND r.status='waiting_approval' AND n.status='waiting_approval'
+      WHERE r.project=? AND r.status='waiting_approval' AND n.status='waiting_approval'
       ORDER BY n.updated,n.node`).all(project).map(({ outcome, ...row }) => ({ ...row, ...JSON.parse(outcome ?? "null") }));
   }
   function liveMapRuns() {
     const activeRuns = `FROM workflow_run r JOIN workflow w ON w.id=r.workflow
-      JOIN project p ON p.id=w.project WHERE p.archived=0`;
+      JOIN project p ON p.id=r.project WHERE p.archived=0`;
     const attention = db.prepare(`SELECT r.id,r.title,r.status,p.name AS project,
       (SELECT n.node FROM workflow_node n WHERE n.run=r.id AND n.status=r.status
         ORDER BY n.updated DESC,n.node LIMIT 1) AS node, COUNT(*) OVER () AS total
@@ -72,12 +72,12 @@ function workflowObservability(db, runs, workspaceRoot) {
   function dashboard(project, days = 30) {
     const cutoff = Date.now() - days * 86400000;
     const states = db.prepare(`SELECT r.status,COUNT(*) AS count FROM workflow_run r
-      JOIN workflow w ON w.id=r.workflow WHERE w.project=? AND r.created>=? GROUP BY r.status`).all(project, cutoff);
+      JOIN workflow w ON w.id=r.workflow WHERE r.project=? AND r.created>=? GROUP BY r.status`).all(project, cutoff);
     const measures = db.prepare(`SELECT COUNT(*) AS count,COALESCE(SUM(r.status='succeeded'),0) AS completed,
       COALESCE(SUM((SELECT COUNT(*) FROM workflow_retry WHERE run=r.id)),0) AS retries,
       COALESCE(SUM((SELECT COUNT(*) FROM workflow_node WHERE run=r.id AND json_extract(outcome,'$.port') IN ('approved','rejected'))),0) AS decisions,
       AVG(CASE WHEN r.status='succeeded' THEN (SELECT MAX(updated) FROM workflow_node WHERE run=r.id)-r.created END) AS averageMs
-      FROM workflow_run r JOIN workflow w ON w.id=r.workflow WHERE w.project=? AND r.created>=?`).get(project, cutoff);
+      FROM workflow_run r JOIN workflow w ON w.id=r.workflow WHERE r.project=? AND r.created>=?`).get(project, cutoff);
     const usage = db.prepare(`WITH agent_usage(cost, basis, model, agent) AS (
       SELECT json_extract(a.outcome,'$.costCents'),json_extract(a.outcome,'$.costBasis'),json_extract(a.outcome,'$.model'),
         json_extract(a.outcome,'$.agent') FROM attempt a
@@ -87,7 +87,7 @@ function workflowObservability(db, runs, workspaceRoot) {
         json_extract(a.value,'$.agent') FROM
         (SELECT run,outcome,updated AS timestamp FROM workflow_node UNION ALL SELECT run,outcome,created AS timestamp FROM workflow_retry) result
         JOIN workflow_run r ON r.id=result.run JOIN workflow w ON w.id=r.workflow,
-        json_each(result.outcome,'$.attempts') a WHERE w.project=? AND result.timestamp>=?
+        json_each(result.outcome,'$.attempts') a WHERE r.project=? AND result.timestamp>=?
     ), normalized AS (
       SELECT cost, model, agent, CASE WHEN cost IS NULL THEN 'missing' WHEN basis='reserved' THEN 'reserved'
         WHEN basis='reported' THEN 'reported' ELSE 'unknown_basis' END AS category FROM agent_usage

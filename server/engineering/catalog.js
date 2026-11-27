@@ -103,7 +103,7 @@ function catalog(db) {
       if (duplicate && duplicate.id !== id) throw problem(409, "Git root already registered");
       if (body.id && project(id).root !== resolved &&
           (db.prepare("SELECT 1 FROM task WHERE project=? LIMIT 1").get(id) ||
-           db.prepare("SELECT 1 FROM workflow_run r JOIN workflow w ON r.workflow=w.id WHERE w.project=? LIMIT 1").get(id))) {
+           db.prepare("SELECT 1 FROM workflow_run WHERE project=? LIMIT 1").get(id))) {
         throw problem(409, "A project with run history cannot change its Git root");
       }
       const previousTeam = body.id ? project(id).team : null;
@@ -129,7 +129,7 @@ function catalog(db) {
     });
   }
   return {
-    project, saveProject, versionOf, writeDefinition, availableTo,
+    project, saveProject, versionOf, writeDefinition, availableTo, availableToOwner, definitionOwner,
     saveDefinition: (body) => transaction(db, () => writeDefinition(body)),
     projects: () => db.prepare("SELECT p.*, t.team FROM project p LEFT JOIN project_team t ON t.project=p.id ORDER BY p.name").all(),
     teams: () => db.prepare("SELECT name FROM harness_team ORDER BY name").all().map(({ name }) => name),

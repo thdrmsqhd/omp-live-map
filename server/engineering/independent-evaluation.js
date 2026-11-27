@@ -142,7 +142,7 @@ function independentEvaluation({ db, directory, workspaceRoot, runs, definitions
     const selected = id === null || id === undefined ? null : completed(project, id);
     const data = database();
     const list = db.prepare(`SELECT r.id,r.title,r.workflow,r.version,r.created FROM workflow_run r JOIN workflow w ON w.id=r.workflow
-      WHERE w.project=? AND r.status='succeeded' AND r.workspace IS NOT NULL AND EXISTS (
+      WHERE r.project=? AND r.status='succeeded' AND r.workspace IS NOT NULL AND EXISTS (
         SELECT 1 FROM workflow_node n, json_each(n.outcome,'$.artifacts') a
         WHERE n.run=r.id AND n.status='succeeded' AND a.type='object' AND length(json_extract(a.value,'$.sha256'))=64
           AND json_extract(a.value,'$.byteLength') BETWEEN 1 AND ?

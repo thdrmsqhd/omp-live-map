@@ -129,7 +129,10 @@ export function bindStudioPersist(S) {
     if (!S.project) throw new Error("작업 프로젝트를 선택하세요.");
     if (!workflowName.value.trim()) { workflowName.focus(); throw new Error("Workflow 이름을 입력하세요."); }
     const owner = S.project.id;
-    const saved = await request("workflows", {}, { project: owner, payload: serialize(true), id: S.wf.record?.id, version: S.wf.record?.version });
+    // 저장 범위는 새 Workflow 를 처음 저장할 때만 고른다(서버가 이후 변경을 막는다).
+    const scope = S.wf.record ? undefined : el("workflow-scope").value;
+    if (scope === "team" && !S.project.team) throw new Error("이 프로젝트에는 팀이 없습니다. 프로젝트 설정에서 팀을 지정하세요.");
+    const saved = await request("workflows", {}, { project: owner, payload: serialize(true), id: S.wf.record?.id, version: S.wf.record?.version, scope });
     if (owner !== S.project?.id) return saved;
     await loadWorkflows();
     const before = spots();

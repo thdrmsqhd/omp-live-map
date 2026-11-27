@@ -572,7 +572,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     save.disabled = busy || !count;
     el("mode").hidden = !wf;
     for (const button of el("mode").querySelectorAll("button")) button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
-    el("workflow-name-field").hidden = !wf;
+    for (const [id, hide] of [["workflow-name-field", !wf], ["workflow-scope-field", !wf || Boolean(wf.record)]]) el(id).hidden = hide;
     el("check").disabled = !wf || !project;
     el("run").disabled = !wf?.record;
     el("undo").disabled = !editHistory?.canUndo();

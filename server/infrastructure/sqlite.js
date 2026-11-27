@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
-const version = 13;
+const version = 14;
 const schema = fs.readFileSync(path.join(__dirname, "../engineering/schema.sql"), "utf8");
 const graphSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v2.sql"), "utf8");
 const runSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v3.sql"), "utf8");
@@ -18,6 +18,7 @@ const stagingSchema = fs.readFileSync(path.join(__dirname, "../engineering/schem
 const scopeSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v11.sql"), "utf8");
 const reusableSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v12.sql"), "utf8");
 const profileSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v13.sql"), "utf8");
+const workflowScopeSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v14.sql"), "utf8");
 
 function transaction(db, fn) {
   db.exec("BEGIN IMMEDIATE");
@@ -44,7 +45,7 @@ function openDatabase(file) {
       if (!fs.existsSync(saved)) backup(db, saved);
     }
     // Rebuild the parent definition table without cascading into pinned versions.
-    if (current < 13) db.exec("PRAGMA foreign_keys=OFF");
+    if (current < 14) db.exec("PRAGMA foreign_keys=OFF");
     transaction(db, () => {
       const current = db.prepare("PRAGMA user_version").get().user_version;
       if (current > version) throw new Error("Unsupported engineering database version");
@@ -68,6 +69,11 @@ function openDatabase(file) {
         db.exec(profileSchema);
         if (db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Invalid profile definition migration");
         db.exec("PRAGMA user_version=13");
+      }
+      if (current < 14) {
+        db.exec(workflowScopeSchema);
+        if (db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Invalid workflow scope migration");
+        db.exec("PRAGMA user_version=14");
       }
     });
     db.exec("PRAGMA foreign_keys=ON");

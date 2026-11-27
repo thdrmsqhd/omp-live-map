@@ -32,7 +32,7 @@ function legacyStore(directory) {
   return profiles;
 }
 
-test("v12 → v13 keeps definitions, backs the old file up and accepts profile definitions", () => {
+test("v12 → v14 keeps definitions, backs the old file up and accepts profile definitions", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-v13-"));
   const file = path.join(directory, "engineering.sqlite");
   try {
@@ -42,7 +42,7 @@ test("v12 → v13 keeps definitions, backs the old file up and accepts profile d
     old.close();
     const db = openDatabase(file);
     try {
-      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 13);
+      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
       assert.ok(fs.existsSync(file + ".v12.bak"), "the v12 file is copied before migrating");
       const backup = new DatabaseSync(file + ".v12.bak", { readOnly: true });
       assert.equal(backup.prepare("PRAGMA user_version").get().user_version, 12);
