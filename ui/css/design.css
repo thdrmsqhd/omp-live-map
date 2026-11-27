@@ -47,3 +47,12 @@
 #first-run-steps li span { color: var(--muted); font-size: var(--fs-small, 11px); }
 .first-run-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 #first-run-status:empty { visibility: hidden; }
+/* 낮은 창(노트북·작은 화면)에서는 단계를 제목과 버튼 한 줄로 줄여 캔버스 자리를 남긴다. 높이는 여전히 고정이다. */
+@media (max-height: 820px) {
+  #first-run { height: 88px; padding: 8px 12px; }
+  #first-run-steps { margin-top: 6px; grid-auto-columns: max-content; }
+  #first-run-steps li { display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
+  #first-run-steps li strong { white-space: nowrap; }
+  #first-run-steps li span { display: none; }
+  .first-run-actions { margin-top: 0; flex-wrap: nowrap; }
+}

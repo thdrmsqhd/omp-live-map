@@ -149,6 +149,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     const start = page.locator('.studio-node[data-key="step:start"]');
     await start.waitFor({ timeout: 15000 });
     const handle = start.locator(".studio-head");
+    await handle.scrollIntoViewIfNeeded();
     const bounds = await handle.boundingBox();
     const originalX = await start.evaluate((node) => parseFloat(node.style.left));
     assert.ok(bounds);
