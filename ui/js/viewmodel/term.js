@@ -87,7 +87,7 @@ async function loadBgAll() {
     const sig = (m) => JSON.stringify([...m.entries()].map(([k, v]) => [k, v.map((j) => [j.id, j.done, (j.tail || []).slice(-1)[0] || ""])]));
     const changed = sig(map) !== sig(BGALL);
     BGALL = map;
-    if (changed) renderMap(false);
+    if (changed) viewUpdates.map?.(false);
   } catch { /* ignore */ }
 }
 
@@ -107,7 +107,7 @@ async function infraAction(kind, target, nodeId) {
     const what = kind === "distro-stop" ? `WSL '${target}' 전체를 종료` : `컨테이너 ${target.slice(0, 12)} 중지`;
     if (!confirm(`${what}할까요?`)) return;
   }
-  if (nodeId) { PENDING.set(nodeId, kind); renderMap(false, true); }
+  if (nodeId) { PENDING.set(nodeId, kind); viewUpdates.map?.(false, true); }
   const log = (lines) => { if (nodeId && openIds.has(nodeId)) termLog(nodeId, lines); };
   try {
     const res = await postJSON("/api/infra/action", { kind, target });
@@ -126,6 +126,6 @@ async function infraAction(kind, target, nodeId) {
     log([{ t: msg, c: "err" }]);
     alert(msg);
   } finally {
-    if (nodeId) { PENDING.delete(nodeId); renderMap(false, true); }
+    if (nodeId) { PENDING.delete(nodeId); viewUpdates.map?.(false, true); }
   }
 }
