@@ -1,13 +1,15 @@
 /* 관제 셸 및 공통 시각 토큰 */
 :root{--card-radius:8px;--card-gap:12px;--card-pad:14px}
 #topbar{flex-wrap:wrap;gap:6px}
-#viewModes{display:flex;gap:3px;flex:none}
+#viewModes{display:flex;gap:2px;flex:none;padding:3px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+#viewModes button{border-color:transparent;background:transparent;min-height:28px;color:var(--muted);white-space:nowrap}
+#viewModes button.on{background:var(--panel2);color:var(--fg)}
 #viewModes button.on{border-color:var(--accent);color:#bfe0ff}
 #globalResources{font:11px var(--mono);white-space:nowrap;color:var(--muted)}
 #globalResources.resource-warning{color:#ffd489}
 #app[data-view="overview"] #stage{display:none}
 #app[data-view="overview"] #overview{display:block;flex:1;min-width:0;overflow:auto}
-#app[data-view="overview"] .zoom,#app[data-view="workspace"] .zoom{display:none}
+#app:not([data-view="map"]) #topbar .zoom{display:none}
 #minimap[hidden],#overview[hidden],#workspace-empty[hidden]{display:none!important}
 #app[data-view="workspace"] #stage{background:#0b1219;cursor:default;touch-action:auto}
 #app[data-view="workspace"] #wrapper{inset:0;transform:none!important}
