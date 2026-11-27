@@ -37,8 +37,7 @@ function askPrep(r) {
 // 카드에 걸린 질문이 바뀌면 그 카드와 대화 블록을 다시 그린다.
 function askTouched(node) {
   const id = liveNodeId(node) || node;
-  if (ELS.has(id) && openIds.has(id) && typeof paintChat === "function") paintChat(id);
-  renderMap(false);
+  viewUpdates.ask?.(id);
 }
 
 // SSE ask 이벤트: add(질문 등장) / del(답을 보냈거나 취소·시한 초과로 해소).
@@ -52,8 +51,8 @@ function handleAskEvent(a) {
     list.splice(i, 1);
     ASK_SENT.delete(askFlight(a.node, a.id));
   } else if (a.kind === "add" && a.request && a.request.id) {
-    ASK_SENT.delete(askFlight(a.node, a.request.id));
     if (list.some((r) => r.id === a.request.id)) return;
+    ASK_SENT.delete(askFlight(a.node, a.request.id));
     list.push(askPrep(a.request));
   } else return;
   if (list.length) ASKS.set(key, list); else ASKS.delete(key);
@@ -72,7 +71,7 @@ function askPick(node, id, qi, label) {
   if (q.multi) { if (q._sel.has(label)) q._sel.delete(label); else q._sel.add(label); }
   else { q._sel = new Set([label]); q._custom = ""; }
   q._err = "";
-  paintChat(liveNodeId(node) || node);
+  viewUpdates.chat?.(liveNodeId(node) || node);
 }
 
 function askCustom(node, id, qi, value) {
@@ -94,7 +93,7 @@ function askSelect(node, id, idx) {
   }
   r._sel = new Set([idx]);
   r._err = "";
-  paintChat(liveNodeId(node) || node);
+  viewUpdates.chat?.(liveNodeId(node) || node);
 }
 
 function askValue(node, id, value) {
@@ -148,7 +147,7 @@ async function askPost(node, id, response) {
   if (!out.ok) {
     ASK_SENT.delete(flight);
     const cur = askFind(node, id);
-    if (cur) { cur._err = out.out || "답을 보내지 못했습니다"; paintChat(liveNodeId(node) || node); }
+    if (cur) { cur._err = out.out || "답을 보내지 못했습니다"; viewUpdates.chat?.(liveNodeId(node) || node); }
   }
   return out;
 }
@@ -162,7 +161,7 @@ function askSend(node, id) {
   const r = askFind(node, id);
   if (!r || r._sending) return;
   const made = askResponse(r);
-  if (made.error) { r._err = made.error; paintChat(liveNodeId(node) || node); return; }
+  if (made.error) { r._err = made.error; viewUpdates.chat?.(liveNodeId(node) || node); return; }
   r._sending = true;
   askPost(node, id, made.response).finally(() => { r._sending = false; });
 }
