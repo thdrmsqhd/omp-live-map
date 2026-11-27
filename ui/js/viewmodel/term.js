@@ -1,7 +1,9 @@
 /* omp-live-map · viewmodel · 터미널 명령·백그라운드 잡·인프라 조작 */
 
+// 운영 API 토큰은 서버가 index.html 에 심는다. 셸·잡·프로세스·인프라·DB 요청이 모두 이 함수를 지난다.
+const OPS_TOKEN = document.querySelector('meta[name="omp-ops-token"]')?.content || "";
 const postJSON = (url, body) => fetch(url, {
-  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  method: "POST", headers: { "Content-Type": "application/json", "X-Omp-Ops-Token": OPS_TOKEN }, body: JSON.stringify(body),
 });
 
 // 세션별 명령 기록. 연속 중복은 한 번만 남기고, ↑↓ 위치는 기록 끝으로 되돌린다.

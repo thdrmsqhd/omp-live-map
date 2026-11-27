@@ -258,3 +258,17 @@ function toggleChatTool(id, tool) {
   if (CHAT_TOOL.get(id) === tool) CHAT_TOOL.delete(id); else CHAT_TOOL.set(id, tool);
   viewUpdates.map?.(false, true);
 }
+
+// 카드를 닫을 때 그 카드의 대화 화면 상태를 놓는다(세션은 그대로 돈다).
+// 보내는 중이거나 대기열·첨부가 남아 있으면 잃을 것이 있으니 그대로 둔다. 초안은 저장소에 남긴다.
+// 다시 열면 chatState 가 저장된 초안과 서버 기록으로 새로 만든다.
+function releaseChatState(id) {
+  const st = CHAT.get(id);
+  if (!st) return false;
+  if (st.busy || st.sending || st.compacting || st.clearing || st.queue?.length || st.files?.length) return false;
+  if (typeof persistPromptDraft === "function") persistPromptDraft(id, st);
+  for (const urls of st.previews?.values?.() || []) revokePreviews(urls);
+  for (const e of st.log || []) if (e.previews) revokePreviews(e.previews);
+  CHAT.delete(id);
+  return true;
+}

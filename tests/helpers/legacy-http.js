@@ -5,6 +5,7 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const { once } = require("node:events");
+const OPS_HEADER = "x-omp-ops-token";
 
 async function withLegacyHttp(t, run) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-map-test-"));
@@ -40,7 +41,9 @@ async function withLegacyHttp(t, run) {
   }
 }
 
-function request(port, route, { method = "GET", headers = {}, body, frames = 0 }) {
+// 화면처럼 운영 API 토큰을 기본으로 붙인다. opsToken: false 면 빼고 보낸다.
+function request(port, route, { method = "GET", headers = {}, body, frames = 0, opsToken = true }) {
+  if (opsToken) headers = { [OPS_HEADER]: require("../../server/edge/ops-token").opsToken(), ...headers };
   return new Promise((resolve, reject) => {
     const req = http.request({ hostname: "127.0.0.1", port, path: route, method, headers }, (res) => {
       let text = "";
