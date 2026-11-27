@@ -112,6 +112,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     const project = (await request("projects")).find(({ name }) => name === "desktop fixture").id;
     // 관제 화면의 설계 모드에서는 프로젝트 등록 같은 설정 쓰기를 막는다.
     await page.goto(origin + "/?mode=design&project=" + project);
+    await page.locator('#design[data-ready="1"]').waitFor({ state: "attached", timeout: 30000 });
 
     // 설계 모드(관제 화면 안 노드 캔버스): 기본 구성 → 노드와 연결선.
     await page.locator("#design").waitFor();
@@ -144,6 +145,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
       { id: "start", label: "Start", type: "start", x: 0, y: 40 }, { id: "end", label: "End", type: "end", x: 420, y: 40 }],
     edges: [{ from: "start", to: "end", port: "next" }] } });
     await page.goto(origin + "/?mode=design&project=" + project + "&workflow=" + created.id);
+    await page.locator('#design[data-ready="1"]').waitFor({ state: "attached", timeout: 30000 });
     const start = page.locator('.studio-node[data-key="step:start"]');
     await start.waitFor({ timeout: 15000 });
     const handle = start.locator(".studio-head");

@@ -109,12 +109,15 @@ if (window.engineeringDesktop) {
   if (localStorage.getItem("omp-map-view-mode-v2") === null && !location.search) {
     void request("projects").then((list) => { if (!list.length) setMapMode("design"); }).catch(() => {});
   }
+  // 주소로 연 설계 화면이 프로젝트·Workflow 를 다 불러오면 #design[data-ready="1"] 로 알린다.
+  // 그 전에는 캔버스가 다시 그려지며 열린 메뉴를 닫거나 노드 위치를 되돌릴 수 있다(검증 스크립트가 이 표시를 기다린다).
+  const settle = (work) => { find("design").dataset.ready = ""; void work.finally(() => { find("design").dataset.ready = "1"; }); };
   const address = new URLSearchParams(location.search);
   if (address.get("mode") === "design" || address.get("workflow")) {
     history.replaceState(null, "", location.pathname);
-    void window.ompDesign.open({ project: address.get("project") || undefined, workflow: address.get("workflow") || undefined });
+    settle(window.ompDesign.open({ project: address.get("project") || undefined, workflow: address.get("workflow") || undefined }));
   } else if (address.get("mode") === "map") {
     history.replaceState(null, "", location.pathname);
     setMapMode("map");
-  } else if (mapMode === "design") void enter();
+  } else if (mapMode === "design") settle(enter());
 }
