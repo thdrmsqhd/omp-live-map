@@ -26,12 +26,19 @@ function recentTokPerSec(st) {
   return dur ? (out / dur) * 1000 : 0;
 }
 
+// omp: 세션 머리 줄의 id. Claude: 기록 파일 이름(<sessionId>.jsonl, --session-id 로 정한 값).
+function sessionIdOf(st) {
+  if (st.harness === "claude") return path.basename(String(st.file), ".jsonl");
+  return st.id || String(path.basename(String(st.file), ".jsonl")).replace(/^.*_/, "");
+}
+
 function nodeOf(st, now, last) {
   const card = lineage.cardOf(st.file);
   return {
     id: card || st.file,
     file: st.file, // 지금 실제 기록 파일(카드 id 와 다를 수 있다)
     harness: st.harness || "omp", // 이 세션을 만든 실행기. UI 는 이 값과 기능 플래그로 버튼을 가른다.
+    sid: sessionIdOf(st), // 실행기 세션 id. Workflow 단계 기록(attempts[].sessionId)과 맞춰 맵이 세션 카드를 단계 아래에 잇는다.
     name: st.name,
     kind: st.kind,
     agent: st.agent || "", // Claude 서브에이전트 agentType / omp 는 finishSession 이 채운다.
@@ -185,4 +192,4 @@ function snapshot() {
   };
 }
 
-module.exports = { snapshot, statusOf };
+module.exports = { snapshot, statusOf, sessionIdOf };

@@ -1,4 +1,4 @@
-/* omp-live-map · view · 제자리 편집과 작은 ⋯ 메뉴. Task 탭(칸반·요약 줄)과 프로젝트 탭(프로젝트 카드)이 함께 쓴다.
+/* omp-live-map · view · 제자리 편집과 작은 ⋯ 메뉴. 한 맵의 띠 머리(상태 이름·예산·기간)·Task·단계 메뉴가 함께 쓴다.
    글자를 누르면 그 자리에 입력 한 칸이 열린다. Enter·포커스 이동은 저장, Esc 는 취소. 저장 버튼은 없다. */
 function inlineEdit(target, { value = target.textContent, type = "text", placeholder = "", min, max, step, label, onSave }) {
   if (!target || target.__editing) return null;

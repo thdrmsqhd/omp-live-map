@@ -9,6 +9,7 @@ const sessionHarness = require("../harness/session-harness");
 const { previewHarness } = require("../engineering/harness-preview");
 const { projectContext } = require("../engineering/project-context");
 const workflowLive = require("../engineering/workflow-live");
+const { taskMap } = require("../engineering/task-map");
 const { createObservationReads } = require("../application/observations");
 const { createEngineeringServices, workflowLiveMap, workflowRunDetail } = require("../application/engineering-services");
 
@@ -42,7 +43,7 @@ function createEngineeringRoutes({ authorize, directory, runner = secureRunner()
   async function route(req, res, url) {
     if (!authorize?.(req)) return reply(res, 403, { error: "Engineering token is required", out: "Engineering API 토큰이 없습니다. 화면을 새로 고쳐 주세요." });
     try {
-      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions, presetWorkflows, evaluation } = initialize();
+      const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions, presetWorkflows, evaluation, taskEdits } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       const observations = createObservationReads({ definitions, flowRuns, evaluation, observability, projectContext, workflowLive });
@@ -63,6 +64,8 @@ function createEngineeringRoutes({ authorize, directory, runner = secureRunner()
         if (observed) result = observed.value;
         else if (endpoint === "projects") result = definitions.projects();
         if (endpoint === "tasks") result = tasks.list(query("project"));
+        // 한 맵: Task · 단계(하네스·루프 칩) · 최근 실행 상태 · 단계에서 돈 세션 id(engineering/task-map.js).
+        if (endpoint === "task-map") result = taskMap({ definitions, workflows, tasks, flowRuns, workflowLive }, query("project"));
         if (endpoint === "sdlc-stages") result = stages.list(query("project"));
         if (endpoint === "workflow-live-map") result = workflowLiveMap({ observability, flowRuns });
         if (endpoint === "project-budget") result = { current: budget.get(query("project")) ?? null };
@@ -120,6 +123,10 @@ function createEngineeringRoutes({ authorize, directory, runner = secureRunner()
         if (endpoint === "teams") result = definitions.saveTeam(input.name);
         if (endpoint === "project-budget") result = budget.save(string(input.project, "project"), input);
         if (endpoint === "tasks") result = tasks.save(input.template ? { ...input, ...taskTemplate(input) } : input);
+        // 맵 서랍: 단계·하네스·루프 고치기(scope: task = 이 Task만 사본, template = 원본), Workflow 편집(넣기·순서·지우기).
+        if (endpoint === "tasks/stage") result = taskEdits.editStage(input);
+        if (endpoint === "tasks/workflow") result = taskEdits.editWorkflow(input);
+        if (endpoint === "workflows/remove") result = taskEdits.removeWorkflow(input.project, input.id);
         if (endpoint === "tasks/run") result = flow.start(tasks.prepareRun(string(input.id, "task")), input.key);
         if (endpoint === "sdlc-stages") result = stages.rename(input);
         if (endpoint === "sdlc-stages/add") result = stages.add(input);

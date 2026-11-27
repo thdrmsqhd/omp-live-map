@@ -4,32 +4,10 @@
       <div id="slGrip" title="끌어서 폭 조절"></div>
     </aside>
     <div id="stage">
-      <div id="workspace-empty" hidden>왼쪽 세션 목록에서 작업할 카드를 선택하세요.</div>
+      <div id="workspace-empty" hidden>맵에서 세션 카드를 두 번 누르거나 '열기'를 누르면 여기에 전체 화면으로 열립니다.</div>
       <div id="wrapper">
         <svg id="edges"></svg>
         <svg id="guides"></svg>
         <div id="nodes"></div>
-        <div id="workflow-layer" hidden>
-          <svg id="workflow-map-edges" aria-hidden="true"></svg>
-          <div id="workflow-map-nodes" aria-label="Workflow 단계"></div>
-        </div>
       </div>
-      <aside id="workflow-queue" data-workflow-controls hidden aria-label="개입 필요">
-        <h2>개입 필요<small>Alt+I</small></h2>
-        <section><h3>에이전트 질문</h3><div id="inbox-asks"></div></section>
-        <section id="workflow-queue-workflows"><p id="workflow-queue-status" role="status"></p><div id="workflow-queue-items"></div></section>
-      </aside>
-      <aside id="workflow-inspector" data-workflow-controls hidden aria-label="Workflow 실행 상세">
-        <div class="wf-inspector-header">
-          <div><small id="wf-map-version"></small><h2 id="wf-map-title" tabindex="-1"></h2></div>
-          <button id="wf-map-close" aria-label="Workflow 닫기">닫기</button>
-        </div>
-        <div class="wf-actions">
-          <button id="wf-map-follow" type="button" aria-pressed="false" hidden>실행 따라가기</button><button id="wf-map-fit">그래프 맞춤</button><button id="wf-map-new">이 Workflow로 새 실행</button><a id="wf-map-engineering">설계에서 편집</a>
-        </div>
-        <p id="wf-map-status" role="status"></p>
-        <div id="wf-map-run-controls"></div>
-        <section id="wf-map-live" aria-live="off" aria-label="실행 중인 프롬프트" hidden></section>
-        <div id="wf-map-details"></div>
-      </aside>
     </div>

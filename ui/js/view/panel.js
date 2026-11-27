@@ -2,7 +2,6 @@
 
 // 큰 카드 열기. 이미 열려 있으면 닫지 않고 그 카드로 화면을 옮긴다(닫기는 toggleCard·카드 − 버튼·목록 ✕).
 function openNode(id) {
-  if (typeof mapMode !== "undefined" && mapMode === "overview") setMapMode("workspace", false);
   const was = openIds.has(id);
   if (!was) {
     openIds.add(id);
@@ -58,7 +57,7 @@ function flashCard(id) {
 function focusCard(id) {
   activateCard(id);
   if (!openIds.has(id)) { if (nodeInData(id)) openNode(id); return; }
-  if (mapMode === "overview") { setMapMode("workspace"); return; }
+  if (mapMode === "map") { setMapMode("workspace"); return; }
   if (mapMode === "workspace") { renderMap(false, true); return; }
   const g = SATS.get(id);
   if (!g) return;

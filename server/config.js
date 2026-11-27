@@ -5,8 +5,9 @@ const path = require("path");
 const os = require("os");
 
 const HOME = os.homedir();
-const SESSIONS = path.join(HOME, ".omp", "agent", "sessions");
-const CLAUDE_PROJECTS = path.join(HOME, ".claude", "projects"); // Claude Code 세션 기록(<슬러그>/<sessionId>.jsonl). 읽기 전용.
+// 검증·데모는 OMP_MAP_SESSIONS·OMP_MAP_CLAUDE_PROJECTS 로 다른 폴더를 가리킬 수 있다(실제 ~/.omp·~/.claude 를 건드리지 않게).
+const SESSIONS = process.env.OMP_MAP_SESSIONS || path.join(HOME, ".omp", "agent", "sessions");
+const CLAUDE_PROJECTS = process.env.OMP_MAP_CLAUDE_PROJECTS || path.join(HOME, ".claude", "projects"); // Claude Code 세션 기록(<슬러그>/<sessionId>.jsonl). 읽기 전용.
 const BLOBS = path.join(HOME, ".omp", "agent", "blobs"); // 세션 이미지 blob:sha256:<hash> 실체
 const UPLOADS = path.join(os.tmpdir(), "omp-live-map-uploads"); // 프롬프트 첨부 저장소(신뢰 루트)
 const ROOT = path.join(__dirname, "..");

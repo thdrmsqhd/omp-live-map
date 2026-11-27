@@ -1,0 +1,36 @@
+/* omp-live-map · view · 두 모드 셸: map(한 맵 #umap) · workspace(세션 하나 전체 화면 #stage). 예전 탭(프로젝트·설계·Task)은 없다. */
+:root{--card-radius:8px;--card-gap:12px;--card-pad:14px}
+#topbar{flex-wrap:wrap;gap:6px}
+#workarea{position:relative;flex:1;display:flex;min-height:0}
+#app[data-view="map"] #sessions,#app[data-view="map"] #stage,#app[data-view="map"] #minimap{display:none!important}
+#app[data-view="workspace"] #sessions,#app[data-view="workspace"] #minimap{display:none!important}
+#app[data-view="workspace"] #topbar .zoom,#app[data-view="workspace"] #umap-attention{display:none}
+#app[data-view="map"] #spath,#app[data-view="map"] #doneSubs{display:none}
+#topbar .searchwrap{width:180px}
+#minimap[hidden],#workspace-empty[hidden],#umap[hidden],#back-to-map[hidden]{display:none!important}
+#app[data-view="workspace"] #stage{background:#0b1219;cursor:default;touch-action:auto}
+#app[data-view="workspace"] #wrapper{inset:0;transform:none!important}
+#app[data-view="workspace"] #nodes{inset:0}
+#app[data-view="workspace"] #edges,#app[data-view="workspace"] #guides{display:none}
+#app[data-view="workspace"] #nodes>.cluster,#app[data-view="workspace"] #nodes>.jcard,#app[data-view="workspace"] #nodes>.node:not(.big),#app[data-view="workspace"] #nodes>.node.big:not(.active-card){display:none}
+#app[data-view="workspace"] #nodes>.node.big.active-card{left:8px!important;top:8px!important;width:calc(100% - 16px)!important;height:calc(100% - 16px)!important;box-sizing:border-box;cursor:default}
+#app[data-view="workspace"] .node.big>.chrome{max-height:35%;overflow:auto}
+#app[data-view="workspace"] .node.big>.body{min-height:0;overflow:auto}
+#app[data-view="workspace"] .node.big .col-left{width:min(36%,520px);min-width:0}
+#app[data-view="workspace"] .node.big .col-ed{min-width:0}
+#app[data-view="workspace"] .node.big .col-tree{width:min(25%,252px)}
+#app[data-view="workspace"] .node.big .rsz{display:none}
+#workspace-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:14px}
+.sl-row.active-card{outline:1px solid var(--accent)}
+.node.big.virtual-card{display:flex;flex-direction:column;justify-content:space-between;padding:16px}
+.virtual-card .virtual-hint{color:var(--muted);font-size:14px}
+.virtual-card .virtual-stats{display:flex;gap:20px;flex-wrap:wrap}
+.virtual-card .virtual-stats span{font-size:14px;color:var(--muted)}
+.virtual-card [data-card-resume]{align-self:flex-start;font-size:16px;padding:8px 16px}
+.chat-history-nav,.term-history-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:none;font-size:var(--fs-small);color:var(--muted)}
+.chat-history-nav span,.term-history-nav span{flex:1;text-align:center}
+.chat-history-nav .cmore{width:auto;margin:0}
+.node.big .body{overscroll-behavior:contain}
+.node.big .cmsgs,.node.big .tout,.node.big .ctlist{overscroll-behavior:contain}
+.node.big.group-selected{outline:3px solid #a98bff;outline-offset:3px}
+@media(max-width:800px){#topbar .searchwrap{width:150px}}

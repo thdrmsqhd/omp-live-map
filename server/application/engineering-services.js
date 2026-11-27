@@ -17,6 +17,7 @@ const { addPresetDefinitions, addPresetWorkflows } = require("../engineering/wor
 const { projectBudget } = require("../engineering/project-budget");
 const { workflowStaging } = require("../engineering/workflow-staging");
 const { runStore } = require("../engineering/run-store");
+const { taskLocal } = require("../engineering/task-local");
 const { loopEngine } = require("../engineering/loop");
 const { secureRunner } = require("../engineering/runner");
 const { workFolders } = require("../engineering/work-folder");
@@ -53,7 +54,7 @@ function createEngineeringServices({ directory, runner = secureRunner() }) {
       services = { definitions, workflows, runs, flowRuns, tasks, budget, trials: harnessTrials(definitions, runner, workspace, budget),
         presetDefinitions: (project) => addPresetDefinitions(db, definitions, project),
         presetWorkflows: (project) => addPresetWorkflows(db, definitions, workflows, project),
-        stages,
+        stages, taskEdits: taskLocal(db, { definitions, workflows, tasks }),
         observability: workflowObservability(db, flowRuns, definitions),
         evaluation: independentEvaluation({ db, directory, runs: flowRuns, definitions, workflows }),
         delivery, staging: workflowStaging(db, delivery),

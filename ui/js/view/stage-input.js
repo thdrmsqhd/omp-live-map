@@ -100,7 +100,7 @@ function bindStageInput() {
     // 입력창·contenteditable·터미널 안의 키(Ctrl+Z 포함)는 지도에서 가로채지 않는다.
     const typing = e.target && (/input|textarea|select/i.test(e.target.tagName) || e.target.isContentEditable || !!(e.target.closest && e.target.closest(".term,.edblk")));
     if (mapMode === "map" && e.code === "Space" && !e.repeat && !typing) { spaceDown = true; stage.style.cursor = "grab"; }
-    if (!typing && (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "n" || e.key === "N")) {
+    if (!typing && mapMode === "workspace" && (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "n" || e.key === "N")) {
       e.preventDefault();
       const r = stage.getBoundingClientRect();
       const pt = worldPoint(r.left + r.width / 2 - 120, r.top + r.height / 2 - 60);
@@ -109,8 +109,6 @@ function bindStageInput() {
     }
     if (typing || e.target.closest?.("[data-workflow-controls]")) return;
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase()==="z") { if(redoLayout())e.preventDefault();return; }
-    if (e.altKey && ["1","2","3","4","5"].includes(e.key)) { e.preventDefault();setMapMode({1:"overview",2:"workspace",3:"map",4:"design",5:"tasks"}[e.key]);return; }
-    if (mapMode === "design" || mapMode === "tasks") return;   // 설계(노드 캔버스)·Task 탭의 키는 그 화면이 처리한다(지도 되돌리기·줌 키를 막는다).
     if (e.altKey && e.key.toLowerCase()==="n") { e.preventDefault();$("new-session-action").click();return; }
     if (e.altKey && e.key.toLowerCase()==="f" && activeCardId) {e.preventDefault();toggleCardFocus(activeCardId);return;}
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
@@ -118,11 +116,9 @@ function bindStageInput() {
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (mapMode === "map" && (e.key === "+" || e.key === "=")) zoomTo(view.k * 1.25);
-    else if (mapMode === "map" && (e.key === "-" || e.key === "_")) zoomTo(view.k / 1.25);
-    else if (mapMode === "map" && e.key === "0") fit();
-    else if (mapMode === "map" && e.key === "1") zoomTo(1);
-    else if (e.key === "Escape") {
+    // 한 맵(map)의 키(+ − 0 1 Esc)는 view/umap-input.js 가 먼저 받는다. 여기는 세션 전체 화면(workspace)의 Esc 다.
+    if (mapMode === "map") return;
+    if (e.key === "Escape") {
       if (cancelCardDrag()) return;
       if ($("ctxmenu").classList.contains("open")) closeMenu();
       else if (SELECTED.size || GROUP_CARDS.size) { SELECTED.clear(); GROUP_CARDS.clear(); paintSelection(); paintGroupCards(); }

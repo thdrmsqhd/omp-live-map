@@ -16,13 +16,14 @@ function paintDoneSubsButton(hidden) {
     : "완료된 서브에이전트를 숨기려면 클릭";
 }
 
-$("zin").onclick = () => zoomTo(view.k * 1.25);
+// 줌 버튼은 한 맵(#umap)의 배율을 바꾼다(세션 전체 화면에서는 숨긴다).
+$("zin").onclick = () => umapZoomTo(UM.view.k * 1.2);
 
-$("zout").onclick = () => zoomTo(view.k / 1.25);
+$("zout").onclick = () => umapZoomTo(UM.view.k / 1.2);
 
-$("zk").onclick = () => zoomTo(1);
+$("zk").onclick = () => umapZoomTo(1);
 
-$("zfit").onclick = fit;
+$("zfit").onclick = () => umapFit();
 
 $("filters").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-f]");

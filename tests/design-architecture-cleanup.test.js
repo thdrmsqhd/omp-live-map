@@ -48,21 +48,6 @@ test("E3: failed answer can be retried and reports state via callback", async ()
   assert.equal(posts, 2);
 });
 
-test("F2: session strip preserves active session and pending question without mutating input", () => {
-  const session = { key: "s", live: true, nodes: [{ id: "n", kind: "main" }] };
-  const request = { id: "q" };
-  const context = vm.createContext({ mapMode: "design", DATA: { sessions: [session] }, ASKS: new Map([["n", [request]]]) });
-  load("ui/js/viewmodel/session-strip.js", context);
-  const before = JSON.stringify([session, request]);
-  const snapshot = context.sessionStripSnapshot();
-  assert.equal(snapshot.ready, true);
-  assert.equal(snapshot.sessions[0], session);
-  assert.equal(snapshot.groups[0].list[0], request);
-  assert.equal(JSON.stringify([session, request]), before);
-  context.mapMode = "map";
-  assert.equal(context.sessionStripSnapshot(), null);
-});
-
 test("D3: infrastructure host process backend has no engineering imports", () => {
   const source = readFileSync(path.join(root, "server/infrastructure/host-process.js"), "utf8");
   assert.doesNotMatch(source, /require\s*\(\s*["']\.\.\/engineering\//);

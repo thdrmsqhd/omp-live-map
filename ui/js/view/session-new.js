@@ -20,7 +20,7 @@ function openNewSession(at) {
     </select></label>
     <div class="nsharness-tools">
       <small class="nsdef-note" role="status"></small>
-      <a href="/?mode=design">하네스 관리(설계)</a>
+      <button type="button" class="nslib">하네스 관리(라이브러리)</button>
     </div>
     <label>실행기<select class="nshz">
       <option value="omp">omp (기본)</option>
@@ -36,7 +36,8 @@ function openNewSession(at) {
   const ta = box.querySelector(".nstext");
   const err = box.querySelector(".nserr");
   const hz = box.querySelector(".nshz");
-  // 하네스(설계 탭의 하네스 정의)를 고르면 그 역할·지시가 세션의 시스템 프롬프트가 되고 실행기·모델도 하네스를 따른다.
+  box.querySelector(".nslib").onclick = () => { closeNewSession(); setMapMode("map"); void openLibraryDrawer("harness"); };
+  // 하네스(라이브러리의 하네스 정의)를 고르면 그 역할·지시가 세션의 시스템 프롬프트가 되고 실행기·모델도 하네스를 따른다.
   const defSelect = box.querySelector(".nsdef");
   const defNote = box.querySelector(".nsdef-note");
   let harnesses = [];
@@ -57,7 +58,7 @@ function openNewSession(at) {
       defSelect.replaceChildren(new Option("하네스 없이 · 실행기 기본 설정", ""),
         ...harnesses.map((item) => new Option(`${item.name} · ${item.adapter === "omp" ? "OMP" : "Claude Code"} · ${scopeOf(item)} · v${item.version}`, item.id)));
       paintHarness();
-      if (!harnesses.length) defNote.textContent = "저장된 하네스가 없습니다. 설계 탭에서 '기본 구성 추가'로 만들 수 있습니다.";
+      if (!harnesses.length) defNote.textContent = "저장된 하네스가 없습니다. 맵 왼쪽 위 '라이브러리'에서 만들 수 있습니다.";
     } catch (error) {
       defNote.textContent = "하네스를 불러오지 못했습니다. " + error.message;
     }

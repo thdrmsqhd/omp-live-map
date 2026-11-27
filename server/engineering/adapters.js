@@ -224,6 +224,7 @@ async function omp(backend, context, io) {
   };
   try {
     const session = await call({ type: "get_state" });
+    if (session.sessionId) progress({ sessionId: String(session.sessionId) });
     await call({ type: "set_model", provider: model.provider, modelId: model.model });
     if (model.reasoning) await call({ type: "set_thinking_level", level: model.reasoning });
     // 핀된 omp 는 set_ask_dialog 이후에만 method ask 를 낸다. 실패해도 select·confirm 대기는 유지한다.
@@ -265,6 +266,7 @@ async function claude(backend, context) {
   let result;
   const tools = new Set();
   const streamed = claudeStreamProgress(progressOf(context));
+  progressOf(context)({ sessionId });
   try {
     for await (const line of lines) {
       let event;

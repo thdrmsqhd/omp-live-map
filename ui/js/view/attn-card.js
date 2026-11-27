@@ -13,5 +13,5 @@ function paintAttention() {
     el.classList.toggle("attn-ask", kind === "ask");
   }
   if (typeof paintMinimap === "function") paintMinimap();
-  if (typeof paintOverview === "function" && mapMode === "overview") paintOverview(filteredSessions());
+  if (mapMode === "map") paintUmapSoon();
 }

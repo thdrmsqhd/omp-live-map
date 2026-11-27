@@ -78,4 +78,4 @@
 
 ## 5. 구현 현황
 
-이 문서의 설계는 `index.html`의 설계 모드(`ui/js/design-mode.js`, `ui/js/studio*.js`)와 서버 `server/engineering/harness-kinds.js`에 반영되었다. 설계 단계에서 쓰던 독립 프로토타입(`workspace-prototype.html`)과 그 검증 스크립트는 앱에서 연결이 없어져 2026-11-27에 삭제했다(git 기록에 남아 있다).
+이 문서의 설계는 한때 `index.html`의 설계 모드(노드 캔버스)로 반영되었고, 지금은 한 맵(프로젝트 띠 > Task > Workflow 단계 > 세션, `ui/js/view/umap-*.js`)과 서버 `server/engineering/harness-kinds.js`로 바뀌었다. 설계 단계에서 쓰던 독립 프로토타입(`workspace-prototype.html`)과 그 검증 스크립트는 앱에서 연결이 없어져 2026-11-27에 삭제했다(git 기록에 남아 있다).

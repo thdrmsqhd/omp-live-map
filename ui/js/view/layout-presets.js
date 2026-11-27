@@ -1,4 +1,4 @@
-/* Shift+헤더 클릭: 다중 선택. 저장 프리셋은 좌표만 복원하며 프로세스/파일에는 영향 없음. */
+/* Shift+헤더 클릭: 다중 선택(세션 전체 화면의 큰 카드). 예전 맵의 배치 프리셋 버튼은 한 맵으로 바뀌며 없앴고 좌표 계산만 남긴다. */
 const GROUP_CARDS=new Set();
 function paintGroupCards(){for(const el of $("nodes").querySelectorAll(".node.big"))el.classList.toggle("group-selected",GROUP_CARDS.has(el.dataset.id));}
 function presetPositions(items,mode){
@@ -15,13 +15,3 @@ function applyLayoutPreset(mode){
   ids.forEach((id,i)=>BIGPOS.set(id,boxes[i]));
   saveOpenCards();renderMap(false,true);fit();
 }
-$("layout-apply").onclick=()=>applyLayoutPreset($("layout-preset").value);
-$("layout-save").onclick=()=>{writeJSON("omp-map-layout-preset-v4",Object.fromEntries([...BIGPOS].filter(([id])=>openIds.has(id))));};
-$("layout-restore").onclick=()=>{
-  const saved=readJSON("omp-map-layout-preset-v4",{}), ids=Object.keys(saved).filter(id=>openIds.has(id)&&["x","y","w","h"].every(k=>Number.isFinite(saved[id]?.[k]))&&saved[id].w>0&&saved[id].h>0);
-  if(!ids.length)return;
-  pushHistory(layoutSnapshot({big:ids}));
-  for(const id of ids)BIGPOS.set(id,saved[id]);saveOpenCards();renderMap(false,true);fit();
-};
-$("layout-undo").onclick=undoLayout;
-$("layout-redo").onclick=redoLayout;

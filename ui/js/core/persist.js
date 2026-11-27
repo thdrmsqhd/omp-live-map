@@ -128,5 +128,6 @@ const saveDbProfiles = (id, list) => {
   writeJSON("omp-map-dbprofiles", Object.fromEntries(DBPROF));
 };
 
-mapMode = readJSON("omp-map-view-mode-v2", "overview");
-if (!["map","overview","workspace","design","tasks"].includes(mapMode)) mapMode = "map";
+// 화면은 늘 한 맵에서 시작한다(세션 전체 화면은 맵의 세션 카드에서 연다). 예전 탭(프로젝트·설계·Task) 저장값은 지운다.
+localStorage.removeItem("omp-map-view-mode-v2");
+mapMode = "map";

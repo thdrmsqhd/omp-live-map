@@ -75,6 +75,8 @@ function update(run, node, patch = {}) {
   if (patch.reset) { state.text = ""; delete state.askSession; }
   if (patch.askSession === null) delete state.askSession;
   if (typeof patch.askSession === "string" && /^workflow-ask:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(patch.askSession)) state.askSession = patch.askSession;
+  // 실행기 세션 id: 맵이 실행 중인 단계 아래에 그 세션 카드를 잇는다(engineering/task-map.js).
+  if (typeof patch.sessionId === "string" && /^[\w-]{6,80}$/.test(patch.sessionId)) state.sessionId = patch.sessionId;
   if (typeof patch.text === "string" && patch.text) {
     state.text = (state.text + patch.text).slice(-TEXT_LIMIT);
     appendLog(state.log, patch.text);

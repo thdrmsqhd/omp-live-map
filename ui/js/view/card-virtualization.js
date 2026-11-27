@@ -7,8 +7,8 @@ const parkSelectors=[".cmsgs",".tout",".bgout",".ctlist",".dres",".extree"];
 function cardContentVisible(id){
   const el=ELS.get(id);
   if(!el || el.dataset.virtual)return false;
-  if(mapMode==="overview")return false;
-  return mapMode!=="workspace"||activeCardId===id;
+  // 한 맵(map)에서는 세션을 맵 카드로만 보여 준다. 무거운 블록은 세션 전체 화면(workspace)의 그 카드에만 둔다.
+  return mapMode==="workspace"&&activeCardId===id;
 }
 function cardInViewport(box,rect,k,x,y){
   const margin=240;
@@ -20,10 +20,7 @@ function fullCardWanted(id){
   if(!b)return false;
   // iframe 내 폼/실행 중 화면은 사용자가 해제를 명시적으로 허용했을 때만 제거한다.
   if(!suspendFrames && old?.querySelector("iframe.bframe.on"))return true;
-  if(mapMode==="overview")return false;
-  if(mapMode==="workspace")return activeCardId===id;
-  if(!powerSave||id===activeCardId)return true;
-  return cardInViewport(b,$("stage").getBoundingClientRect(),view.k,view.x,view.y);
+  return mapMode==="workspace"&&activeCardId===id;
 }
 function virtualBigCard(n){
   const b=SATS.get(n.id), r=n.res;
@@ -78,14 +75,5 @@ function queueCardVisibility(){
     for(const id of openIds){const el=ELS.get(id);if(el && !!el.dataset.virtual===fullCardWanted(id)){renderMap(false,true);break;}}
   },100);
 }
-function paintPowerSave(){
-  $("power-save").classList.toggle("on",powerSave);
-  $("power-save").setAttribute("aria-pressed",String(powerSave));
-  $("suspend-frames").checked=suspendFrames;
-}
-$("power-save").onclick=()=>{powerSave=!powerSave;writeJSON("omp-map-power-save",powerSave);paintPowerSave();renderMap(false,true);};
-$("suspend-frames").onchange=(e)=>{
-  if(e.target.checked&&!confirm("비활성 브라우저의 페이지 상태가 해제되며 다시 열 때 재로드됩니다. 적용할까요?")){e.target.checked=false;return;}
-  suspendFrames=e.target.checked;writeJSON("omp-map-suspend-frames",suspendFrames);renderMap(false,true);
-};
-paintPowerSave();
+// 절전·비활성 브라우저 해제는 자원 서랍(view/umap-topbar.js)에서 바꾼다.
+function paintPowerSave(){ if(mapMode==="workspace")renderMap(false,true); }

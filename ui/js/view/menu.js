@@ -169,9 +169,10 @@ function openCardMenu(clientX, clientY, id) {
     null,
     ...blockMenuItems(n),
   ];
-  if (n.kind !== "local" && (/^[a-zA-Z]:[\\/]/.test(n.cwd || "") || String(n.cwd || "").startsWith("/")) && window.ompTasks) {
+  if (n.kind !== "local" && (/^[a-zA-Z]:[\\/]/.test(n.cwd || "") || String(n.cwd || "").startsWith("/"))) {
+    // 맵의 그 폴더(프로젝트) 띠에 ＋ Task 한 줄을 연다. 아직 프로젝트가 아니면 만들 때 프로젝트가 된다.
     items.splice(1, 0, { label: "이 폴더에서 Task 만들기", hint: n.cwd.replace(/[\\/]+$/, "").split(/[\\/]/).pop(),
-      run: () => void window.ompTasks.quick({ folder: n.cwd }) });
+      run: () => { setMapMode("map"); umapOpenAdd(umapBandKeyFor(n.cwd)); } });
   }
   if (n.kind === "main") {
     const to = capsOf(n).id === "claude" ? "omp" : "Claude Code";

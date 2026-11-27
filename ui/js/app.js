@@ -24,6 +24,16 @@ function wireViewUpdates() {
     renderMap(false);
     if (typeof paintWorkflowAskSurfaces === "function") paintWorkflowAskSurfaces(id);
   };
+  // 한 맵: Task 맵 데이터가 바뀌면 다시 그린다(viewmodel/task-map.js umapNotify).
+  viewUpdates.umap = () => paintUmapSoon();
+}
+
+// 세션 질문 카드 대신 Workflow 단계 질문(askSession)이 오면 그 단계 서랍을 다시 연다.
+function paintWorkflowAskSurfaces(id) {
+  if (UMD.kind !== "stage") return;
+  const [task, node] = UMD.key.split(":");
+  const stage = umapTaskById(task)?.stages.find((item) => item.id === node);
+  if (stage?.live?.askSession && askKey(stage.live.askSession) === askKey(id)) void openStageDrawer(task, node);
 }
 
 // 첫 스냅샷. 서버가 아직 안 떴으면 3초마다 다시 시도한다.
@@ -68,6 +78,8 @@ async function boot() {
   bindCardResize();
   bindMinimap();
   bindSessionList();
+  bindUmapInput();
+  bindUmapTopbar();
   $("nodes").addEventListener("click", onNodesClick);
   // 포인터를 누르고 있는 동안에는 카드를 다시 그리지 않는다(끌기·더블클릭 대상이 바뀌지 않게).
   $("stage").addEventListener("pointerdown", () => { DEFER = true; });
@@ -75,17 +87,16 @@ async function boot() {
   addEventListener("pointerup", release);
   addEventListener("pointercancel", release);
 
-  // 세션 그래프는 받는 대로 먼저 그린다. 인프라(WSL·Docker 조회는 몇 초 걸릴 수 있다)와 호스트는 도착하면
-  // 다시 그리고, 그때까지 사용자가 화면을 움직이지 않았으면 전체가 보이게 한 번 더 맞춘다.
-  let touched = false;
-  const touch = () => { touched = true; };
-  $("stage").addEventListener("pointerdown", touch, { once: true });
-  $("stage").addEventListener("wheel", touch, { once: true, passive: true });
+  // 세션 그래프는 받는 대로 먼저 그린다. 인프라(WSL·Docker 조회는 몇 초 걸릴 수 있다)와 호스트는 도착하면 다시 그린다.
   let graphBase=await firstGraph();setGraph(graphBase);
   setConnected(true);
-  const mayFit = () => !touched && !wfMap.opening && !wfMap.run;
-  renderMap(mayFit(), true);
-  Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(mayFit(), true));
+  renderMap(false, true);
+  Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(false, true));
+  // 한 맵 데이터(프로젝트·Task·단계·세션 연결). 처음 열면 전체가 보이게 맞춘다(저장한 맵 위치가 있으면 그 자리).
+  const firstView = !localStorage.getItem(UMAP_VIEW_KEY);
+  const wantedRun = new URLSearchParams(location.search).get("run");
+  if (wantedRun) history.replaceState(null, "", location.pathname);
+  void umapRefresh(true).then(() => { paintUmap(true); if (firstView) umapFit(); if (wantedRun) umapRevealRun(wantedRun); });
 
   function connectEvents() {
     const es = new EventSource("/api/events?graph=2");
@@ -138,6 +149,8 @@ async function boot() {
     if (!document.hidden && !typingNow() && JOBS.some((j) => !j.done)) renderMap(false);
   }, 2000);
   adaptive(paintJobScroll,1000);
+  adaptive(() => (mapMode === "map" ? umapRefresh(false) : null), 3000);
+  adaptive(() => umapRefresh(true), 20000);
   addEventListener("resize", paintMinimap);
 }
 

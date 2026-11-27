@@ -45,17 +45,18 @@ test("engineering API works in web mode behind Host, Origin and per-start token 
       assert.equal(page.headers["cache-control"], "no-store");
       // 실패 메시지에 토큰이 찍히지 않게 불리언으로만 확인한다.
       assert.ok(page.text.includes(`<meta name="omp-ops-token" content="${token}">`), "token meta");
-      assert.ok(page.text.includes('data-mode="tasks"'), "Task tab");
-      assert.ok(page.text.includes('id="engineering"'), "Task panel");
+      // 한 화면: 탭 없이 한 맵(#umap)이 Task·Workflow·세션을 함께 그린다.
+      assert.ok(page.text.includes('id="umap"'), "one map");
+      assert.ok(!page.text.includes('id="viewModes"') && !page.text.includes('data-mode="tasks"'), "no top tabs");
       assert.ok(!page.text.includes("engineering.html"), "no separate page link");
       assert.ok(!page.text.includes("데스크톱에서 조회"), "no desktop-only notice");
 
-      // 예전 Engineering 페이지 주소는 합친 화면의 탭으로 보낸다.
+      // 예전 Engineering 페이지 주소는 한 맵으로 보낸다(실행 주소는 그 실행의 Task 줄로).
       const old = await raw(port, "/engineering.html?view=execution&project=p1");
       assert.equal(old.status, 302);
-      assert.equal(old.headers.location, "/?mode=tasks&project=p1&view=execution");
+      assert.equal(old.headers.location, "/");
       assert.equal((await raw(port, "/engineering.html?run=r1")).headers.location, "/?run=r1");
-      assert.equal((await raw(port, "/engineering.html?view=studio")).headers.location, "/?mode=design");
+      assert.equal((await raw(port, "/engineering.html?view=studio")).headers.location, "/");
 
       // DNS rebinding: 토큰이 있어도 Host 가 이 서버(127.0.0.1·localhost:<port>)가 아니면 거부한다.
       for (const host of [`evil.example:${port}`, "127.0.0.1", `127.0.0.1:${port + 1}`, `localhost.evil.example:${port}`]) {

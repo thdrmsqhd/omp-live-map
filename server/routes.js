@@ -112,16 +112,10 @@ function serveStatic(res, pathname) {
 }
 
 // 예전 Engineering 페이지 주소는 하나로 합친 관제 화면으로 보낸다(실행은 맵, 설계는 설계 모드, 나머지는 Task 탭).
+// 예전 Engineering 페이지 주소는 한 맵(/)으로 보낸다. 실행 주소(?run=)는 맵이 그 실행의 Task 줄로 옮긴다.
 function redirectEngineering(res, url) {
-  const from = url.searchParams, to = new URLSearchParams();
-  const view = from.get("view");
-  if (from.get("run")) to.set("run", from.get("run"));
-  else if (from.get("workflow") || ["studio", "design", "loop", "session-harnesses", "setup", "workflow"].includes(view)) to.set("mode", "design");
-  else to.set("mode", "tasks");
-  if (!from.get("run") && from.get("project")) to.set("project", from.get("project"));
-  if (to.get("mode") === "design" && from.get("workflow")) to.set("workflow", from.get("workflow"));
-  if (to.get("mode") === "tasks" && view === "execution") to.set("view", "execution");
-  res.writeHead(302, { Location: "/?" + to, "Cache-Control": "no-store" });
+  const run = url.searchParams.get("run");
+  res.writeHead(302, { Location: run ? "/?" + new URLSearchParams({ run }) : "/", "Cache-Control": "no-store" });
   res.end();
 }
 

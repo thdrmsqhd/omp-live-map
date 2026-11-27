@@ -22,6 +22,8 @@ const workflowScopeSchema = fs.readFileSync(path.join(__dirname, "../engineering
 const boardSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v15.sql"), "utf8");
 
 function transaction(db, fn) {
+  // 이미 열린 트랜잭션 안이면(예: 맵 서랍의 '이 Task만' 저장이 정의·Workflow·Task 를 한 번에 쓸 때) 바깥 트랜잭션에 맡긴다.
+  if (db.isTransaction) return fn();
   db.exec("BEGIN IMMEDIATE");
   try {
     const result = fn();
