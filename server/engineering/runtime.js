@@ -12,13 +12,14 @@ const { consoleOAuth } = require("./anthropic-oauth");
 const { claudeCodeLogin, savedToken, LOGIN_EXPIRED } = require("./claude-code-oauth");
 const { secureRunner } = require("./runner");
 const { problem } = require("./state");
+const { adapterSpec, adapterIds } = require("./adapter-registry");
 
 // Compose engineering policy with the isolated process backend here, not in infrastructure.
 function dockerRunner({ key, oauth, upstream, ...options }) {
   const { backend, shutdown } = dockerBackend({
     ...options, problem,
     supports: (name, model) => Boolean((key || oauth) && model.provider === "anthropic" && models.has(model.model) &&
-      (!model.reasoning || name === "omp")),
+      (!model.reasoning || adapterSpec(name)?.reasoning === true)),
     createBroker: (request) => createAnthropicBroker({ ...request, key, oauth, upstream }),
   });
   return { ...secureRunner(adaptersFor(backend), commandRunner(backend, permitted)), shutdown };
@@ -167,7 +168,7 @@ function runtime(directory, key, consoleAuth = consoleOAuth(), claudeCode = proc
     status: () => {
       const live = liveAuth();
       return { status: live?.status ?? status, detail: live?.detail ?? detail, canLogin: Boolean(consoleAuth), signingIn: Boolean(loginAttempt), loginStatus,
-        auth: auth && { ...auth }, omp: delegate.available("omp"), claude: delegate.available("claude") };
+        auth: auth && { ...auth }, ...Object.fromEntries(adapterIds.map((id) => [id, delegate.available(id)])) };
     },
   };
 }

@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { ROOT } = require("../config");
+// 실행기 목록은 순수 데이터 모듈 하나만 공유한다(다른 engineering 모듈은 끌어오지 않는다).
+const { isAdapter } = require("../engineering/adapter-registry");
 
 let db;
 
@@ -73,7 +75,7 @@ function save(input) {
   const adapter = input.adapter;
   const model = field(input.model, 160, "모델");
   const provider = adapter === "omp" && model ? field(input.provider, 80, "모델 제공자") : "";
-  if (!name || !["omp", "claude"].includes(adapter)) throw new Error("이름과 실행기를 입력해 주세요.");
+  if (!name || !isAdapter(adapter)) throw new Error("이름과 실행기를 입력해 주세요.");
   if (adapter === "omp" && model && !provider) throw new Error("OMP 모델을 지정하려면 모델 제공자도 입력해 주세요.");
   if (adapter === "claude" && model && !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,79}$/.test(model)) {
     throw new Error("Claude 모델 ID 형식을 확인해 주세요.");

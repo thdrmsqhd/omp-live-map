@@ -3,6 +3,7 @@
 const { harnessAssets } = require("./harness-assets");
 const { resultContract } = require("./harness-result");
 const { problem } = require("./state");
+const { isAdapter } = require("./adapter-registry");
 
 function string(value, label, max = 240) {
   if (typeof value !== "string" || !value.trim() || value.length > max || value.includes("\0")) {
@@ -24,7 +25,7 @@ function definition(kind, body) {
       reasoning: body.reasoning ? string(body.reasoning, "reasoning") : "" };
   }
   if (kind === "harness") {
-    if (!["omp", "claude"].includes(body.adapter)) throw problem(400, "Unsupported harness");
+    if (!isAdapter(body.adapter)) throw problem(400, "Unsupported harness");
     const result = resultContract(body.result);
     return { name, adapter: body.adapter, model: string(body.model, "model definition id"),
       role: string(body.role, "role"), instructions: body.instructions ? string(body.instructions, "instructions", 12000) : "",

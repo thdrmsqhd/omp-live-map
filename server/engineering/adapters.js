@@ -9,6 +9,7 @@ const { problem, redact } = require("./state");
 const { acceptsWorkflowAsk, rejectsWorkflowAsk } = require("./workflow-gates");
 const { claudeStreamProgress, ompToolLine } = require("./stream-progress");
 const { brokerFailure } = require("./anthropic");
+const { adapterIds } = require("./adapter-registry");
 
 // 브로커가 호출을 막았으면(구독 로그인 만료·예산 소진) CLI 의 일반 오류 대신 그 사유로 실패한다.
 function throwBrokerFailure(child) {
@@ -313,8 +314,17 @@ function defaultIo() {
   return { rpc: require("../rpc"), asks: require("../ui-requests") };
 }
 
+// 실행기 id → 실행 함수. id 목록은 adapter-registry.js 가 정하고, 여기에는 실행 방법만 적는다.
+const runners = Object.freeze({
+  omp: (backend, context, io) => omp(backend, context, io),
+  claude: (backend, context) => claude(backend, context),
+});
+
 function adaptersFor(backend, io = defaultIo()) {
-  return new Map([["omp", execution(backend, "omp", (runner, context) => omp(runner, context, io))], ["claude", execution(backend, "claude", claude)]]);
+  return new Map(adapterIds.map((id) => {
+    if (!runners[id]) throw new Error(`No runner for adapter ${id}`);
+    return [id, execution(backend, id, (runner, context) => runners[id](runner, context, io))];
+  }));
 }
 
-module.exports = { adaptersFor, promptSections };
+module.exports = { adaptersFor, promptSections, runners };

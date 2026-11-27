@@ -5,6 +5,7 @@ const { executionDefinitions } = require("./harness-provenance");
 const { verifyResult } = require("./harness-result");
 const { promptSections } = require("./adapters");
 const { problem, redact } = require("./state");
+const { adapterSpec } = require("./adapter-registry");
 
 function nodeDefinitions(catalog, project, node) {
   const profile = node.sessionProfile;
@@ -12,7 +13,7 @@ function nodeDefinitions(catalog, project, node) {
     const { id, version, name, adapter, role, instructions } = profile;
     return {
       harness: { id, version, payload: { name, adapter, role, instructions, permission: "workspace-only" } },
-      model: { id, version, payload: { name: profile.model, model: profile.model, provider: adapter === "claude" ? "anthropic" : profile.provider, reasoning: "" } },
+      model: { id, version, payload: { name: profile.model, model: profile.model, provider: adapterSpec(adapter)?.provider(profile) ?? "", reasoning: "" } },
     };
   }
   const target = catalog.versionOf(node.definition, node.version);
