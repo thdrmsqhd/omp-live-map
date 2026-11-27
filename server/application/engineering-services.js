@@ -22,6 +22,8 @@ const { secureRunner } = require("../engineering/runner");
 const { worktrees } = require("../engineering/worktree");
 const { harnessTrials } = require("../engineering/harness-trials");
 const workflowLive = require("../engineering/workflow-live");
+const { profileDefinitions, importLegacyProfiles } = require("../engineering/profile-definitions");
+const sessionProfiles = require("../harness/session-profiles");
 
 
 function createEngineeringServices({ directory, runner = secureRunner() }) {
@@ -32,6 +34,9 @@ function createEngineeringServices({ directory, runner = secureRunner() }) {
     const db = openDatabase(path.resolve(directory, "engineering.sqlite"));
     try {
       const definitions = catalog(db);
+      // 프로필은 정의 저장소로 옮겨 쓴다. 이전 저장소가 있으면 한 번 가져오고, 세션 배정은 이전 저장소에 남긴다.
+      importLegacyProfiles(db, sessionProfiles.legacyRows());
+      sessionProfiles.useDefinitions(profileDefinitions(db, definitions));
       const runs = runStore(db, definitions);
       const workflows = workflowCatalog(db, definitions);
       const tasks = sdlcTasks(db, definitions, workflows);

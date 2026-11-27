@@ -138,7 +138,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   function labelOf(node) {
     if (node.kind === "step") return node.data.label;
     const owner = ownerOf(node);
-    const prefix = node.kind === "profile" ? "" : "[" + (owner.scope === "team" ? "팀 · " + owner.team : SCOPE_LABELS[owner.scope]) + "] ";
+    const prefix = node.kind === "profile" ? (owner?.scope === "team" ? "[팀 · " + owner.team + "] " : "") : "[" + (owner.scope === "team" ? "팀 · " + owner.team : SCOPE_LABELS[owner.scope]) + "] ";
     return prefix + nameOf(node) + (node.isNew ? " (저장 전)" : "");
   }
   function libraryNode(kind, record, payload) {
@@ -403,7 +403,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   const ctx = {
     catalog: null,
     node: (key) => nodes.get(key),
-    scopeChoices,
+    scopeChoices, desktop,
     workflows: () => workflows,
     currentWorkflow: () => wf?.record?.id ?? "",
     hasIncoming,
@@ -440,7 +440,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const kind = (node.kind === "harness" ? harnessTypeOf(node.draft.role)?.label : null) ?? KIND_LABELS[node.kind];
     if (node.isNew) return kind + " · 저장 전";
     const owner = ownerOf(node);
-    const scope = node.kind === "profile" ? "" : (owner.scope === "team" ? "팀 " + owner.team : SCOPE_LABELS[owner.scope]) + " · ";
+    const scope = node.kind === "profile" ? (owner?.scope === "team" ? "팀 " + owner.team + " · " : "") : (owner.scope === "team" ? "팀 " + owner.team : SCOPE_LABELS[owner.scope]) + " · ";
     return kind + " · " + scope + "v" + node.record.version;
   }
   function socket(node, direction, spec) {

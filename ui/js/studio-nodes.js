@@ -219,8 +219,11 @@ function details(summary, open, ...children) {
 }
 
 function scopeWidget(ctx, node) {
-  if (!node.isNew || node.kind === "profile") return null;
-  return field("저장 범위", select(ctx.scopeChoices(), node.owner.scope, (value) => ctx.setScope(node, value)));
+  if (!node.isNew) return null;
+  // 프로필은 맵 세션에서도 쓰므로 프로젝트 범위 없이 개인·팀만 고른다(엔지니어링 DB가 있는 데스크톱에서만).
+  const choices = node.kind !== "profile" ? ctx.scopeChoices() : ctx.desktop() ? ctx.scopeChoices().filter(([scope]) => scope !== "project") : [];
+  if (node.kind === "profile" && choices.length < 2) return null;
+  return field("저장 범위", select(choices, node.owner.scope, (value) => ctx.setScope(node, value)));
 }
 
 // ---- 노드별 위젯 -------------------------------------------------------------
@@ -353,6 +356,7 @@ function profileWidgets(ctx, node) {
   } });
   showModelOptions(picker, models, draft.model ? modelKey(adapter === "claude" ? "" : draft.provider, draft.model) : "", "실행기 기본 모델");
   return [
+    scopeWidget(ctx, node),
     field("이름", textInput(ctx, node, draft, "name", { maxLength: 120, rename: true })),
     h("div", { class: "studio-row" },
       field("실행기", select([["claude", "Claude Code"], ["omp", "OMP"]], adapter, (value) => {

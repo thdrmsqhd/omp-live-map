@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
-const version = 12;
+const version = 13;
 const schema = fs.readFileSync(path.join(__dirname, "../engineering/schema.sql"), "utf8");
 const graphSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v2.sql"), "utf8");
 const runSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v3.sql"), "utf8");
@@ -17,6 +17,7 @@ const budgetSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema
 const stagingSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v10.sql"), "utf8");
 const scopeSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v11.sql"), "utf8");
 const reusableSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v12.sql"), "utf8");
+const profileSchema = fs.readFileSync(path.join(__dirname, "../engineering/schema-v13.sql"), "utf8");
 
 function transaction(db, fn) {
   db.exec("BEGIN IMMEDIATE");
@@ -37,8 +38,13 @@ function openDatabase(file) {
   try {
     db.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA journal_mode=WAL");
     const current = db.prepare("PRAGMA user_version").get().user_version;
+    // 스키마를 올리기 전에 지금 파일을 그대로 떠 둔다. 새 버전은 구버전 앱이 열지 못하므로 되돌릴 때 이 파일을 쓴다.
+    if (current > 0 && current < version) {
+      const saved = file + ".v" + current + ".bak";
+      if (!fs.existsSync(saved)) backup(db, saved);
+    }
     // Rebuild the parent definition table without cascading into pinned versions.
-    if (current < 12) db.exec("PRAGMA foreign_keys=OFF");
+    if (current < 13) db.exec("PRAGMA foreign_keys=OFF");
     transaction(db, () => {
       const current = db.prepare("PRAGMA user_version").get().user_version;
       if (current > version) throw new Error("Unsupported engineering database version");
@@ -57,6 +63,11 @@ function openDatabase(file) {
         db.exec(reusableSchema);
         if (db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Invalid scoped definition migration");
         db.exec("PRAGMA user_version=12");
+      }
+      if (current < 13) {
+        db.exec(profileSchema);
+        if (db.prepare("PRAGMA foreign_key_check").get()) throw new Error("Invalid profile definition migration");
+        db.exec("PRAGMA user_version=13");
       }
     });
     db.exec("PRAGMA foreign_keys=ON");

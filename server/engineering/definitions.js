@@ -4,6 +4,7 @@ const { harnessAssets } = require("./harness-assets");
 const { resultContract } = require("./harness-result");
 const { problem } = require("./state");
 const { isAdapter } = require("./adapter-registry");
+const { profilePayload } = require("./profile-payload");
 
 function string(value, label, max = 240) {
   if (typeof value !== "string" || !value.trim() || value.length > max || value.includes("\0")) {
@@ -18,6 +19,9 @@ function integer(value, label, min, max) {
 }
 
 function definition(kind, body) {
+  if (kind === "profile") {
+    try { return profilePayload(body); } catch (error) { throw problem(400, error.message); }
+  }
   if (!body || typeof body !== "object" || Array.isArray(body)) throw problem(400, "Definition payload is required");
   const name = string(body.name, "name");
   if (kind === "model") {

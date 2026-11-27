@@ -56,7 +56,9 @@ export function bindStudioPersist(S) {
     }
     const previous = node.record?.version;
     if (node.kind === "profile") {
-      const { profile } = await profileRequest({ ...node.draft, id: node.record?.id, version: node.record?.version });
+      const owner = ownerOf(node);
+      const { profile } = await profileRequest({ ...node.draft, id: node.record?.id, version: node.record?.version,
+        ...(node.record ? {} : { scope: owner.scope === "team" ? "team" : "personal", team: owner.team ?? undefined }) });
       node.record = profile;
       node.draft = { name: profile.name, adapter: profile.adapter, provider: profile.provider ?? "", model: profile.model ?? "",
         role: profile.role ?? "", instructions: profile.instructions ?? "" };
