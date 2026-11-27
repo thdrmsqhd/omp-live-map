@@ -111,6 +111,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = runner.status();
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
+        if (endpoint === "projects/ensure") result = await definitions.ensureProject(input);
         if (endpoint === "teams") result = definitions.saveTeam(input.name);
         if (endpoint === "project-budget") result = budget.save(string(input.project, "project"), input);
         if (endpoint === "tasks") result = tasks.save(input);
@@ -144,6 +145,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = await flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
         }
         if (endpoint === "workflow-delivery/approve") result = await delivery.approve(string(input.id, "run"), input.branch);
+        if (endpoint === "workflow-delivery/apply") result = await delivery.applyToFolder(string(input.id, "run"));
         if (endpoint === "workflow-delivery/pr") result = await delivery.createPR(string(input.id, "run"));
         if (endpoint === "workflow-delivery/ci") result = await delivery.checkCI(string(input.id, "run"));
         if (endpoint === "workflow-delivery/release") result = await delivery.approveRelease(string(input.id, "run"));

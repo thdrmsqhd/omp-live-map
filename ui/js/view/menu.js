@@ -169,6 +169,10 @@ function openCardMenu(clientX, clientY, id) {
     null,
     ...blockMenuItems(n),
   ];
+  if (n.kind !== "local" && (/^[a-zA-Z]:[\\/]/.test(n.cwd || "") || String(n.cwd || "").startsWith("/")) && window.ompQuickRun) {
+    items.splice(1, 0, { label: "이 폴더에서 Workflow 실행", hint: n.cwd.replace(/[\\/]+$/, "").split(/[\\/]/).pop(),
+      run: () => { setMapMode("design"); void window.ompQuickRun.target(n.cwd); } });
+  }
   if (n.kind === "main") {
     const to = capsOf(n).id === "claude" ? "omp" : "Claude Code";
     items.push(null, { label: to + "로 전환", hint: "요약 이어받기", run: () => switchCardHarness(id) },

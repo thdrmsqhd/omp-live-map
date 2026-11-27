@@ -8,10 +8,11 @@ const { promisify } = require("node:util");
 const { transaction } = require("../infrastructure/sqlite");
 const { string, integer, definition } = require("./definitions");
 const { problem } = require("./state");
+const shadow = require("./shadow-repo");
 const launch = promisify(execFile);
 
 async function git(cwd, args) {
-  const { stdout } = await launch("git", args, { cwd, timeout: 12000, maxBuffer: 1024 * 1024, windowsHide: true });
+  const { stdout } = await launch("git", shadow.gitArgs(cwd, args), { cwd, timeout: 12000, maxBuffer: 1024 * 1024, windowsHide: true });
   return stdout.trimEnd();
 }
 
@@ -83,19 +84,27 @@ function catalog(db) {
     return versionOf(id, next);
   }
   async function saveProject(body) {
-    const name = string(body.name, "name");
     const root = string(body.root, "Git root", 4000);
     if (!path.isAbsolute(root)) throw problem(400, "Git root must be absolute");
     let resolved, branch;
     try {
       resolved = await fs.realpath(root);
-      const top = await fs.realpath(await git(resolved, ["rev-parse", "--show-toplevel"]));
-      if (top !== resolved) throw new Error("Not repository root");
-      branch = body.branch ? string(body.branch, "base branch") : await git(resolved, ["branch", "--show-current"]);
-      string(branch, "base branch");
-      await git(resolved, ["show-ref", "--verify", "refs/heads/" + branch]);
+      if (!(await fs.stat(resolved)).isDirectory()) throw new Error("Not a directory");
     } catch {
-      throw problem(400, "An existing Git root and local branch are required");
+      throw problem(400, "폴더를 찾을 수 없습니다: " + root);
+    }
+    const name = body.name ? string(body.name, "name") : path.basename(resolved) || resolved;
+    let top = null;
+    try { top = await fs.realpath(await git(resolved, ["rev-parse", "--show-toplevel"])); } catch { /* git 저장소가 아니다 */ }
+    if (top === resolved) {
+      branch = body.branch ? string(body.branch, "base branch") : await git(resolved, ["branch", "--show-current"]).catch(() => "");
+      if (!branch) throw problem(400, "현재 브랜치를 알 수 없습니다. 기준 브랜치를 적어 주세요.");
+      await git(resolved, ["show-ref", "--verify", "refs/heads/" + branch]).catch(() => {
+        throw problem(400, "로컬 브랜치 '" + branch + "'가 없습니다. 커밋이 없는 저장소라면 첫 커밋을 만든 뒤 다시 시도해 주세요.");
+      });
+    } else {
+      await shadow.ensure(resolved);
+      branch = "main";
     }
     const id = body.id ? project(string(body.id, "id")).id : randomUUID();
     return transaction(db, () => {
@@ -128,8 +137,22 @@ function catalog(db) {
       return project(id);
     });
   }
+  // 실행 창에서 폴더만 고르면 쓰도록, 등록된 폴더면 그 프로젝트를, 아니면 폴더 이름·현재 브랜치로 등록한다.
+  async function ensureProject(body) {
+    const root = string(body.root, "Git root", 4000);
+    if (!path.isAbsolute(root)) throw problem(400, "Git root must be absolute");
+    let resolved;
+    try { resolved = await fs.realpath(root); } catch { throw problem(400, "폴더를 찾을 수 없습니다: " + root); }
+    const found = db.prepare("SELECT id, archived FROM project WHERE root=?").get(resolved);
+    if (!found) return saveProject({ root: resolved });
+    if (found.archived) {
+      db.prepare("UPDATE project SET archived=0 WHERE id=?").run(found.id);
+      event(db, "project.saved", { id: found.id });
+    }
+    return project(found.id);
+  }
   return {
-    project, saveProject, versionOf, writeDefinition, availableTo, availableToOwner, definitionOwner,
+    project, saveProject, ensureProject, versionOf, writeDefinition, availableTo, availableToOwner, definitionOwner,
     saveDefinition: (body) => transaction(db, () => writeDefinition(body)),
     projects: () => db.prepare("SELECT p.*, t.team FROM project p LEFT JOIN project_team t ON t.project=p.id ORDER BY p.name").all(),
     teams: () => db.prepare("SELECT name FROM harness_team ORDER BY name").all().map(({ name }) => name),

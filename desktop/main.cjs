@@ -22,13 +22,14 @@ const endpoints = new Set([
   "workflow-runs", "workflow-run", "workflow-transcript", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
   "workflow-approvals", "workflow-live-map", "workflow-dashboard", "workflow-review", "workflow-artifact", "independent-evaluation",
-  "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
+  "workflow-delivery/approve", "workflow-delivery/apply", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
-  "projects/register-picked",
+  "projects/register-picked", "projects/ensure",
 ]);
 
 // 관제 화면(/)은 Live Map 과 설계(노드 캔버스) 모드를 함께 담으므로 정의·Workflow 편집과 실행 API 를 모두 쓴다.
 // 비밀 값(API 키)·로그인·프로젝트 등록·보관·팀 등록 같은 설정 쓰기는 Engineering 설정 페이지에서만 한다.
+// 실행 창에서 폴더를 고르면 바로 등록하도록 projects/ensure 는 관제 화면도 허용한다(경로 검사는 서버가 한다).
 const settingsOnlyWrites = new Set(["runtime", "runtime/key", "runtime/login", "projects", "projects/archive", "teams"]);
 
 function startServer() {
@@ -84,7 +85,7 @@ ipcMain.handle("dialog:pick-folder", async (event) => {
   // 개발 실행(패키지 전)의 검증 스크립트만 대화상자 대신 경로를 넘길 수 있다.
   const scripted = !app.isPackaged && process.env.OMP_MAP_TEST_PICK_FOLDER;
   const result = scripted ? { canceled: false, filePaths: [scripted] }
-    : await dialog.showOpenDialog(window, { title: "프로젝트 Git 루트 선택", properties: ["openDirectory"] });
+    : await dialog.showOpenDialog(window, { title: "작업 폴더 선택", properties: ["openDirectory"] });
   pickedFolder = result.canceled ? null : result.filePaths[0] ?? null;
   return pickedFolder ? { ok: true, value: pickedFolder } : { ok: false, error: "선택을 취소했습니다." };
 });
@@ -97,8 +98,8 @@ ipcMain.handle("engineering:request", async (event, { endpoint, params, payload 
   if (endpoint === "projects/register-picked") {
     if (!pickedFolder || payload?.root !== pickedFolder) return { ok: false, error: "폴더를 먼저 선택해 주세요." };
     pickedFolder = null;
-    endpoint = "projects";
-    payload = { name: path.basename(payload.root), root: payload.root };
+    endpoint = "projects/ensure";
+    payload = { root: payload.root };
   }
   if (endpoint === "runtime/key") {
     try {

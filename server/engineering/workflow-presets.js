@@ -43,7 +43,7 @@ const DOCS_PROMPT = "산출물을 확인해 주세요.\n1. 저장소에서 확�
 
 const presets = Object.freeze({
   feature: {
-    name: "신규 기능 개발", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
+    name: "신규 기능 개발", summary: "계획 → 승인 → 구현·검증 → 리뷰", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
     labels: { plan: "요구사항 및 계획" },
     text: {
       plan: "요구사항과 제약을 정리하고, 검증 가능한 인수 기준과 변경 계획(파일·순서·위험·되돌리는 방법)을 작성한다.",
@@ -52,7 +52,7 @@ const presets = Object.freeze({
     },
   },
   bugfix: {
-    name: "버그 수정", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
+    name: "버그 수정", summary: "원인 찾기 → 승인 → 재현 테스트로 수정 → 리뷰", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
     labels: { plan: "재현·원인 가설" },
     text: {
       plan: "증상을 재현하는 절차와 원인 가설, 수정 범위, 인수 기준(수정 전에는 실패하고 수정 후에는 통과)을 작성한다.",
@@ -61,7 +61,7 @@ const presets = Object.freeze({
     },
   },
   refactor: {
-    name: "리팩토링", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
+    name: "리팩토링", summary: "동작은 그대로 두고 구조를 정리", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
     labels: { plan: "구조 개선 계획" },
     text: {
       plan: "개선할 구조, 바꾸지 않을 외부 동작, 단계별 계획과 각 단계의 검증 방법을 작성한다.",
@@ -70,11 +70,11 @@ const presets = Object.freeze({
     },
   },
   review: {
-    name: "코드 리뷰", phases: ["review", "finalApproval"],
+    name: "코드 리뷰", summary: "코드를 읽고 문제점을 보고서로 정리", phases: ["review", "finalApproval"],
     text: { review: "지정된 변경을 읽기 전용으로 검토하고 지적 사항을 보고한다. 구현 파일은 수정하지 않는다." },
   },
   tests: {
-    name: "테스트 작성", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
+    name: "테스트 작성", summary: "빠진 테스트를 찾아 추가하고 통과 확인", phases: ["plan", "designApproval", "implement", "review", "finalApproval"],
     labels: { plan: "테스트 계획" },
     text: {
       plan: "테스트할 동작과 우선순위(경계값·실패 경로·회귀)를 정하고 인수 기준을 작성한다.",
@@ -83,16 +83,16 @@ const presets = Object.freeze({
     },
   },
   docs: {
-    name: "기술 문서 작성", phases: ["draft", "finalApproval"], finalPrompt: DOCS_PROMPT,
+    name: "기술 문서 작성", summary: "코드를 확인해 기술 문서 초안 작성", phases: ["draft", "finalApproval"], finalPrompt: DOCS_PROMPT,
     text: { draft: "저장소에서 실제 동작을 확인한 뒤 대상 독자에 맞는 기술 문서 초안을 작성한다. 확인하지 못한 내용은 '미확인'으로 표시한다." },
   },
   release: {
-    name: "릴리스 및 배포", phases: ["checks", "draft", "finalApproval"],
+    name: "릴리스 및 배포", summary: "테스트 실행 뒤 릴리스 노트 작성", phases: ["checks", "draft", "finalApproval"],
     labels: { draft: "릴리스 노트 작성" },
     text: { draft: "변경 요약, 검증 결과, 롤백 방법, 배포 때 주의할 점을 릴리스 노트로 정리한다. 배포 자체는 이 Workflow 밖에서 한다." },
   },
   incident: {
-    name: "현장 장애 분석", phases: ["triage", "draft", "finalApproval"],
+    name: "현장 장애 분석", summary: "증상을 분류하고 원인 분석 보고서 작성", phases: ["triage", "draft", "finalApproval"],
     labels: { triage: "관측 분류", draft: "원인 분석 보고" },
     text: {
       triage: "제공된 관측 내용을 증상·시간·영향 범위로 분류하고 불확실한 부분을 표시한다. 현장 시스템과 운영 데이터는 변경하지 않는다.",
@@ -144,7 +144,7 @@ const suggestFor = (id, preset) => ({
   loop: PRESET_LOOPS[id] ? LOOPS[PRESET_LOOPS[id]].name : null,
 });
 
-const listPresets = () => Object.entries(presets).map(([id, preset]) => ({ id, name: preset.name,
+const listPresets = () => Object.entries(presets).map(([id, preset]) => ({ id, name: preset.name, summary: preset.summary,
   author: preset.phases.includes("draft") || preset.phases.includes("plan"),
   reviewer: preset.phases.includes("review"), triage: preset.phases.includes("triage"), loop: preset.phases.includes("implement"),
   suggest: suggestFor(id, preset) }));

@@ -6,6 +6,7 @@ const { promisify } = require("node:util");
 const { git } = require("./catalog");
 const { artifactText } = require("./workflow-artifact");
 const { problem } = require("./state");
+const shadow = require("./shadow-repo");
 
 const launch = promisify(execFile);
 const maxBytes = 16 * 1024;
@@ -23,7 +24,7 @@ async function gitSource(root, commit, file, signal) {
     const entry = await git(root, ["--literal-pathspecs", "ls-tree", "-z", commit, "--", file]);
     const match = /^100(?:644|755) blob ([a-f0-9]{40,64})\t/.exec(entry);
     if (!match || entry.slice(match[0].length) !== file + "\0") throw new Error();
-    const { stdout } = await launch("git", ["cat-file", "blob", match[1]], {
+    const { stdout } = await launch("git", shadow.gitArgs(root, ["cat-file", "blob", match[1]]), {
       cwd: root, encoding: "buffer", timeout: 12000, windowsHide: true, maxBuffer: maxBytes, signal,
     });
     return { kind: "repository", path: file, commit, sha256: digest(stdout), text: text(stdout, file) };

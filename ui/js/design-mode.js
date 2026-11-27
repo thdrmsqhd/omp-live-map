@@ -43,7 +43,7 @@ if (window.engineeringDesktop) {
   async function loadProjects(chosen) {
     projects = await request("projects");
     const value = chosen ?? picker.value ?? readJSON(PROJECT_KEY, "");
-    picker.replaceChildren(new Option("프로젝트 선택", ""), ...projects.map(({ id, name, archived }) => new Option(name + (archived ? " (보관됨)" : ""), id)));
+    picker.replaceChildren(new Option("아직 없음 · 바로 실행하면 정해집니다", ""), ...projects.map(({ id, name, archived }) => new Option(name + (archived ? " (보관됨)" : ""), id)));
     picker.value = projects.some(({ id }) => id === value) ? value : projects.find(({ archived }) => !archived)?.id ?? "";
     writeJSON(PROJECT_KEY, picker.value);
     await studio.selectProject(picker.value, projects.find(({ id }) => id === picker.value));

@@ -1,7 +1,7 @@
 "use strict";
 
-// 데스크톱 첫 실행: 빈 사용자 데이터로 앱을 열면 설계 화면의 '처음 쓰기' 안내가 보이고,
-// 폴더 선택(메인 프로세스 대화상자) → 등록 → 기본 구성 → 기본 Workflow → 첫 Workflow 열기까지 페이지 이동 없이 끝난다.
+// 데스크톱 첫 실행: 빈 사용자 데이터로 앱을 열면 설계 화면의 '바로 실행' 패널이 보이고,
+// 작업 폴더 목록의 '다른 폴더…'(메인 프로세스 대화상자) → 등록 → 할 일 8종 표시 → 목표를 적으면 '실행' 활성까지 페이지 이동 없이 끝난다(실행은 누르지 않는다).
 // 렌더러는 대화상자에서 고르지 않은 경로를 등록할 수 없다.
 const assert = require("node:assert/strict");
 const { spawn, execFileSync } = require("node:child_process");
@@ -47,14 +47,17 @@ test("desktop first run registers a picked folder and opens a built-in workflow"
     assert.equal(denied.ok, false);
 
     const steps = panel.locator("#first-run-steps");
-    await steps.getByRole("button", { name: "폴더 선택" }).click();
-    await steps.locator("li[data-done='1']", { hasText: "프로젝트 등록" }).waitFor({ timeout: 15000 });
-    await steps.getByRole("button", { name: "기본 구성 추가" }).click();
-    await steps.locator("li[data-done='1']", { hasText: "기본 구성" }).waitFor({ timeout: 15000 });
-    await steps.getByRole("button", { name: "기본 Workflow 8종 추가" }).click();
-    await steps.locator("li[data-done='1']", { hasText: "기본 Workflow" }).waitFor({ timeout: 15000 });
-    await steps.getByRole("button", { name: "열기" }).click();
-    await page.locator("#studio-workflow option:checked", { hasText: "버그 수정" }).waitFor({ state: "attached", timeout: 15000 });
+    const folder = steps.getByLabel("작업 폴더");
+    await folder.waitFor({ timeout: 15000 });
+    await folder.selectOption("pick:");
+    await page.waitForFunction(() => document.querySelector("#first-run-steps select[aria-label='작업 폴더']")?.value.includes("picked-repo"), null, { timeout: 15000 });
+    const choices = steps.locator(".first-run-presets button");
+    await choices.nth(7).waitFor({ timeout: 15000 });
+    assert.equal(await choices.count(), 8);
+    assert.equal(await steps.locator(".first-run-presets button", { hasText: "버그 수정" }).getAttribute("aria-pressed"), "true");
+    const run = steps.getByRole("button", { name: "실행", exact: true });
+    await steps.getByLabel("작업 목표").fill("로그인 버튼이 반응하지 않는다. 원인을 찾아 고친다.");
+    assert.equal(await run.isEnabled(), true);
     assert.equal(new URL(page.url()).pathname, "/");
     // 대화상자에서 받은 경로는 한 번만 쓸 수 있다.
     const again = await page.evaluate((root) => window.engineeringDesktop.request("projects/register-picked", {}, { root }), repository);

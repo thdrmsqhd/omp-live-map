@@ -22,6 +22,7 @@ const { secureRunner } = require("../engineering/runner");
 const { worktrees } = require("../engineering/worktree");
 const { harnessTrials } = require("../engineering/harness-trials");
 const workflowLive = require("../engineering/workflow-live");
+const shadowRepo = require("../engineering/shadow-repo");
 const { profileDefinitions, importLegacyProfiles } = require("../engineering/profile-definitions");
 const sessionProfiles = require("../harness/session-profiles");
 
@@ -31,6 +32,7 @@ function createEngineeringServices({ directory, runner = secureRunner() }) {
   function initialize() {
     if (services) return services;
     workflowLive.configure({ directory: path.resolve(directory) });
+    shadowRepo.configure(path.resolve(directory, "shadow"));
     const db = openDatabase(path.resolve(directory, "engineering.sqlite"));
     try {
       const definitions = catalog(db);

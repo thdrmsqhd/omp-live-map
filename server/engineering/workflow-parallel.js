@@ -112,4 +112,4 @@ async function runParallel({ project, workspace, worktrees, nodes, priorArtifact
   return completed.map(({ node, result }) => ({ node, result }));
 }
 
-module.exports = { runParallel };
+module.exports = { runParallel, copyFile };

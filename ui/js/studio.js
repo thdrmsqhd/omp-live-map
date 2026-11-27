@@ -9,7 +9,7 @@ import { bindStudioPersist } from "./studio-persist.js";
 import { bindStudioHistory } from "./studio-history.js";
 import { loadModelOptions } from "./engineering-model-options.js";
 import {
-  h, KIND_LABELS, STEP_TYPES, STEP_HINTS, SCOPE_LABELS, HARNESS_TEMPLATES, HARNESS_CATALOG,
+  h, STEP_TYPES, STEP_HINTS, SCOPE_LABELS, HARNESS_TEMPLATES, HARNESS_CATALOG,
   socketsOf, widgetsOf, problemsOf, blankPayload, blankStep, harnessTypeOf,
   harnessContractDetails, isEvaluationHarness, isEvaluationRole, evaluationFlowBlock, socketDragAllowed,
   EXTERNAL_LANE_X, EXTERNAL_LANE_LABEL,
@@ -437,11 +437,11 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       const version = node.version ? " · v" + node.version : "";
       return STEP_TYPES[node.data.type] + version;
     }
-    const kind = (node.kind === "harness" ? harnessTypeOf(node.draft.role)?.label : null) ?? KIND_LABELS[node.kind];
-    if (node.isNew) return kind + " · 저장 전";
+    const role = node.kind === "harness" ? harnessTypeOf(node.draft.role)?.label : null;
+    if (node.isNew) return (role ? role + " · " : "") + "저장 전";
     const owner = ownerOf(node);
     const scope = node.kind === "profile" ? (owner?.scope === "team" ? "팀 " + owner.team + " · " : "") : (owner.scope === "team" ? "팀 " + owner.team : SCOPE_LABELS[owner.scope]) + " · ";
-    return kind + " · " + scope + "v" + node.record.version;
+    return (role ? role + " · " : "") + scope + "v" + node.record.version;
   }
   function socket(node, direction, spec) {
     const { slot, type, label } = spec;
@@ -488,7 +488,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const title = h("strong", { class: "studio-title" }, nameOf(node));
     const head = h("header", { class: "studio-head", title: node.kind === "step" ? STEP_HINTS[type] ?? "" : "" },
       h("button", { type: "button", class: "studio-collapse", "aria-label": node.collapsed ? "펼치기" : "접기",
-        "aria-expanded": String(!node.collapsed), onclick: () => toggleCollapse(node) }, node.collapsed ? "▸" : "▾"),
+        "aria-expanded": String(!node.collapsed), onclick: () => toggleCollapse(node) }, node.collapsed ? "▸" : "▾"), node.kind === "step" ? null : h("span", { class: "studio-kind" }, TYPE_LABELS[node.kind]),
       h("span", { class: "studio-head-text" }, title, h("small", { class: "studio-badge" }, badgeOf(node))),
       h("span", { class: "studio-dirty", title: "저장하지 않은 변경", hidden: !isDirty(node) }, "●"),
       h("button", { type: "button", class: "studio-more", "aria-label": nameOf(node) + " 메뉴", onclick: (event) => nodeMenu(event, node) }, "⋯"));
@@ -578,7 +578,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     el("undo").disabled = !editHistory?.canUndo();
     el("redo").disabled = !editHistory?.canRedo();
     workflowPicker.disabled = !project || !desktop();
-    el("lanes").hidden = !wf;
+    for (const [id, hide] of [["lane-profile", Boolean(wf)], ["lane-workflow", !wf], ["lane-line", !wf]]) el(id).hidden = hide;
     el("lane-workflow").style.left = WORKFLOW_X + "px";
     el("lane-line").style.left = (WORKFLOW_X - 50) + "px";
     paintExternalLane();
@@ -600,7 +600,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     line.style.left = (EXTERNAL_LANE_X + 340) + "px";
   }
   function fillWorkflowPicker(chosen) {
-    workflowPicker.replaceChildren(h("option", { value: "" }, project ? "Workflow 열지 않음 · 정의만 보기" : "프로젝트를 고르면 Workflow를 열 수 있습니다"),
+    workflowPicker.replaceChildren(h("option", { value: "" }, project ? "Workflow 열지 않음 · 정의만 보기" : "작업 폴더가 정해지면 Workflow를 열 수 있습니다"),
       ...(project ? [h("option", { value: "new" }, "+ 새 Workflow")] : []),
       // 템플릿 빠른 실행이 만든 자동 사본은 사용자가 저장한 Workflow 와 따로 묶는다.
       ...[["저장된 Workflow", false], ["빠른 실행 사본(자동 생성)", true]].map(([label, generated]) => {

@@ -7,6 +7,16 @@
 #workflow-launch details label { margin-top: 8px; }
 #workflow-launch input, #workflow-launch textarea, #workflow-launch select { width: 100%; box-sizing: border-box; border: 1px solid #465460; border-radius: 5px; padding: 6px; background: #111923; color: inherit; font: inherit; }
 #workflow-launch a { color: #8bdbce; }
+#workflow-launch fieldset { display: grid; gap: 8px; margin: 0; padding: 8px 10px 10px; border: 1px solid #43515d; border-radius: 8px; min-width: 0; }
+#workflow-launch fieldset[hidden] { display: none; }
+#workflow-launch legend { padding: 0 6px; font-weight: 600; }
+#workflow-launch .wf-role-help { color: #9fb3c4; font-size: 11.5px; line-height: 1.4; }
+#workflow-launch label small { display: block; }
+#workflow-launch .wf-role-hint { color: #9fb3c4; font-size: 11.5px; line-height: 1.4; }
+#workflow-launch .wf-role-summary { color: #8bdbce; font-size: 12px; line-height: 1.4; }
+#workflow-launch .wf-role-summary:empty { display: none; }
+#workflow-launch .wf-role-steps { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: #d7e0e8; font-size: 12px; line-height: 1.4; }
+#workflow-launch .wf-role-steps[hidden] { display: none; }
 .wf-actions { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
 #workflow-launch .wf-actions { justify-content: flex-end; }
 #workflow-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }

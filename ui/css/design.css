@@ -30,29 +30,28 @@
 /* 지도 전용 도구(배치·줌)는 설계 모드에서 숨긴다. */
 #app[data-view="design"] .zoom { display: none; }
 
-/* 설계 모드 첫 실행 안내.
-   안내는 서버 응답 뒤에 채워지므로 높이를 고정해 캔버스를 밀지 않는다(채워지는 순간 열린 메뉴가 닫히거나 끌기가 빗나가지 않게).
-   단계는 한 줄로 두고 넘치면 가로로 스크롤한다. */
-#first-run { box-sizing: border-box; flex: none; height: 164px; display: flex; flex-direction: column; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
+/* 설계 모드 바로 실행: 폴더 · 할 일 · 목표+실행을 한 줄 격자로 둔다.
+   내용은 서버 응답 뒤에 채워지므로 높이를 고정해 캔버스를 밀지 않는다(채워지는 순간 열린 메뉴가 닫히거나 끌기가 빗나가지 않게). 넘치면 패널 안에서 스크롤한다. */
+#first-run { box-sizing: border-box; flex: none; height: 288px; display: flex; flex-direction: column; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
 #first-run[hidden] { display: none; }
 .first-run-head { display: flex; align-items: center; gap: 8px; }
 .first-run-head h2 { margin: 0; font-size: 15px; }
 .first-run-head #first-run-status { flex: 1; margin: 0; color: #f299ad; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .first-run-head button { margin-left: auto; }
-#first-run-steps { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); gap: 8px; margin: 8px 0 0; padding: 0; overflow: auto hidden; list-style: none; counter-reset: step; }
-#first-run-steps li { display: grid; gap: 4px; align-content: start; min-height: 0; overflow: auto; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; counter-increment: step; }
-#first-run-steps li strong::before { content: counter(step) ". "; }
-#first-run-steps li[data-done="1"] { border-color: var(--live); }
-#first-run-steps li[data-done="1"] strong { color: var(--live); }
-#first-run-steps li span { color: var(--muted); font-size: var(--fs-small, 11px); }
-.first-run-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.first-run-quick { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 400px); align-content: start; gap: 10px; margin: 8px 0 0; }
+.first-run-folder { display: grid; gap: 4px; color: var(--muted); font-size: var(--fs-small, 11px); }
+.first-run-folder select { box-sizing: border-box; width: 100%; }
+.first-run-col { display: grid; gap: 6px; align-content: start; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; }
+.first-run-col small { color: var(--muted); font-size: var(--fs-small, 11px); overflow-wrap: anywhere; }
+.first-run-col textarea { box-sizing: border-box; width: 100%; resize: vertical; }
+.first-run-name { color: var(--text); font-weight: 600; }
+.first-run-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.first-run-presets button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border: 1px solid var(--border); }
+.first-run-presets button small { color: var(--muted); font-size: var(--fs-small, 11px); }
+.first-run-presets button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--panel)); }
+.first-run-warn { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f3c77a; font-size: 12px; }
+.first-run-hint { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: var(--fs-small, 11px); }
 #first-run-status:empty { visibility: hidden; }
-/* 낮은 창(노트북·작은 화면)에서는 단계를 제목과 버튼 한 줄로 줄여 캔버스 자리를 남긴다. 높이는 여전히 고정이다. */
-@media (max-height: 820px) {
-  #first-run { height: 88px; padding: 8px 12px; }
-  #first-run-steps { margin-top: 6px; grid-auto-columns: max-content; }
-  #first-run-steps li { display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
-  #first-run-steps li strong { white-space: nowrap; }
-  #first-run-steps li span { display: none; }
-  .first-run-actions { margin-top: 0; flex-wrap: nowrap; }
+@media (max-width: 900px) {
+  .first-run-quick { grid-template-columns: 1fr; }
 }

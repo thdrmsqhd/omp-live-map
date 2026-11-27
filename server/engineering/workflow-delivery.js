@@ -6,6 +6,9 @@ const { event, git } = require("./catalog");
 const { problem } = require("./state");
 const { string } = require("./definitions");
 const { githubCli } = require("./github-cli");
+const { artifactPath } = require("./graph-definition");
+const { copyFile } = require("./workflow-parallel");
+const shadow = require("./shadow-repo");
 
 function githubRepository(remote) {
   const prefix = /^(?:https:\/\/github\.com\/|git@github\.com:)/;
@@ -24,15 +27,21 @@ function workflowDelivery(db, runs, catalog, workspaceRoot, gh = githubCli, gitC
     try { return await action(); } finally { locks.delete(id); }
   }
 
-  async function commit(id) {
+  async function owned(id, message) {
     const run = runs.get(id);
-    if (run.status !== "succeeded" || !run.workspace) throw problem(409, "Complete the workflow before approving its commit");
+    if (run.status !== "succeeded" || !run.workspace) throw problem(409, message);
     const workspace = await fs.realpath(run.workspace), root = await fs.realpath(workspaceRoot);
     if (path.dirname(workspace) !== root || path.basename(workspace) !== id) throw problem(409, "Invalid workflow worktree");
+    return { run, workspace };
+  }
+  async function commit(id) {
+    const { run, workspace } = await owned(id, "Complete the workflow before approving its commit");
     const [changes, head, remote] = await Promise.all([
       gitCall(workspace, ["--no-optional-locks", "status", "--porcelain=v1", "--untracked-files=all"]),
       gitCall(workspace, ["rev-parse", "--verify", "HEAD"]),
-      gitCall(workspace, ["remote", "get-url", "origin"]),
+      gitCall(workspace, ["remote", "get-url", "origin"]).catch(() => {
+        throw problem(409, "GitHub remote(origin)가 없어 PR을 만들 수 없습니다. ‘폴더에 반영’으로 작업 폴더에 바로 반영하세요.");
+      }),
     ]);
     if (changes || !/^[a-f0-9]{40}$/i.test(head)) throw problem(409, "Review and commit every worktree change before approval");
     return { run, workspace, sha: head, repository: githubRepository(remote), base: catalog.project(run.project).branch };
@@ -128,6 +137,45 @@ function workflowDelivery(db, runs, catalog, workspaceRoot, gh = githubCli, gitC
       db.prepare("UPDATE workflow_delivery SET state='created',pr_number=?,pr_url=? WHERE run=?").run(pr.number, pr.html_url, id);
       event(db, "workflow.pr.linked", { id, url: pr.html_url });
       return get(id);
+    }); },
+    // 충돌 하나면 전부 쓰지 않는다: 일부만 반영하면 사용자 폴더가 실행 결과도 원래 상태도 아닌 채로 남기 때문이다.
+    // ponytail: 반영 여부를 저장하지 않아 다시 눌러도 같은 결과가 되는 것으로 충분하다. 반영 표시가 필요하면 workflow_delivery 에 열을 추가한다.
+    applyToFolder(id) { return withRun(id, async () => {
+      const { run, workspace } = await owned(id, "실행이 성공한 뒤에 폴더에 반영할 수 있습니다");
+      const root = catalog.project(run.project).root;
+      const [tracked, added] = await Promise.all([
+        gitCall(workspace, ["diff", "--name-only", "-z", "--no-renames", "HEAD"]),
+        // 실행 보고서(.workflow-output)는 앱에서 보는 산출물이라 작업 폴더에 쓰지 않는다.
+        gitCall(workspace, ["ls-files", "-z", "--others", "--exclude-standard", "--", ".", ":(exclude).workflow-output"]),
+      ]);
+      const names = [...new Set([...tracked.split("\0"), ...added.split("\0")].filter(Boolean))];
+      if (names.length > 5000) throw problem(409, "폴더에 반영할 파일이 5,000개를 넘습니다");
+      const kind = (file) => fs.lstat(file).then((stat) => stat.isFile() ? "file" : "other",
+        (error) => { if (["ENOENT", "ENOTDIR"].includes(error.code)) return ""; throw error; });
+      const blob = async (file, p) => await kind(file) === "file" ? gitCall(workspace, ["hash-object", "--path=" + p, "--", file]) : "";
+      const changes = [], conflicts = [];
+      for (const name of names) {
+        const p = artifactPath(name), file = path.join(workspace, p), target = path.join(root, p);
+        const [before, after, current] = [
+          await gitCall(workspace, ["rev-parse", "--verify", "-q", "HEAD:" + p]).catch(() => ""),
+          await blob(file, p),
+          await blob(target, p),
+        ];
+        if ([await kind(file), await kind(target)].includes("other") || (current !== before && current !== after)) conflicts.push(p);
+        else changes.push({ p, after, skip: current === after });
+      }
+      if (conflicts.length) {
+        throw problem(409, "실행 뒤 작업 폴더에서 바뀐 파일이 있어 반영하지 않았습니다: " + conflicts.slice(0, 20).join(", ") +
+          (conflicts.length > 20 ? ` 외 ${conflicts.length - 20}개` : ""));
+      }
+      for (const { p, after, skip } of changes) {
+        if (skip) continue;
+        if (after === "") await fs.rm(path.join(root, p), { force: true });
+        else await copyFile(workspace, root, p);
+      }
+      await shadow.snapshot(root);
+      event(db, "workflow.folder.applied", { id, files: names.length });
+      return { root, files: names.map(artifactPath) };
     }); },
     checkCI(id) { return withRun(id, async () => { await ci(approved(id)); return get(id); }); },
     approveRelease(id) { return withRun(id, async () => {

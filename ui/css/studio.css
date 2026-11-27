@@ -64,9 +64,13 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 /* 구역 표시 */
 .studio-lanes { position: absolute; left: 0; top: 0; pointer-events: none; }
 .studio-lane { position: absolute; top: -64px; white-space: nowrap; color: #6f7690; font-size: 15px; font-weight: 700; letter-spacing: .02em; }
-.studio-lane small { display: block; font-weight: 400; font-size: 12px; color: #5c6276; }
+.studio-lane small { display: block; font-weight: 400; font-size: 13px; color: #9aa1b5; }
 .studio-lane-line { position: absolute; top: -70px; height: 9000px; border-left: 1px dashed #2f3442; }
-.studio-lane-library { left: 0; }
+/* 종류별 열 제목. left 는 studio-shared.js 의 COLUMN(모델 0·하네스 400·루프 800)과 GRID_LIBRARY[0](1200, 정의만 볼 때 프로필 격자)과 같아야 한다. */
+.studio-lane[data-type="model"] { left: 0; color: var(--c-model); }
+.studio-lane[data-type="harness"] { left: 400px; color: var(--c-harness); }
+.studio-lane[data-type="loop"] { left: 800px; color: var(--c-loop); }
+.studio-lane[data-type="profile"] { left: 1200px; color: var(--c-profile); }
 .studio-lane-external, .studio-lane-external-line { pointer-events: none; }
 .studio-lane-external { color: #d7c8ff; z-index: 2; }
 .studio-lane-external small { color: #a898d0; }
@@ -120,6 +124,7 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
   background: linear-gradient(90deg, color-mix(in srgb, var(--kind) 34%, #22252d), color-mix(in srgb, var(--kind) 14%, #22252d));
   border-bottom: 1px solid #0004; border-radius: 9px 9px 0 0; cursor: grab; user-select: none;
 }
+.studio-kind { flex: none; padding: 1px 5px; border-radius: 4px; background: var(--kind); color: #15171c; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
 .studio-head-text { flex: 1; min-width: 0; display: grid; line-height: 1.2; }
 .studio-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .studio-badge { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: color-mix(in srgb, var(--kind) 75%, #fff); }
