@@ -7,11 +7,6 @@ const { randomUUID } = require("node:crypto");
 const { EventEmitter, once } = require("node:events");
 const { PassThrough, Writable } = require("node:stream");
 const { createInterface } = require("node:readline");
-const { createAnthropicBroker, models } = require("../engineering/anthropic");
-const { adaptersFor } = require("../engineering/adapters");
-const { commandRunner } = require("../engineering/command-runner");
-const { secureRunner } = require("../engineering/runner");
-const { problem } = require("../engineering/state");
 
 const permitted = [
   { command: "npm", args: ["test"] }, { command: "node", args: ["--test"] },
@@ -93,7 +88,7 @@ function bridgeProcess(raw, broker, abort) {
   return channel;
 }
 
-function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemon, upstream, launchProcess = spawn }) {
+function dockerRunner({ image, context, binary, workspaceRoot, daemon, launchProcess = spawn, supports, createBroker, problem }) {
   if (!/^sha256:[a-f0-9]{64}$/.test(image) || !path.isAbsolute(binary) ||
       !["default", "desktop-linux"].includes(context)) throw problem(409, "A local Docker runtime and immutable image are required");
   const root = fs.realpathSync(workspaceRoot);
@@ -104,8 +99,6 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemo
   const prefix = daemon ? ["--host", daemon] : ["--context", context];
   const user = process.platform === "win32" ? "1000:1000" : `${process.getuid()}:${process.getgid()}`;
   const cleanup = new Set();
-  const supports = (name, model) => Boolean((key || oauth) && model.provider === "anthropic" && models.has(model.model) &&
-    (!model.reasoning || name === "omp"));
 
   function start(program, args, options, { signal, budgetCents = 0, model, workflowAsk = false } = {}) {
     signal?.throwIfAborted();
@@ -153,7 +146,7 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemo
       if (!controller.signal.aborted) controller.abort();
     });
     if (!agent) { raw.stdin.end(); raw.abortIsolation = abort; return raw; }
-    return bridgeProcess(raw, createAnthropicBroker({ model: model.model, key, oauth, budgetCents, signal: lifetime, upstream }), abort);
+    return bridgeProcess(raw, createBroker({ model: model.model, budgetCents, signal: lifetime }), abort);
   }
 
   const backend = {
@@ -165,7 +158,7 @@ function dockerRunner({ image, context, binary, workspaceRoot, key, oauth, daemo
     protocol: "docker-anthropic",
   };
   return {
-    ...secureRunner(adaptersFor(backend), commandRunner(backend, permitted)),
+    backend,
     shutdown: () => { for (const terminate of cleanup) terminate(); },
   };
 }
