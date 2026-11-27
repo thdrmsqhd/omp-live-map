@@ -4,7 +4,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { event } = require("./catalog");
 const { transaction } = require("../infrastructure/sqlite");
 const { string, integer } = require("./definitions");
-const { problem, redact } = require("./state");
+const { problem, redact, workflowTransitionAllowed } = require("./state");
 const { sdlcTasks } = require("./sdlc-tasks");
 const { projectBudget } = require("./project-budget");
 
@@ -20,6 +20,11 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
   function setStatus(id, from, to, error = null) {
     const current = get(id);
     if (!from.includes(current.status)) throw problem(409, "Workflow run changed state");
+    if (!workflowTransitionAllowed(current.status, to)) {
+      // 테스트·CI 는 OMP_STRICT_TRANSITIONS=1 로 표 밖 전이를 바로 실패시킨다.
+      if (process.env.OMP_STRICT_TRANSITIONS === "1") throw problem(409, `Unexpected workflow transition: ${current.status} → ${to}`);
+      event(db, "workflow.transition.unexpected", { id, from: current.status, to });
+    }
     db.prepare("UPDATE workflow_run SET status=?,error=? WHERE id=?").run(to, error ? redact(error) : null, id);
     event(db, "workflow.run", { id, status: to });
     tasks.followRun(id, to);

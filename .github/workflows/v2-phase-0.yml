@@ -28,6 +28,8 @@ jobs:
           node-version: '24'
       - name: Regression and static layer tests
         run: node --test
+        env:
+          OMP_STRICT_TRANSITIONS: '1'
   windows:
     runs-on: windows-2025
     timeout-minutes: 15
