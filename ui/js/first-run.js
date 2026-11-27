@@ -1,12 +1,20 @@
 // 설계 모드의 첫 실행 안내: 실행 환경 → 프로젝트 등록 → 기본 구성 → 기본 Workflow → 첫 Workflow 열기.
 // 모든 단계는 기존 Engineering API 만 쓴다. 프로젝트 등록은 메인 프로세스의 폴더 선택 결과로만 허용된다(desktop/main.cjs).
 const DISMISS_KEY = "omp-first-run-dismissed";
+// 마지막으로 보인 상태를 기억해 다음 로드에서 응답을 기다리지 않고 같은 자리를 잡는다(늦게 나타나 캔버스를 밀지 않게).
+const VISIBLE_KEY = "omp-first-run-visible";
 
 export function bindFirstRun({ find, request, currentProject, reloadProjects, openWorkflow }) {
   const panel = find("first-run");
   const list = find("first-run-steps");
   const note = find("first-run-status");
   let busy = false;
+  const show = (visible) => {
+    if (panel) panel.hidden = !visible;
+    try { localStorage.setItem(VISIBLE_KEY, visible ? "1" : "0"); } catch {}
+  };
+  // 처음 여는 사용자는 안내가 보이는 쪽으로 자리를 잡는다. 이미 끝낸 사용자는 숨긴 채로 시작한다.
+  if (panel) panel.hidden = localStorage.getItem(DISMISS_KEY) === "1" || localStorage.getItem(VISIBLE_KEY) === "0";
 
   const say = (text) => { note.textContent = text; };
   const button = (label, action) => {
@@ -58,7 +66,7 @@ export function bindFirstRun({ find, request, currentProject, reloadProjects, op
 
   async function refresh() {
     if (!panel) return;
-    if (localStorage.getItem(DISMISS_KEY) === "1") { panel.hidden = true; return; }
+    if (localStorage.getItem(DISMISS_KEY) === "1") { show(false); return; }
     let current;
     try { current = await state(); } catch (error) { say(error.message); return; }
     const { runtime, projects, personal, project, workflows, runs } = current;
@@ -94,13 +102,13 @@ export function bindFirstRun({ find, request, currentProject, reloadProjects, op
     }
     list.replaceChildren(...steps);
     // 준비가 끝나고 실행을 한 번이라도 했으면 더 안내하지 않는다.
-    panel.hidden = complete && runs.length > 0;
+    show(!(complete && runs.length > 0));
     panel.dataset.complete = complete ? "1" : "";
   }
 
   find("first-run-dismiss")?.addEventListener("click", () => {
     localStorage.setItem(DISMISS_KEY, "1");
-    panel.hidden = true;
+    show(false);
   });
   return { refresh };
 }
