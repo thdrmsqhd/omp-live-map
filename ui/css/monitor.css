@@ -55,14 +55,14 @@
 .mon-secondary{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:8px 0}
 .mon-activity{font-size:12px;overflow-wrap:anywhere;min-height:28px;padding:8px;border-radius:4px;background:#0b1219}
 .mon-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
-.mon-metrics small{display:block;font-size:10px;color:var(--muted)}
+.mon-metrics small{display:block;font-size:var(--fs-small);color:var(--muted)}
 .mon-metrics strong{display:block;font:600 13px var(--mono);overflow:hidden;text-overflow:ellipsis}
 .mon-card-actions{display:flex;gap:6px;flex-wrap:wrap}
 .mon-card-actions button{font-size:11px}
 .mon-agent-list{margin:8px 0;display:grid;gap:4px}
 .mon-agent-list button{display:flex;gap:5px;align-items:center;min-width:0;text-align:left}
-.mon-agent-list button span{margin-left:auto;font-size:10px;color:var(--muted)}
-.mon-trend{display:flex;gap:10px;align-items:center;margin:8px 0;font-size:10px;color:var(--muted)}
+.mon-agent-list button span{margin-left:auto;font-size:var(--fs-small);color:var(--muted)}
+.mon-trend{display:flex;gap:10px;align-items:center;margin:8px 0;font-size:var(--fs-small);color:var(--muted)}
 @media(max-width:800px){#topbar .searchwrap{width:150px}#overview{padding:8px}.mon-grid{grid-template-columns:1fr}}
 
 .node.big.virtual-card{display:flex;flex-direction:column;justify-content:space-between;padding:16px}
@@ -72,7 +72,7 @@
 .virtual-card [data-card-resume]{align-self:flex-start;font-size:16px;padding:8px 16px}
 #power-save.on{color:#9ecbff;border-color:#2f5d85}
 .overview-toolbar #suspend-frames{width:auto}
-.chat-history-nav,.term-history-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:none;font-size:10px;color:var(--muted)}
+.chat-history-nav,.term-history-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:none;font-size:var(--fs-small);color:var(--muted)}
 .chat-history-nav span,.term-history-nav span{flex:1;text-align:center}
 .chat-history-nav .cmore{width:auto;margin:0}
 .node.big .body{overscroll-behavior:contain}
@@ -100,7 +100,7 @@
 .mon-group{padding:0;border:0;background:transparent;margin-bottom:18px}
 .mon-group>header{border-bottom:1px solid var(--border);padding:6px 0}
 .mon-group h2 button{background:transparent;border:0;padding:0;font-size:14px;font-weight:650}
-.mon-group .mon-path{margin:6px 0;font-size:10px}
+.mon-group .mon-path{margin:6px 0;font-size:var(--fs-small)}
 .mon-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,245px),1fr));gap:8px}
 .mon-card{padding:10px;border-radius:7px;border-left-width:2px;transition:border-color .12s}
 .mon-card.active,.mon-card.selected{border-color:var(--accent);background:#16283a}
@@ -109,7 +109,7 @@
 .mon-secondary{margin:4px 0}
 .mon-activity{padding:4px 0;background:transparent;min-height:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#b6c6d7}
 .mon-metrics{grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin:8px 0}
-.mon-metrics small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9px}
+.mon-metrics small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-small)}
 .mon-metrics strong{font-size:11px}
 .mon-card-actions{gap:4px;align-items:center;margin-top:8px}
 .mon-card-actions button{padding:4px 6px}
