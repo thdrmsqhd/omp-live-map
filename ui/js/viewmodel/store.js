@@ -16,7 +16,7 @@ function setGraph(data) {
 function apply(data, patch) {
   const previous = DATA;
   setGraph(data);
-  if (!patch || !renderGraphPatch(previous, patch)) renderMap(false);
+  viewUpdates.graph?.(previous, patch);
 }
 
 // 스냅샷을 지금 다시 받는다(새 세션 파일처럼 SSE 방송을 기다리지 않을 때).
@@ -37,7 +37,7 @@ async function fetchInfra() {
 }
 
 async function loadInfra() {
-  try { if (await fetchInfra()) renderMap(false); } catch { /* server restarting */ }
+  try { if (await fetchInfra()) viewUpdates.map?.(false); } catch { /* server restarting */ }
 }
 
 async function fetchSys() {
@@ -50,5 +50,5 @@ async function fetchSys() {
 }
 
 async function loadSys() {
-  try { if (await fetchSys()) renderMap(false); } catch { /* server restarting */ }
+  try { if (await fetchSys()) viewUpdates.map?.(false); } catch { /* server restarting */ }
 }
