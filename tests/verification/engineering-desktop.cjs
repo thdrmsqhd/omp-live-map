@@ -50,6 +50,11 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     browser = await chromium.connectOverCDP(endpoint);
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
+    // 실패했을 때 화면 쪽 원인을 남긴다(Windows CI 에서만 재현되는 실패를 읽기 위해).
+    const pageErrors = [];
+    context.on("page", (next) => next.on("pageerror", (error) => pageErrors.push(error.message)));
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
     // 확인 창(하네스 새 버전 적용, Claude Code 로그인이 곧 만료되는 PC 의 실행 시작 확인)은 모두 수락한다.
     page.on("dialog", (dialog) => void dialog.accept());
     // Engineering 설정 페이지: 이전 데이터 가져오기, 실행 환경, 키 저장소, 프로젝트 등록.
@@ -114,7 +119,10 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     assert.equal(denied.ok, false);
     // 빈 캔버스 안내의 버튼은 프로필이 이미 있으면 보이지 않으므로 + 노드 메뉴의 빠른 시작을 쓴다.
     await page.locator("#studio-add").click();
-    await page.getByRole("menuitem", { name: /기본 구성 추가/ }).click();
+    await page.getByRole("menuitem", { name: /기본 구성 추가/ }).click({ timeout: 15000 }).catch(async (error) => {
+      const menu = await page.locator("#studio-menu").innerText().catch(() => "(no menu)");
+      throw new Error(`기본 구성 추가 메뉴를 찾지 못했습니다. url=${page.url()} menu=${JSON.stringify(menu.slice(0, 600))} errors=${JSON.stringify(pageErrors.slice(-10))}`, { cause: error });
+    });
     await page.locator('.studio-node[data-kind="harness"]').first().waitFor({ timeout: 15000 });
     await page.locator('#studio-lines g[data-type="model"]').first().waitFor({ state: "attached" });
     assert.equal(await page.evaluate(() => mapMode), "design");
