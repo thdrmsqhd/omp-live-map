@@ -74,7 +74,8 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
     const workspace = path.join(directory, run.id);
     fs.mkdirSync(workspace);
     runs.workspace(run.id, workspace);
-    runs.change(run.id, ["queued"], "succeeded");
+    runs.change(run.id, ["queued"], "running");
+    runs.change(run.id, ["running"], "succeeded");
     const commit = "1".repeat(40), repo = "example/fixture";
     let creates = 0, dispatches = 0, posted, dispatched, ci = "failure";
     const gh = async (endpoint, method, fields) => {

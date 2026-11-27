@@ -13,6 +13,7 @@ const { addClient, removeClient, replay } = require("./sse");
 const localfs = require("./routes-localfs");
 const images = require("./routes-images");
 const { prefix, createEngineeringRoutes } = require("./edge/engineering-routes");
+const { injectOpsToken } = require("./edge/ops-token");
 const { runtime } = require("./engineering/runtime");
 const engineeringRuntime = process.env.OMP_MAP_ENGINEERING_DATA
   ? runtime(process.env.OMP_MAP_ENGINEERING_DATA, process.env.ANTHROPIC_API_KEY) : undefined;
@@ -79,10 +80,10 @@ const SHARED_SCRIPTS = {
 
 function composeIndex() {
   const shell = fs.readFileSync(path.join(UI_DIR, "index.html"), "utf8");
-  return shell.replace(/<!-- shell:([a-z-]+) -->/g, (_, name) => {
+  return injectOpsToken(shell.replace(/<!-- shell:([a-z-]+) -->/g, (_, name) => {
     const file = SHELLS[name];
     return file ? fs.readFileSync(path.join(UI_DIR, "shell", file), "utf8").trimEnd() : "";
-  });
+  }));
 }
 
 function serveStatic(res, pathname) {

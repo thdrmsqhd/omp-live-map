@@ -4,7 +4,7 @@ async function loadTree(id, dirPath) {
   // 마지막 요청만 반영한다(↻ 연타·cwd 이동이 겹칠 때).
   const tok = {};
   TREES.set(id, { path: dirPath, entries: [], loading: true, tok });
-  paintTree(id);
+  viewUpdates.tree?.(id);
   let data;
   try {
     const res = await fetch("/api/tree?p=" + encodeURIComponent(dirPath || "") + "&d=2");
@@ -14,7 +14,7 @@ async function loadTree(id, dirPath) {
   }
   if (!TREES.has(id) || TREES.get(id).tok !== tok) return;
   TREES.set(id, data);
-  paintTree(id);
+  viewUpdates.tree?.(id);
 }
 
 function findTreeEntry(entries, dirPath) {
@@ -39,7 +39,7 @@ async function loadTreeChildren(id, dirPath) {
     entry.children = [];
   }
   entry.loading = false;
-  if (TREES.get(id) === data) paintTree(id);
+  if (TREES.get(id) === data) viewUpdates.tree?.(id);
 }
 
 // 터미널 cwd 와 파일 트리 루트를 함께 옮긴다.
@@ -66,5 +66,5 @@ async function loadLocalRes() {
       if (JSON.stringify(LOCRES.get(L.id)) !== JSON.stringify(j)) { LOCRES.set(L.id, j); changed = true; }
     } catch { /* ignore */ }
   }
-  if (changed) renderMap(false);
+  if (changed) viewUpdates.map?.(false);
 }

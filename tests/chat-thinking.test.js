@@ -2,6 +2,10 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+const activity = require("../ui/js/model/activity");
+Object.assign(globalThis, activity);
+// viewmodel/live.js 의 actItems 와 같은 조립(테스트가 바꿔 끼우는 전역 liveItems·HIDE_DONE_SUBS 를 쓴다).
+globalThis.actItems = (id, st) => activity.actItemsOf(globalThis.liveItems(id), st, globalThis.HIDE_DONE_SUBS);
 const { splitRunningItems, chatActivityHTML } = require("../ui/js/view/chat-activity");
 const { liveHistoryItems } = require("../ui/js/viewmodel/live");
 

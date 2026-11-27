@@ -41,7 +41,7 @@ function placeBigCards() {
     let box = BIGPOS.get(id);
     if (!box) {
       const anchor = clusterOfCard(id);
-      box = anchor ? placeSatellite(anchor) : placeInView(BIG_W, BIG_H);
+      box = anchor ? placeSatellite(anchor) : (() => { const size = bigCardSize(); return placeInView(size.w, size.h); })();
       BIGPOS.set(id, box);
       changed = true;
     }

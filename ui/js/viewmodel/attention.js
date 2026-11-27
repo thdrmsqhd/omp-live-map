@@ -25,7 +25,7 @@ function attnEmit(ev) {
 
 // 카드 클래스·미니맵 점은 view 가 칠한다(아직 로드 전이면 다음 렌더가 맞춘다).
 function attnPaintNow() {
-  if (typeof paintAttention === "function") paintAttention();
+  viewUpdates.attention?.();
 }
 
 function attnClear(id) {

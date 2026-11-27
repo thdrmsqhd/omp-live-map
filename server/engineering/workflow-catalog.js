@@ -15,17 +15,23 @@ const { listPresets } = require("./workflow-presets");
 // 템플릿 이름을 돌려준다. 목록에서 사용자가 저장한 Workflow 와 구분해 보여 주려고 쓴다.
 function generatedTemplate(name) {
   const match = /^(.+) · ([0-9a-f]{12})$/.exec(name);
+  if (match?.[1].startsWith("Loop 실행 · ")) return "Loop 실행";   // workflow-launch.js loopLaunch 가 만든 사본
   return match && listPresets().some((preset) => preset.name === match[1]) ? match[1] : null;
 }
 
 function workflowCatalog(db, catalog) {
+  // Workflow 는 정의처럼 개인·팀·프로젝트 범위를 갖는다(v14). project 는 '이 프로젝트에서 쓸 수 있는가'를 묻는 문맥이다.
   function get(project, id, version) {
-    const row = db.prepare(`SELECT w.id, w.project, v.version, v.payload FROM workflow w JOIN workflow_version v
-      ON w.id=v.workflow WHERE w.project=? AND w.id=? AND v.version=COALESCE(?,w.version)`).get(project, id, version ?? null);
-    if (!row) throw problem(404, "Workflow version not found");
+    const row = db.prepare(`SELECT w.id, w.project, w.team, w.scope, v.version, v.payload FROM workflow w JOIN workflow_version v
+      ON w.id=v.workflow WHERE w.id=? AND v.version=COALESCE(?,w.version)`).get(id, version ?? null);
+    if (!row || !catalog.availableTo(row, project)) throw problem(404, "Workflow version not found");
     const payload = JSON.parse(row.payload);
     return { ...row, name: payload.name, payload };
   }
+  const ownerOfRow = (row) => ({ scope: row.scope, project: row.project ?? null, team: row.team ?? null });
+  const sameOwner = (a, b) => a.scope === b.scope && (a.project ?? null) === (b.project ?? null) && (a.team ?? null) === (b.team ?? null);
+  // 프로젝트에서 보이는 Workflow: 그 프로젝트 것 + 개인 + 같은 팀.
+  const VISIBLE = "(w.scope='personal' OR (w.scope='project' AND w.project=?) OR (w.scope='team' AND w.team IS ?))";
 
   function resolveProfile(node) {
     const profile = profiles.pinned(node.profileId, node.profileVersion);
@@ -65,16 +71,25 @@ function workflowCatalog(db, catalog) {
     }
   }
 
-  function plan(project, payload) {
+  // owner 를 주면(팀·개인 Workflow 저장) 참조하는 정의·하위 Workflow 도 그 범위에서 쓸 수 있어야 한다.
+  // 팀 Workflow 가 한 프로젝트의 하네스를 참조하면 같은 팀의 다른 프로젝트에서 풀리지 않기 때문이다.
+  function plan(project, payload, owner = null) {
     catalog.project(project);
     const result = compileGraph(payload);
     const definitions = new Map();
     for (const item of result.document.nodes) {
       if (item.type === "profile") resolveProfile(item);
-      if (item.type === "subgraph") item.version = get(project, item.workflow, item.version).version;
+      if (item.type === "subgraph") {
+        const sub = get(project, item.workflow, item.version);
+        if (owner && owner.scope !== "project" && !catalog.availableToOwner(sub, owner)) {
+          throw problem(400, "Workflow node references a workflow outside this workflow's scope");
+        }
+        item.version = sub.version;
+      }
       if (!item.definition) continue;
       const target = catalog.versionOf(item.definition, item.version);
-      if (!catalog.availableTo(target, project) || target.kind !== (item.type === "agent" ? "harness" : "loop")) {
+      if (!catalog.availableTo(target, project) || target.kind !== (item.type === "agent" ? "harness" : "loop") ||
+          (owner && owner.scope !== "project" && !catalog.availableToOwner(target, owner))) {
         throw problem(400, "Workflow node references a definition of the wrong project or kind");
       }
       item.version = target.version;
@@ -97,18 +112,24 @@ function workflowCatalog(db, catalog) {
   function writeWorkflow(body) {
     const project = string(body.project, "project");
     if (catalog.project(project).archived) throw problem(409, "Project is archived");
-    const { document } = plan(project, body.payload);
     const previous = body.id ? get(project, string(body.id, "workflow")) : null;
+    // 범위는 처음 저장할 때 정하고 바꾸지 않는다. 팀 범위는 이 프로젝트의 팀으로 정한다.
+    const owner = previous ? ownerOfRow(previous)
+      : catalog.definitionOwner(body.scope ?? "project", project, body.scope === "team" ? catalog.project(project).team : null);
+    if (previous && body.scope !== undefined && body.scope !== previous.scope) throw problem(400, "Workflow scope is immutable");
+    const { document } = plan(project, body.payload, owner);
     if (previous && integer(body.version, "workflow version", 1, Number.MAX_SAFE_INTEGER) !== previous.version) {
       throw problem(409, "Workflow changed. Reload it before saving.");
     }
     const id = previous?.id ?? randomUUID();
     const version = (previous?.version ?? 0) + 1;
     executionPlan(project, document, id);
-    const duplicate = db.prepare("SELECT id FROM workflow WHERE project=? AND name=?").get(project, document.name);
+    const duplicate = db.prepare("SELECT id FROM workflow WHERE scope=? AND project IS ? AND team IS ? AND name=?")
+      .get(owner.scope, owner.project, owner.team, document.name);
     if (duplicate && duplicate.id !== id) throw problem(409, "Workflow name is already in use");
     if (previous) db.prepare("UPDATE workflow SET version=?, name=? WHERE id=?").run(version, document.name, id);
-    else db.prepare("INSERT INTO workflow VALUES (?,?,?,?)").run(id, project, document.name, version);
+    else db.prepare("INSERT INTO workflow(id,project,team,scope,name,version) VALUES (?,?,?,?,?,?)")
+      .run(id, owner.project, owner.team, owner.scope, document.name, version);
     db.prepare("INSERT INTO workflow_version VALUES (?,?,?)").run(id, version, JSON.stringify(document));
     const ref = db.prepare("INSERT INTO workflow_definition VALUES (?,?,?,?,?)");
     const subref = db.prepare("INSERT INTO workflow_subgraph VALUES (?,?,?,?,?)");
@@ -132,8 +153,8 @@ function workflowCatalog(db, catalog) {
       FROM workflow w JOIN workflow_definition x ON x.workflow=w.id AND x.version=w.version
       JOIN definition d ON d.id=x.target
       LEFT JOIN definition_ref r ON d.kind='loop' AND r.source=x.target AND r.version=x.target_version
-      WHERE w.project=? AND ((d.kind='harness' AND x.target=?) OR r.target=?)
-      ORDER BY w.name,x.node`).all(project, id, id);
+      WHERE ${VISIBLE} AND ((d.kind='harness' AND x.target=?) OR r.target=?)
+      ORDER BY w.name,x.node`).all(project, catalog.project(project).team ?? null, id, id);
   }
 
   function relinkHarness(body) {
@@ -168,7 +189,7 @@ function workflowCatalog(db, catalog) {
       }
       let loop = null;
       if (node.type === "loop") {
-        loop = writeLoopOverride(project, pinned, {}, next.version);
+        loop = writeLoopOverride(project, pinned, {}, next.version, ownerOfRow(workflow));
         node.definition = loop.id;
         node.version = loop.version;
       } else node.version = next.version;
@@ -176,11 +197,13 @@ function workflowCatalog(db, catalog) {
     });
   }
 
-  function writeLoopOverride(project, pinned, changes, referenceVersion) {
+  // Loop 설정을 바꾼 사본은 Workflow 와 같은 범위에 둔다(팀 Workflow 의 사본은 팀 범위).
+  function writeLoopOverride(project, pinned, changes, referenceVersion, owner = { scope: "project", project, team: null }) {
     const latest = catalog.versionOf(pinned.id);
-    const local = latest.scope === "project";
+    const local = sameOwner(ownerOfRow(latest), owner);
     const name = local ? latest.name : latest.name.slice(0, 216) + " · " + randomUUID().slice(0, 8);
-    return catalog.writeDefinition({ project, kind: "loop", ...(local ? { id: latest.id, version: latest.version } : {}),
+    return catalog.writeDefinition({ scope: owner.scope, project: owner.project ?? undefined, team: owner.team ?? undefined,
+      kind: "loop", ...(local ? { id: latest.id, version: latest.version } : {}),
       payload: { ...pinned.payload, ...changes, name }, referenceVersion });
   }
 
@@ -204,7 +227,7 @@ function workflowCatalog(db, catalog) {
         const key = JSON.stringify([previous.id, previous.version, attempts]);
         if (!replacements.has(key)) {
           const harness = catalog.dependency(previous);
-          replacements.set(key, writeLoopOverride(project, previous, { attempts }, harness.version));
+          replacements.set(key, writeLoopOverride(project, previous, { attempts }, harness.version, ownerOfRow(current)));
         }
         const replacement = replacements.get(key);
         node.definition = replacement.id;
@@ -215,7 +238,7 @@ function workflowCatalog(db, catalog) {
   }
 
   function ensurePreset(project, payload) {
-    for (const row of db.prepare("SELECT id FROM workflow WHERE project=? AND name=?").all(project, payload.name)) {
+    for (const row of db.prepare("SELECT id FROM workflow WHERE scope='project' AND project=? AND name=?").all(project, payload.name)) {
       const existing = get(project, row.id, 1);
       if (JSON.stringify(existing.payload) === JSON.stringify(plan(project, payload).document)) return existing;
       throw problem(409, "A workflow already uses this template name");
@@ -224,8 +247,9 @@ function workflowCatalog(db, catalog) {
   }
 
   return { get, plan, executionPlan, ensurePreset, saveCanvas, save: (body) => transaction(db, () => writeWorkflow(body)), harnessUses, relinkHarness, list(project) {
-    catalog.project(project);
-    return db.prepare("SELECT id,name,version FROM workflow WHERE project=? ORDER BY name,id").all(project).map((row) => {
+    const team = catalog.project(project).team ?? null;
+    return db.prepare(`SELECT w.id,w.name,w.version,w.scope,w.team FROM workflow w WHERE ${VISIBLE}
+      ORDER BY CASE w.scope WHEN 'project' THEN 1 WHEN 'team' THEN 2 ELSE 3 END,w.name,w.id`).all(project, team).map((row) => {
       const template = generatedTemplate(row.name);
       return template ? { ...row, generated: true, template } : row;
     });

@@ -50,6 +50,11 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     browser = await chromium.connectOverCDP(endpoint);
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
+    // 실패했을 때 화면 쪽 원인을 남긴다(Windows CI 에서만 재현되는 실패를 읽기 위해).
+    const pageErrors = [];
+    context.on("page", (next) => next.on("pageerror", (error) => pageErrors.push(error.message)));
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
     // 확인 창(하네스 새 버전 적용, Claude Code 로그인이 곧 만료되는 PC 의 실행 시작 확인)은 모두 수락한다.
     page.on("dialog", (dialog) => void dialog.accept());
     // Engineering 설정 페이지: 이전 데이터 가져오기, 실행 환경, 키 저장소, 프로젝트 등록.
@@ -107,6 +112,7 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     const project = (await request("projects")).find(({ name }) => name === "desktop fixture").id;
     // 관제 화면의 설계 모드에서는 프로젝트 등록 같은 설정 쓰기를 막는다.
     await page.goto(origin + "/?mode=design&project=" + project);
+    await page.locator('#design[data-ready="1"]').waitFor({ state: "attached", timeout: 30000 });
 
     // 설계 모드(관제 화면 안 노드 캔버스): 기본 구성 → 노드와 연결선.
     await page.locator("#design").waitFor();
@@ -114,7 +120,10 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     assert.equal(denied.ok, false);
     // 빈 캔버스 안내의 버튼은 프로필이 이미 있으면 보이지 않으므로 + 노드 메뉴의 빠른 시작을 쓴다.
     await page.locator("#studio-add").click();
-    await page.getByRole("menuitem", { name: /기본 구성 추가/ }).click();
+    await page.getByRole("menuitem", { name: /기본 구성 추가/ }).click({ timeout: 15000 }).catch(async (error) => {
+      const menu = await page.locator("#studio-menu").innerText().catch(() => "(no menu)");
+      throw new Error(`기본 구성 추가 메뉴를 찾지 못했습니다. url=${page.url()} menu=${JSON.stringify(menu.slice(0, 600))} errors=${JSON.stringify(pageErrors.slice(-10))}`, { cause: error });
+    });
     await page.locator('.studio-node[data-kind="harness"]').first().waitFor({ timeout: 15000 });
     await page.locator('#studio-lines g[data-type="model"]').first().waitFor({ state: "attached" });
     assert.equal(await page.evaluate(() => mapMode), "design");
@@ -136,9 +145,11 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
       { id: "start", label: "Start", type: "start", x: 0, y: 40 }, { id: "end", label: "End", type: "end", x: 420, y: 40 }],
     edges: [{ from: "start", to: "end", port: "next" }] } });
     await page.goto(origin + "/?mode=design&project=" + project + "&workflow=" + created.id);
+    await page.locator('#design[data-ready="1"]').waitFor({ state: "attached", timeout: 30000 });
     const start = page.locator('.studio-node[data-key="step:start"]');
     await start.waitFor({ timeout: 15000 });
     const handle = start.locator(".studio-head");
+    await handle.scrollIntoViewIfNeeded();
     const bounds = await handle.boundingBox();
     const originalX = await start.evaluate((node) => parseFloat(node.style.left));
     assert.ok(bounds);
@@ -147,7 +158,14 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     await page.mouse.move(bounds.x + 90, bounds.y + 40, { steps: 6 });
     await page.mouse.up();
     const moved = await start.evaluate((node) => parseFloat(node.style.left));
-    assert.ok(moved > originalX);
+    if (!(moved > originalX)) {
+      const at = await page.evaluate(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        const describe = (node) => node ? node.tagName.toLowerCase() + (node.id ? "#" + node.id : "") + (node.className && typeof node.className === "string" ? "." + node.className.trim().split(/\s+/).join(".") : "") : "none";
+        return { hit: describe(hit), parent: describe(hit?.parentElement), viewport: [innerWidth, innerHeight], dpr: devicePixelRatio };
+      }, [bounds.x + 30, bounds.y + 10]);
+      assert.fail(`노드를 끌어도 움직이지 않았습니다. before=${originalX} after=${moved} bounds=${JSON.stringify(bounds)} at=${JSON.stringify(at)} errors=${JSON.stringify(pageErrors.slice(-10))}`);
+    }
     await page.locator("#studio-check").click();
     await page.locator("#studio-status").filter({ hasText: "검사 통과" }).waitFor();
     await page.locator("#studio-save").click();
@@ -276,6 +294,9 @@ async function verifyLiveMap(page, origin, project) {
   await page.locator("#studio-workflow option:checked").filter({ hasText: "CI workflow · v2" }).waitFor({ state: "attached" });
   await page.locator("#studio-run").click();
   await launch.locator('[name="source"] option:checked').filter({ hasText: "CI workflow · v2" }).waitFor({ state: "attached" });
-  assert.equal(await page.evaluate(() => mapMode), "map");
+  // 설계 화면을 떠나지 않고, 캔버스에서 고른 프로젝트·Workflow는 고정된다.
+  assert.equal(await page.evaluate(() => mapMode), "design");
+  assert.equal(await launch.locator('[name="source"]').isDisabled(), true);
+  assert.equal(await launch.locator('[name="project"]').isDisabled(), true);
   await launch.getByRole("button", { name: "닫기", exact: true }).click();
 }

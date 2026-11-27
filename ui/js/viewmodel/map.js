@@ -147,12 +147,21 @@ function sessionKeyOfNode(id) {
 
 // 큰 카드 하나를 접는다. 다른 열린 카드와 카드별 배치는 건드리지 않는다.
 function closeCard(id) {
-  if (!id) id = typeof activeCardId !== "undefined" ? activeCardId : null;
+  if (!id) id = activeCardId;
   if (!id) return;
-  if (typeof dockOnClose === "function") dockOnClose(id);   // 메인이면 연결 서브도 함께, 서브면 자동 열림 끄기
-  if (typeof edDispose === "function") edDispose(id);   // 카드별 Monaco·탭·모델 정리
+  viewUpdates.cardClosing?.(id);   // 도킹 서브 정리·편집기 dispose(view, app.js 가 연결)
   openIds.delete(id);
-  if (typeof cardClosed === "function") cardClosed(id);
+  viewUpdates.cardClosed?.(id);
   SATS.delete(id);
+  releaseCardState(id);
   saveOpenCards();
+}
+
+// 닫힌 카드가 들고 있던 화면 상태를 놓는다: 대화(blob 미리보기 포함), 컨텍스트 블록 데이터,
+// DB 블록에 입력해 둔 비밀번호. 세션·배치·별칭처럼 다시 열 때 이어 써야 하는 것은 남긴다.
+function releaseCardState(id) {
+  if (typeof releaseChatState === "function") releaseChatState(id);
+  CTX.delete(id);
+  const db = DBUI.get(id);
+  if (db) { db.password = ""; db.res = null; }
 }

@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { ROOT } = require("../config");
+// 페이로드 규칙은 정의 저장소와 같이 쓴다(순수 모듈만 끌어온다).
+const { profilePayload, field } = require("../engineering/profile-payload");
 
 let db;
 
@@ -41,44 +43,25 @@ function store() {
 const sessionKey = (node) => process.platform === "win32" ? path.normalize(node).toLowerCase() : path.normalize(node);
 const unpack = ({ id, version, payload }) => ({ id, version, ...JSON.parse(payload) });
 
-function list() {
+function legacyList() {
   return store().prepare("SELECT id, version, payload FROM profiles").all().map(unpack)
     .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
-function get(id, version) {
+function legacyGet(id, version) {
   const row = store().prepare("SELECT id, version, payload FROM profiles WHERE id=? AND version=?").get(id, version);
   if (!row) throw new Error("하네스가 변경되었거나 삭제되었습니다. 목록을 다시 열어 주세요.");
   return unpack(row);
 }
 
-function pinned(id, version) {
+function legacyPinned(id, version) {
   const row = store().prepare(`SELECT id, version, payload FROM profiles WHERE id=? AND version=?
     UNION ALL SELECT id, version, payload FROM profile_history WHERE id=? AND version=?`).get(id, version, id, version);
   return row && unpack(row);
 }
 
-function field(value, limit, label) {
-  if (value == null) return "";
-  if (typeof value !== "string" || value.length > limit || value.includes("\0")) {
-    throw new Error(label + " 형식을 확인해 주세요.");
-  }
-  return value.trim();
-}
-
-function save(input) {
-  const name = field(input.name, 120, "이름");
-  const role = field(input.role, 240, "역할");
-  const instructions = field(input.instructions, 12000, "작업 지시");
-  const adapter = input.adapter;
-  const model = field(input.model, 160, "모델");
-  const provider = adapter === "omp" && model ? field(input.provider, 80, "모델 제공자") : "";
-  if (!name || !["omp", "claude"].includes(adapter)) throw new Error("이름과 실행기를 입력해 주세요.");
-  if (adapter === "omp" && model && !provider) throw new Error("OMP 모델을 지정하려면 모델 제공자도 입력해 주세요.");
-  if (adapter === "claude" && model && !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,79}$/.test(model)) {
-    throw new Error("Claude 모델 ID 형식을 확인해 주세요.");
-  }
-  const payload = { name, role, instructions, adapter, model, provider };
+function legacySave(input) {
+  const payload = profilePayload(input);
   const body = JSON.stringify(payload);
   const connection = store();
   if (!input.id) {
@@ -94,7 +77,7 @@ function save(input) {
   return { id, version: version + 1, ...payload };
 }
 
-function remove(id, version) {
+function legacyRemove(id, version) {
   if (typeof id !== "string" || !Number.isSafeInteger(version)) throw new Error("하네스 버전을 확인해 주세요.");
   if (!store().prepare("DELETE FROM profiles WHERE id=? AND version=?").run(id, version).changes) {
     throw new Error("하네스가 변경되었거나 삭제되었습니다. 목록을 다시 열어 주세요.");
@@ -123,4 +106,33 @@ function close() {
   db = undefined;
 }
 
-module.exports = { close, list, get, pinned, save, remove, assign, assigned, systemPrompt };
+// 프로필 정의(list·get·pinned·save·remove)를 어디에 둘지 고른다.
+// 엔지니어링 DB가 열리면(데스크톱) 정의 저장소(definition kind='profile', 개인·팀 범위)를 쓰고,
+// 웹 모드에서는 이 파일의 session-harness.sqlite 를 그대로 쓴다. 세션 배정(assignments)은 늘 이 파일에 남는다.
+const legacy = { list: legacyList, get: legacyGet, pinned: legacyPinned, save: legacySave, remove: legacyRemove };
+let backend = legacy;
+
+function useDefinitions(next) {
+  backend = next || legacy;
+}
+
+// 이전 저장소를 읽기만 한다(가져오기용). 파일이 없으면 null.
+function legacyRows() {
+  const dir = process.env.OMP_MAP_STATE || path.join(ROOT, "data");
+  if (!db && !fs.existsSync(path.join(dir, "session-harness.sqlite"))) return null;
+  const connection = store();
+  return {
+    file: path.join(dir, "session-harness.sqlite"),
+    current: connection.prepare("SELECT id, version, payload FROM profiles").all(),
+    history: connection.prepare("SELECT id, version, payload FROM profile_history").all(),
+  };
+}
+
+module.exports = {
+  close, assign, assigned, systemPrompt, useDefinitions, legacyRows, legacy,
+  list: () => backend.list(),
+  get: (id, version) => backend.get(id, version),
+  pinned: (id, version) => backend.pinned(id, version),
+  save: (input) => backend.save(input),
+  remove: (id, version) => backend.remove(id, version),
+};

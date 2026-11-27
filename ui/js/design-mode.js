@@ -4,6 +4,7 @@
 //  - 캔버스의 '관제에서 실행' → 관제로 돌아가 새 실행 대화상자를 연다.
 // 주소: /?mode=design&project=<프로젝트>&workflow=<Workflow>
 import { bindStudio } from "./studio.js";
+import { bindFirstRun } from "./first-run.js";
 
 const find = (id) => document.getElementById(id);
 const PROJECT_KEY = "omp-design-project";
@@ -26,10 +27,17 @@ if (window.engineeringDesktop) {
   const studio = bindStudio({
     find, request, report,
     currentProject: () => projects.find(({ id }) => id === picker.value),
+    // 설계 화면을 떠나지 않고 같은 자리에서 실행 대화상자를 연다. 프로젝트·Workflow는 지금 캔버스의 것으로 고정한다.
     openWorkflow(id) {
-      setMapMode("map");
       if (typeof openMapWorkflowLaunch === "function") void openMapWorkflowLaunch(picker.value, id, { returnToDesign: true });
     },
+  });
+
+  const firstRun = bindFirstRun({
+    find, request,
+    currentProject: () => projects.find(({ id }) => id === picker.value),
+    reloadProjects: async (chosen) => { await loadProjects(chosen); await studio.reload(); },
+    openWorkflow: (id) => studio.showWorkflow(id),
   });
 
   async function loadProjects(chosen) {
@@ -41,6 +49,7 @@ if (window.engineeringDesktop) {
     await studio.selectProject(picker.value, projects.find(({ id }) => id === picker.value));
     loaded = picker.value;
     if (active) window.OMPIndependentEvaluation?.show(picker.value); window.UnifiedProjectContext?.show(loaded);
+    void firstRun.refresh();
   }
   // 모드 전환 이벤트와 '설계에서 편집'이 동시에 부를 수 있으므로 진행 중인 준비를 함께 기다린다
   // (그렇지 않으면 캔버스 새로 고침이 방금 연 Workflow 선택을 되돌린다).
@@ -71,6 +80,7 @@ if (window.engineeringDesktop) {
     loaded = picker.value;
     if (active) window.UnifiedProjectContext?.show(loaded);
     window.UnifiedWorkflow?.paint();
+    void firstRun.refresh();
   }));
   document.addEventListener("omp-mode", (event) => { if (event.detail === "design") void enter(); else leave(); });
   addEventListener("beforeunload", (event) => { if (studio.dirty()) event.preventDefault(); });
@@ -95,12 +105,19 @@ if (window.engineeringDesktop) {
   };
 
   document.querySelector('#viewModes [data-mode="design"]').hidden = false;
+  // 처음 실행(저장된 화면 모드 없음)이고 등록 프로젝트가 없으면 첫 실행 안내가 있는 설계 화면에서 시작한다.
+  if (localStorage.getItem("omp-map-view-mode-v2") === null && !location.search) {
+    void request("projects").then((list) => { if (!list.length) setMapMode("design"); }).catch(() => {});
+  }
+  // 주소로 연 설계 화면이 프로젝트·Workflow 를 다 불러오면 #design[data-ready="1"] 로 알린다.
+  // 그 전에는 캔버스가 다시 그려지며 열린 메뉴를 닫거나 노드 위치를 되돌릴 수 있다(검증 스크립트가 이 표시를 기다린다).
+  const settle = (work) => { find("design").dataset.ready = ""; void work.finally(() => { find("design").dataset.ready = "1"; }); };
   const address = new URLSearchParams(location.search);
   if (address.get("mode") === "design" || address.get("workflow")) {
     history.replaceState(null, "", location.pathname);
-    void window.ompDesign.open({ project: address.get("project") || undefined, workflow: address.get("workflow") || undefined });
+    settle(window.ompDesign.open({ project: address.get("project") || undefined, workflow: address.get("workflow") || undefined }));
   } else if (address.get("mode") === "map") {
     history.replaceState(null, "", location.pathname);
     setMapMode("map");
-  } else if (mapMode === "design") void enter();
+  } else if (mapMode === "design") settle(enter());
 }

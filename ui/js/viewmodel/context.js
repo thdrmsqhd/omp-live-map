@@ -15,7 +15,7 @@ async function loadContext(id, force) {
   if (st.loading) return;
   if (!force && st.at && Date.now() - st.at < CTX_TTL) return;
   st.loading = true;
-  if (!st.data) paintContext(id);
+  if (!st.data) viewUpdates.context?.(id);
   let data;
   try {
     const res = await fetch("/api/context?node=" + encodeURIComponent(id));
@@ -26,7 +26,7 @@ async function loadContext(id, force) {
   st.loading = false;
   st.at = Date.now();
   if (data.ok) { st.data = data; st.error = ""; } else st.error = data.out || "컨텍스트를 읽지 못했습니다";
-  paintContext(id);
+  viewUpdates.context?.(id);
 }
 
 // 압축 지시문에서 뺄 항목 토글.
@@ -34,7 +34,7 @@ function toggleCtxOmit(id, i) {
   const st = ctxState(id);
   const n = Number(i);
   if (st.omit.has(n)) st.omit.delete(n); else st.omit.add(n);
-  paintContext(id);
+  viewUpdates.context?.(id);
 }
 
 // 편집: guide = 작업 가이드를 맵 세션에 보내기(도는 중이면 steer), compact = 지시문을 붙여 컨텍스트 압축.
@@ -42,10 +42,10 @@ async function editContext(id, mode) {
   const st = ctxState(id);
   if (st.busy) return;
   const text = (st.draft || "").trim();
-  if (!text && mode === "guide") { st.msg = "작업 가이드를 입력하세요"; paintContext(id); return; }
+  if (!text && mode === "guide") { st.msg = "작업 가이드를 입력하세요"; viewUpdates.context?.(id); return; }
   st.busy = true;
   st.msg = mode === "compact" ? "압축하는 중…" : "보내는 중…";
-  paintContext(id);
+  viewUpdates.context?.(id);
   let out;
   try {
     const res = await postJSON("/api/context", {
@@ -66,5 +66,5 @@ async function editContext(id, mode) {
   } else {
     st.msg = "실패: " + (out.out || "응답 없음") + (out.held ? " (터미널 세션은 보기만 합니다)" : "");
   }
-  paintContext(id);
+  viewUpdates.context?.(id);
 }

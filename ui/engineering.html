@@ -103,8 +103,9 @@
         <label>작업 제목 <input name="title" required></label>
         <label>작업 지시 <textarea name="instruction" required rows="4"></textarea></label>
         <button>실행</button>
+        <small>실행하면 Loop 한 단계짜리 Workflow로 시작하고 관제 맵에서 진행을 봅니다.</small>
       </form>
-      <label>실행 이력 <select id="runs"></select></label>
+      <label>이전 Loop 실행 이력 <select id="runs"></select></label>
       <div id="actions">
         <button type="button" data-operation="pause">일시정지</button>
         <button type="button" data-operation="resume">재개</button>

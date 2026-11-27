@@ -74,7 +74,7 @@ async function sendChat(id,entryOverride=null) {
   const priorBusy=st.busy;
   if (!text && !files.length) return false;
   const bad = attachProblem(files);
-  if (bad) { st.error = bad; st.retry = ""; paintChat(id); return false; }
+  if (bad) { st.error = bad; st.retry = ""; viewUpdates.chat?.(id); return false; }
   if(typeof attnClear==="function")attnClear(id);
   st.sending=true;
   st.historyOffset=0;st.search="";
@@ -93,7 +93,7 @@ async function sendChat(id,entryOverride=null) {
   Object.assign(st, { busy: true, error: "", retry: "", lastText: text, since });
   if(!entryOverride){st.draft="";st.files=[];}
   st.log.push(entry);
-  paintChat(id);
+  viewUpdates.chat?.(id);
   let out = {};
   try {
     const res = await postJSON("/api/prompt", { node: id, text, files: attachPayload(files) });
@@ -102,7 +102,7 @@ async function sendChat(id,entryOverride=null) {
     out = { ok: false, out: err.message };
   }
   st.sending=false;
-  if (out.ok) { clearAttachments(files, new Set(previews)); rememberPrompt(id,text);persistPromptDraft(id,st);paintChat(id); return true; }
+  if (out.ok) { clearAttachments(files, new Set(previews)); rememberPrompt(id,text);persistPromptDraft(id,st);viewUpdates.chat?.(id); return true; }
   // 전달되지 않은 입력은 대화 목록에서 빼고 입력창에 되돌려 다시 시도할 수 있게 한다.
   const i = st.log.indexOf(entry);
   if (i >= 0) st.log.splice(i, 1);
@@ -110,7 +110,7 @@ async function sendChat(id,entryOverride=null) {
   st.busy = priorBusy;
   st.error = "전송 실패: " + (out.out || "응답 없음");
   st.retry = entryOverride?"":"send";
-  persistPromptDraft(id,st);paintChat(id);return false;
+  persistPromptDraft(id,st);viewUpdates.chat?.(id);return false;
 }
 
 async function cancelChat(id) {
@@ -123,14 +123,14 @@ async function cancelChat(id) {
   } catch (err) {
     st.error = "취소 실패: " + err.message;
   }
-  paintChat(id);
+  viewUpdates.chat?.(id);
 }
 
 async function summarize(id) {
   const st = chatState(id);
   st.summary = "요약 생성 중…";
   st.error = "";
-  paintChat(id);
+  viewUpdates.chat?.(id);
   let fail = "";
   try {
     const res = await postJSON("/api/summary", { node: id });
@@ -141,7 +141,7 @@ async function summarize(id) {
     fail = "요약 실패: " + err.message;
   }
   if (fail) { st.summary = ""; st.error = fail; st.retry = "sum"; }
-  paintChat(id);
+  viewUpdates.chat?.(id);
 }
 
 // 컨텍스트 압축: 작업 가이드 없이 omp 의 compact 만 부른다. 결과는 요약 줄(.csum)에 남긴다.
@@ -152,7 +152,7 @@ async function compactChat(id) {
   st.summary = "";
   st.error = "";
   st.retry = "";
-  paintChat(id);
+  viewUpdates.chat?.(id);
   let out = {};
   try {
     const res = await postJSON("/api/context", { node: id, mode: "compact" });
@@ -163,7 +163,7 @@ async function compactChat(id) {
   st.compacting = false;
   if (out.ok) st.summary = out.out || "압축했습니다";
   else st.error = "압축 실패: " + (out.out || "응답 없음");
-  paintChat(id);
+  viewUpdates.chat?.(id);
 }
 
 // 비우기: omp 가 새 세션 파일로 이어 가도 카드 id·자리·이름·메모는 그대로 두고 대화만 빈다.
@@ -176,7 +176,7 @@ async function clearChat(id) {
   st.summary = "";
   st.error = "";
   st.retry = "";
-  paintChat(id);
+  viewUpdates.chat?.(id);
   let out = {};
   try {
     const res = await postJSON("/api/context", { node: id, mode: "clear" });
@@ -187,15 +187,15 @@ async function clearChat(id) {
   st.clearing = false;
   if (!out.ok) {
     st.error = (out.cancelled ? "비우기 취소: " : "비우기 실패: ") + (out.out || "응답 없음");
-    paintChat(id);
+    viewUpdates.chat?.(id);
     return;
   }
   CHAT.delete(id);        // 비우기 전 로컬 표시분·요약을 버린다
   CTX.delete(id);         // 컨텍스트 블록 캐시도 새 기록 기준으로 다시 읽는다
   CHAT_TOOL.delete(id);
   await reloadGraph();
-  renderMap(false, true);
-  paintChat(id);
+  viewUpdates.map?.(false, true);
+  viewUpdates.chat?.(id);
 }
 
 // 오류 줄의 "다시 시도": 마지막 전송 입력 또는 요약을 그대로 다시 요청한다.
@@ -206,7 +206,7 @@ function retryChat(id) {
   st.retry = "";
   if (kind === "sum") summarize(id);
   else if (kind === "send") { if(!st.draft)st.draft=st.lastText||"";persistPromptDraft(id,st);submitPrompt(id); }
-  else paintChat(id);
+  else viewUpdates.chat?.(id);
 }
 
 // SSE chat 이벤트. 보낸 탭은 sendChat 이 입력을 이미 기록했으므로 다른 탭에서 보낸 것만 여기서 기록한다.
@@ -256,5 +256,19 @@ function handleChatEvent(c) {
 // 툴 칩을 누르면 대화를 그 툴을 쓴 턴으로 거른다. 같은 칩을 다시 누르면 푼다.
 function toggleChatTool(id, tool) {
   if (CHAT_TOOL.get(id) === tool) CHAT_TOOL.delete(id); else CHAT_TOOL.set(id, tool);
-  renderMap(false, true);
+  viewUpdates.map?.(false, true);
+}
+
+// 카드를 닫을 때 그 카드의 대화 화면 상태를 놓는다(세션은 그대로 돈다).
+// 보내는 중이거나 대기열·첨부가 남아 있으면 잃을 것이 있으니 그대로 둔다. 초안은 저장소에 남긴다.
+// 다시 열면 chatState 가 저장된 초안과 서버 기록으로 새로 만든다.
+function releaseChatState(id) {
+  const st = CHAT.get(id);
+  if (!st) return false;
+  if (st.busy || st.sending || st.compacting || st.clearing || st.queue?.length || st.files?.length) return false;
+  if (typeof persistPromptDraft === "function") persistPromptDraft(id, st);
+  for (const urls of st.previews?.values?.() || []) revokePreviews(urls);
+  for (const e of st.log || []) if (e.previews) revokePreviews(e.previews);
+  CHAT.delete(id);
+  return true;
 }

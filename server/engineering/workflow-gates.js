@@ -1,6 +1,6 @@
 "use strict";
 
-const { gateForRole } = require("../engineering/harness-kinds");
+const { gateForRole } = require("./harness-kinds");
 
 const manualGateText = Object.freeze({
   browser: "브라우저의 결제·동의·비밀번호 화면은 그 창에서 직접 처리하세요. 관제에는 그 정보를 입력하지 마세요.",

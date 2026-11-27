@@ -76,22 +76,6 @@
 
 각 유형의 원본 계약과 스키마 키는 `server/engineering/harness-kinds.js`에 선언했다. 예: 검색은 `evidence_list`를 넘기고 답변을 생성하지 않는다. 답변은 `cited_answer`를 생성하고 출처 문제를 검색에 되돌린다. 이 되돌림은 별도 정책이며 스스로 순환하는 실행 Edge를 만들지 않는다.
 
-## 5. 진입 방법 및 검증
+## 5. 구현 현황
 
-- 저장소에서 `node server.js --port 7800 --hours 24` 실행 후 `http://localhost:7800/workspace-prototype.html`을 연다. 기존 앱의 **설계 · 노드 캔버스** 또는 **Live Map의 Workflow 실행 상세**에서 **통합 관제 프로토타입**을 눌러도 된다. HTML 단일 파일은 서버 없이 동작하지만 파일 연결/저장 기능은 브라우저의 `file:` 정책을 따른다.
-- `모의 실행`의 첫 샘플: 검색 산출물 확인 → 답변 카드 ASK에 응답 → 외부 평가 관찰 완료. 별도 시나리오: `노드 추가`로 시스템 운영을 추가하고 실행 → UAC 관문에서 수정 지시 → 계속 대기 확인 → 반려하여 후속 평가가 시작되지 않는지 확인.
-- `node --test tests/verification/workspace-prototype.cjs`: 카탈로그 6/18, 계약 불일치·순환 차단, 평가 레인 격리, 불변 실행 스냅샷, ASK·UAC, 로컬 저장 복원, 파일 재확인, 모바일 넘침 검사를 실행한다.
-
-### 코드 위치
-
-- `ui/workspace-prototype.html`, `ui/css/workspace-prototype.css`: 화면 구조, 반응형 레이아웃.
-- `server/engineering/harness-kinds.js`, `ui/js/workspace-model.js`: 선언형 계약, 설계 검증 및 모의 실행 데이터.
-- `ui/js/workspace-prototype.js`: 캔버스와 계약선, 편집, 실행/개입, 로그, 문서 연동.
-- `ui/index.html`: 기존 화면에서 새 프로토타입으로 가는 링크만 추가.
-
-### 기존 화면 연결 변경 전 / 후 (원문 발췌)
-
-| 변경 전 | 변경 후 |
-|---|---|
-| `<a href="/engineering.html">프로젝트·팀·실행 환경 설정</a>` | `<a href="/workspace-prototype.html">통합 관제 프로토타입</a>`<br>`<a href="/engineering.html">프로젝트·팀·실행 환경 설정</a>` |
-| `<a id="wf-map-engineering">설계에서 편집</a>` | `<a id="wf-map-engineering">설계에서 편집</a><a href="/workspace-prototype.html">통합 관제 프로토타입</a>` |
+이 문서의 설계는 `index.html`의 설계 모드(`ui/js/design-mode.js`, `ui/js/studio*.js`)와 서버 `server/engineering/harness-kinds.js`에 반영되었다. 설계 단계에서 쓰던 독립 프로토타입(`workspace-prototype.html`)과 그 검증 스크립트는 앱에서 연결이 없어져 2026-11-27에 삭제했다(git 기록에 남아 있다).

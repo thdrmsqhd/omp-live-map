@@ -1,10 +1,8 @@
 /* omp-live-map · view · 스테이지 잡 카드 (백그라운드 잡: 상태·경과·출력 스트리밍) */
 
 // 열어 둔 잡 카드와 그 출력의 스크롤 상태(렌더를 다시 해도 유지한다).
-const JOBOPEN = new Set();
 const JOBSTICK = new Map();
 
-const jobKeyOf = (j) => `${j.file || j.session || ""}|${j.id}`;
 
 // 잡 카드가 보여줄 출력: 맵 세션이면 rpc 로 흐른 출력, TUI 세션이면 끝날 때 붙은 꼬리.
 function jobOutText(j) {

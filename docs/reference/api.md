@@ -33,7 +33,7 @@
 | `GET /api/claude/status` | Claude Code CLI 상태 `{ok, installed, version, auth{loggedIn, method}}` |
 | `POST /api/claude/options` · `/api/claude/project-info` · `/api/claude/queue` | Claude Code 카드용 옵션·프로젝트 정보·프롬프트 대기열 |
 | `POST /api/session/stop` · `/api/session/switch` | 세션 종료 · 하네스 전환(omp ↔ Claude Code) |
-| `GET`·`POST /api/session-harnesses` | 세션 하네스 프로필 목록·변경 `{ok, profiles[]}` |
+| `GET`·`POST /api/session-harnesses` | 세션 하네스 프로필 목록·변경 `{ok, profiles[]}`. 데스크톱(엔지니어링 DB)에서는 정의 저장소(`definition` kind=`profile`)를 쓰고 새 프로필에 `scope`(`personal`·`team`)·`team`을 받습니다. 웹 모드는 `session-harness.sqlite`를 씁니다 |
 | `POST /api/chat/activity` · `/api/chat/answer` · `/api/chat/diff` | 대화 블록 보조: 턴별 활동 기록, 질문 카드 답변, 세션 폴더의 파일 diff |
 | `/api/engineering/*` | 데스크톱 앱 전용. 앱의 토큰 헤더가 없으면 403 |
 

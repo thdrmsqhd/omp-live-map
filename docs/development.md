@@ -1,10 +1,10 @@
 # 개발과 검증
 
-**앞으로 할 일**: [관심사별 리팩토링 계획](plans/2026-11-26-concern-refactor.md). 화면, 정의, 실행, 개입, 관찰을 나누는 순서와 확인 항목이 있다. 아직 코드를 옮기지 않았다.
+**리팩토링 기록**: [관심사별 리팩토링 계획](plans/2026-11-26-concern-refactor.md)은 코드에 반영되었다. 화면, 정의, 실행, 개입, 관찰을 나눈 순서와 확인 항목이 있다.
 
 **로컬 회귀 테스트**: `node --test`는 2026-11-26에 Node 26.5(Windows)에서 모두 통과했습니다.
 
-**Windows CI**: `main`에 push하면 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다.
+**CI**: `main` 대상 PR과 `main` push에서 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 Linux `unit` 잡(`node --test`)과 함께 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다.
 
 V4 시점의 기록은 [Windows CI #34](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45507478308)의 40건 통과, 테스트용 10개 세션에서 scan → SSE → DOM 반영 지연 P95 29.4ms(허용 기준 1,000ms)입니다. 과거 측정값이며 현재 `main`의 결과가 아닙니다. 실제 에이전트 프로세스의 메모리 절감량과 설치 프로그램은 별도 검증 대상입니다.
 

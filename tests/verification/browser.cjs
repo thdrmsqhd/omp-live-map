@@ -106,6 +106,16 @@ test("existing map opens a session card, restores panel state and renders update
       assert.equal(await page.locator("#overview .mon-card").count(),10);
       assert.equal(await page.locator("#overview .mon-card .mon-resources").count(),10);
       await page.screenshot({path:"artifacts/v4-ux/01-overview.png"});
+      // 접근성 자동 검사(axe-core): 색 대비·버튼·입력 이름. 프로젝트·워크스페이스·맵 화면.
+      const axeSource = await fs.readFile(require.resolve("axe-core/axe.min.js"), "utf8");
+      for (const mode of ["overview", "workspace", "map"]) {
+        await page.locator(`#viewModes [data-mode="${mode}"]`).click();
+        await page.waitForTimeout(300);
+        await page.evaluate(axeSource);
+        const result = await page.evaluate(() => axe.run(document, { runOnly: ["color-contrast", "button-name", "label", "select-name"] }));
+        assert.deepEqual(result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(", ")}`), [], `axe violations in ${mode}`);
+      }
+      await page.locator('[data-mode="overview"]').click();
       await page.locator("#mon-search").fill("Timing 1");
       assert.equal(await page.locator("#overview .mon-card").count(),1);
       await page.locator("#mon-search").fill("");
@@ -125,7 +135,26 @@ test("existing map opens a session card, restores panel state and renders update
       await page.locator(".node.big.active-card [data-bslot=chat]").selectOption("main");
       await page.locator('[data-mode="map"]').click();
       await sessionName("Timing 1").click(filter);
+      // 맵에서 처음 연 카드는 읽을 수 있는 배율로 보인다(대화 본문 실측 12px 이상).
+      await page.waitForTimeout(400);
+      const readable = await page.evaluate(() => {
+        const chat = document.querySelector(".node.big.active-card .cmsgs");
+        const size = chat ? parseFloat(getComputedStyle(chat).fontSize) : 0;
+        const zoom = chat ? parseFloat(getComputedStyle(chat.closest(".chat") || chat).zoom || "1") : 1;
+        return { k: view.k, px: size * zoom * view.k };
+      });
+      assert.ok(readable.k >= 0.8 && readable.px >= 12, `card opened unreadable: ${JSON.stringify(readable)}`);
       await page.screenshot({path:"artifacts/v4-ux/03-live-map.png"});
+      // 미니맵은 어떤 폭에서도 상단 바(줌·배치 도구·검색)를 가리지 않는다.
+      const minimapClear = () => page.evaluate(() => {
+        const a = document.getElementById("minimap").getBoundingClientRect(), b = document.getElementById("topbar").getBoundingClientRect();
+        return a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom;
+      });
+      for (const width of [1024, 1440, 1920]) {
+        await page.setViewportSize({ width, height: 900 });
+        assert.equal(await minimapClear(), true, `minimap overlaps the top bar at ${width}px`);
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
       const before = await page.evaluate(()=>JSON.stringify([...BIGPOS]));
       await page.locator("#layout-preset").selectOption("vertical");
       await page.locator("#layout-apply").click();

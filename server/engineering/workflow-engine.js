@@ -1,7 +1,7 @@
 "use strict";
 
 const { graphScheduler } = require("./graph-scheduler");
-const { instructionFor, manualHold } = require("../application/workflow-gates");
+const { instructionFor, manualHold } = require("./workflow-gates");
 const { retryPlan } = require("./workflow-retry-plan");
 const { nodeExecutor, nodeDefinitions } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");

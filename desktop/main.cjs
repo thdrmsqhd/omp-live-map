@@ -17,13 +17,14 @@ const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path
 const endpoints = new Set([
   "projects", "projects/archive", "teams", "definitions", "definitions/remove", "definitions/version", "harness/preview", "harness/uses", "harness/apply",
   "harness/trial", "harness/trial/cancel", "harness/trial/retry",
-  "workflows", "workflows/launch", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
+  "workflows", "workflows/launch", "workflows/launch-loop", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
   "workflows/presets/defaults", "workflows/presets/all",
   "workflow-runs", "workflow-run", "workflow-transcript", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
   "tasks", "tasks/move", "sdlc-stages", "project-budget",
   "workflow-approvals", "workflow-live-map", "workflow-dashboard", "workflow-review", "workflow-artifact", "independent-evaluation",
   "workflow-delivery/approve", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
   "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
+  "projects/register-picked",
 ]);
 
 // 관제 화면(/)은 Live Map 과 설계(노드 캔버스) 모드를 함께 담으므로 정의·Workflow 편집과 실행 API 를 모두 쓴다.
@@ -68,14 +69,36 @@ function startServer() {
   });
 }
 
-ipcMain.handle("engineering:request", async (event, { endpoint, params, payload }) => {
+// 앱 창의 메인 프레임이 이 앱의 로컬 서버 주소일 때만 IPC 를 받는다. 돌려주는 값은 그 페이지 경로다.
+function trustedPage(event) {
   const frame = event.senderFrame;
   const location = frame?.url ? new URL(frame.url) : null;
-  const fromEngineering = location?.pathname === "/engineering.html" && endpoints.has(endpoint);
-  const fromLiveMap = location?.pathname === "/" && endpoints.has(endpoint) && (payload === undefined || !settingsOnlyWrites.has(endpoint));
-  if (!window || event.sender !== window.webContents || frame !== window.webContents.mainFrame ||
-      location?.origin !== origin || !(fromEngineering || fromLiveMap)) {
-    return { ok: false, error: "Request denied" };
+  if (!window || event.sender !== window.webContents || frame !== window.webContents.mainFrame || location?.origin !== origin) return null;
+  return location.pathname;
+}
+
+// 첫 실행 안내에서 고른 폴더. 렌더러가 임의 경로를 등록하지 못하게, 메인 프로세스가 대화상자로 받은 경로만 등록을 허용한다.
+let pickedFolder = null;
+ipcMain.handle("dialog:pick-folder", async (event) => {
+  if (trustedPage(event) === null) return { ok: false, error: "Request denied" };
+  // 개발 실행(패키지 전)의 검증 스크립트만 대화상자 대신 경로를 넘길 수 있다.
+  const scripted = !app.isPackaged && process.env.OMP_MAP_TEST_PICK_FOLDER;
+  const result = scripted ? { canceled: false, filePaths: [scripted] }
+    : await dialog.showOpenDialog(window, { title: "프로젝트 Git 루트 선택", properties: ["openDirectory"] });
+  pickedFolder = result.canceled ? null : result.filePaths[0] ?? null;
+  return pickedFolder ? { ok: true, value: pickedFolder } : { ok: false, error: "선택을 취소했습니다." };
+});
+
+ipcMain.handle("engineering:request", async (event, { endpoint, params, payload }) => {
+  const page = trustedPage(event);
+  const fromEngineering = page === "/engineering.html" && endpoints.has(endpoint);
+  const fromLiveMap = page === "/" && endpoints.has(endpoint) && (payload === undefined || !settingsOnlyWrites.has(endpoint));
+  if (!(fromEngineering || fromLiveMap)) return { ok: false, error: "Request denied" };
+  if (endpoint === "projects/register-picked") {
+    if (!pickedFolder || payload?.root !== pickedFolder) return { ok: false, error: "폴더를 먼저 선택해 주세요." };
+    pickedFolder = null;
+    endpoint = "projects";
+    payload = { name: path.basename(payload.root), root: payload.root };
   }
   if (endpoint === "runtime/key") {
     try {

@@ -2,7 +2,6 @@
 
 const LIVE_TAIL = 12;   // 접힌 툴 출력에 보이는 줄 수
 const LIVE_LABEL = { think: "생각", text: "답변", sub: "서브에이전트", notify: "알림" };
-const LIVE_RUNNING = /^(running|live|started|spawned|active|pending|queued)$/i;
 
 function liveItemHTML(it) {
   if (it.kind === "sub") {
@@ -49,19 +48,6 @@ function activityStaysAtBottom(running, lastMessage, turnEndTs) {
   return msgTs <= turnEndTs;
 }
 
-// 마지막 턴의 항목 범위. 도는 중이면 마지막 turn_end 뒤, 끝났으면 그 턴(turn_end 두 개 사이)이다.
-// sub(서브 라이프사이클)·notify(알림)는 안내일 뿐이라 turn_end 뒤에 붙어도 도는 중으로 보지 않는다.
-const ACT_WORK = (it) => it.kind !== "sub" && it.kind !== "notify";
-function actRange(list) {
-  let end = -1;
-  for (let i = list.length - 1; i >= 0; i--) if (list[i].kind === "turn_end") { end = i; break; }
-  const tail = list.slice(end + 1);
-  if (tail.some(ACT_WORK)) return { items: tail, running: true };
-  if (end < 0) return { items: tail, running: false };
-  let prev = -1;
-  for (let i = end - 1; i >= 0; i--) if (list[i].kind === "turn_end") { prev = i; break; }
-  return { items: list.slice(prev + 1, end), running: false };
-}
 
 // 글(text)은 스트림이 없을 때만 활동에 넣는다. 끝난 턴의 답변은 기록 메시지가 보여준다.
 // 생각·알림·실패·진행 중 도구는 시간순으로 그대로 보여 준다. 끝난 도구만 따로 접는다.
@@ -74,16 +60,6 @@ function splitRunningItems(items) {
   return { live, done };
 }
 
-function actItems(nodeId, st) {
-  const { items, running } = actRange(liveItems(nodeId));
-  // 본문 스트림이 없는 서브에이전트는 실시간 text 가 답변이다. 스트림과 겹치면 빼 이중 표시를 막는다.
-  const showText = running && !(st && st.stream);
-  return {
-    items: items.filter((it) => (it.kind === "think" || it.kind === "tool" || it.kind === "sub" || it.kind === "notify" || (showText && it.kind === "text"))
-      && (it.kind !== "sub" || !HIDE_DONE_SUBS || !it.status || LIVE_RUNNING.test(it.status))),
-    running,
-  };
-}
 
 function actSummary(items) {
   const tool = items.filter((it) => it.kind === "tool").length;
@@ -115,4 +91,4 @@ function chatActivityHTML(nodeId, st) {
     + (open ? `<div class="lvact">${list}</div>` : "");
 }
 
-if (typeof module === "object" && module.exports) module.exports = { activityStaysAtBottom, lastTurnEndTs, splitRunningItems, actRange, chatActivityHTML };
+if (typeof module === "object" && module.exports) module.exports = { activityStaysAtBottom, lastTurnEndTs, splitRunningItems, chatActivityHTML };

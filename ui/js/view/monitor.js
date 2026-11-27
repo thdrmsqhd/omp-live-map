@@ -1,7 +1,4 @@
 /* 관제/워크스페이스/맵 셸. 기존 열린 카드 상태 및 좌표는 모드 전환 때 보존한다. */
-let mapMode = readJSON("omp-map-view-mode-v2", window.engineeringDesktop ? "map" : "overview");
-// design: 관제 화면 안의 노드 캔버스(설계) 모드. 데스크톱 앱에서만 쓴다(design-mode.js).
-if (!["map","overview","workspace","design"].includes(mapMode) || (mapMode==="design" && !window.engineeringDesktop)) mapMode="map";
 let overviewDensity = readJSON("omp-map-overview-density","standard");
 if (!["compact","standard","detailed"].includes(overviewDensity)) overviewDensity="standard";
 let overviewSort = readJSON("omp-map-overview-sort-v2","stable");

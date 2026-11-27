@@ -3,14 +3,13 @@
 const { randomUUID } = require("node:crypto");
 const { once } = require("node:events");
 const { createInterface } = require("node:readline");
-const { open } = require("../rpc");
-const { ask: registerWorkflowAsk, drop: dropWorkflowAsk, asksFor } = require("../ui-requests");
 const { resultInstruction } = require("./harness-result");
 const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
-const { acceptsWorkflowAsk, rejectsWorkflowAsk } = require("../application/workflow-gates");
+const { acceptsWorkflowAsk, rejectsWorkflowAsk } = require("./workflow-gates");
 const { claudeStreamProgress, ompToolLine } = require("./stream-progress");
 const { brokerFailure } = require("./anthropic");
+const { adapterIds } = require("./adapter-registry");
 
 // 브로커가 호출을 막았으면(구독 로그인 만료·예산 소진) CLI 의 일반 오류 대신 그 사유로 실패한다.
 function throwBrokerFailure(child) {
@@ -157,9 +156,9 @@ function execution(backend, name, run) {
   };
 }
 
-async function omp(backend, context) {
+async function omp(backend, context, io) {
   const { cwd, model, signal, budgetCents, capture } = context;
-  const rpc = open({
+  const rpc = io.rpc.open({
     cwd, launch: (program, args, options) => backend.launch(program, args, options, { budgetCents, signal, model, workflowAsk: context.workflowAsk === true }),
     terminate: (child) => backend.terminate(child),
     mainPrompt: backend.ompPrompt,
@@ -202,7 +201,7 @@ async function omp(backend, context) {
         const method = frame.method;
         if (method === "cancel" && context.workflowAsk === true) {
           const target = String(frame.targetId ?? "");
-          if (askSession && asksFor(askSession).some((item) => item.id === target)) dropWorkflowAsk(askSession);
+          if (askSession && io.asks.asksFor(askSession).some((item) => item.id === target)) io.asks.drop(askSession);
           return;
         }
         if (acceptsWorkflowAsk(method) || rejectsWorkflowAsk(method)) {
@@ -216,9 +215,9 @@ async function omp(backend, context) {
             askSession = "workflow-ask:" + randomUUID();
             progress({ askSession });
           }
-          if (asksFor(askSession).some((item) => item.id === id)) return;
+          if (io.asks.asksFor(askSession).some((item) => item.id === id)) return;
           const request = workflowAskRequest(frame);
-          registerWorkflowAsk(askSession, request, (response) => {
+          io.asks.ask(askSession, request, (response) => {
             const sent = rpc.sendRaw({ type: "extension_ui_response", id: request.id, ...workflowAskResponse(method, response) });
             return sent ? { ok: true } : { ok: false, out: "omp 프로세스에 답을 보내지 못했습니다" };
           });
@@ -254,7 +253,7 @@ async function omp(backend, context) {
     if (diagnostics) throw new Error(error.message + ": " + redact(diagnostics));
     throw error;
   } finally {
-    if (askSession) dropWorkflowAsk(askSession);
+    if (askSession) io.asks.drop(askSession);
     signal.removeEventListener("abort", onAbort);
     rpc.close();
     await closed.catch(() => {});
@@ -310,8 +309,22 @@ async function claude(backend, context) {
   }
 }
 
-function adaptersFor(backend) {
-  return new Map([["omp", execution(backend, "omp", omp)], ["claude", execution(backend, "claude", claude)]]);
+// omp 실행이 쓰는 RPC 프로세스와 질문 카드 저장소. 조립하는 쪽이 넘기지 않으면 관제 서버의 것을 쓴다.
+function defaultIo() {
+  return { rpc: require("../rpc"), asks: require("../ui-requests") };
 }
 
-module.exports = { adaptersFor, promptSections };
+// 실행기 id → 실행 함수. id 목록은 adapter-registry.js 가 정하고, 여기에는 실행 방법만 적는다.
+const runners = Object.freeze({
+  omp: (backend, context, io) => omp(backend, context, io),
+  claude: (backend, context) => claude(backend, context),
+});
+
+function adaptersFor(backend, io = defaultIo()) {
+  return new Map(adapterIds.map((id) => {
+    if (!runners[id]) throw new Error(`No runner for adapter ${id}`);
+    return [id, execution(backend, id, (runner, context) => runners[id](runner, context, io))];
+  }));
+}
+
+module.exports = { adaptersFor, promptSections, runners };

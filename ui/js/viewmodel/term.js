@@ -1,7 +1,9 @@
 /* omp-live-map · viewmodel · 터미널 명령·백그라운드 잡·인프라 조작 */
 
+// 운영 API 토큰은 서버가 index.html 에 심는다. 셸·잡·프로세스·인프라·DB 요청이 모두 이 함수를 지난다.
+const OPS_TOKEN = document.querySelector('meta[name="omp-ops-token"]')?.content || "";
 const postJSON = (url, body) => fetch(url, {
-  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  method: "POST", headers: { "Content-Type": "application/json", "X-Omp-Ops-Token": OPS_TOKEN }, body: JSON.stringify(body),
 });
 
 // 세션별 명령 기록. 연속 중복은 한 번만 남기고, ↑↓ 위치는 기록 끝으로 되돌린다.
@@ -20,7 +22,7 @@ function termLog(id, lines) {
   st.lines.push(...lines);
   if (lines.some((l)=>l.c==="cmd")) st.historyOffset=0;
   if (st.lines.length > 300) st.lines = st.lines.slice(-300);
-  paintTerm(id, lines.some((l) => l.c === "cmd"));
+  viewUpdates.term?.(id, lines.some((l) => l.c === "cmd"));
 }
 
 async function runTerm(id, cmd) {
@@ -72,7 +74,7 @@ async function loadBg(nodeId) {
       return p ? { ...j, open: p.open, stick: p.stick, top: p.top } : j;
     }));
   } catch { /* ignore */ }
-  paintBg(nodeId);
+  viewUpdates.bg?.(nodeId);
 }
 
 async function loadBgAll() {
@@ -87,7 +89,7 @@ async function loadBgAll() {
     const sig = (m) => JSON.stringify([...m.entries()].map(([k, v]) => [k, v.map((j) => [j.id, j.done, (j.tail || []).slice(-1)[0] || ""])]));
     const changed = sig(map) !== sig(BGALL);
     BGALL = map;
-    if (changed) renderMap(false);
+    if (changed) viewUpdates.map?.(false);
   } catch { /* ignore */ }
 }
 
@@ -107,7 +109,7 @@ async function infraAction(kind, target, nodeId) {
     const what = kind === "distro-stop" ? `WSL '${target}' 전체를 종료` : `컨테이너 ${target.slice(0, 12)} 중지`;
     if (!confirm(`${what}할까요?`)) return;
   }
-  if (nodeId) { PENDING.set(nodeId, kind); renderMap(false, true); }
+  if (nodeId) { PENDING.set(nodeId, kind); viewUpdates.map?.(false, true); }
   const log = (lines) => { if (nodeId && openIds.has(nodeId)) termLog(nodeId, lines); };
   try {
     const res = await postJSON("/api/infra/action", { kind, target });
@@ -126,6 +128,6 @@ async function infraAction(kind, target, nodeId) {
     log([{ t: msg, c: "err" }]);
     alert(msg);
   } finally {
-    if (nodeId) { PENDING.delete(nodeId); renderMap(false, true); }
+    if (nodeId) { PENDING.delete(nodeId); viewUpdates.map?.(false, true); }
   }
 }

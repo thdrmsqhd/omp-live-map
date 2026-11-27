@@ -39,7 +39,7 @@ function dbSelect(id, i) {
   const card = ELS.get(id);
   const pw = card && card.querySelector('.blk[data-blk="db"] .dpw');
   if (pw) pw.value = "";
-  paintDb(id);
+  viewUpdates.db?.(id);
 }
 
 function dbSaveProfile(id) {
@@ -53,7 +53,7 @@ function dbSaveProfile(id) {
   else st.profiles.push(entry);
   st.sel = st.profiles.findIndex((p) => p.name === entry.name);
   saveDbProfiles(id, st.profiles);
-  paintDb(id);
+  viewUpdates.db?.(id);
 }
 
 function dbSetType(id, type) {
@@ -63,7 +63,7 @@ function dbSetType(id, type) {
   // 포트가 이전 유형의 기본값이면 새 유형의 기본값으로 바꿔 준다(직접 넣은 값은 지킨다).
   if (!st.form.port || st.form.port === DB_PORTS[old]) st.form.port = DB_PORTS[st.form.type] || "";
   if (st.form.type !== "sqlite" && !st.form.database) st.form.database = DB_DBNAME[st.form.type] || "";
-  paintDb(id);
+  viewUpdates.db?.(id);
 }
 
 const dbHistPush = (st, sql) => {
@@ -76,10 +76,10 @@ async function runDb(id) {
   const sql = String(st.sql || "").trim();
   if (!sql) {
     st.res = { ok: false, reason: "input", error: "SQL 이 비었습니다" };
-    return paintDb(id);
+    return viewUpdates.db?.(id);
   }
   st.busy = true;
-  paintDb(id);
+  viewUpdates.db?.(id);
   try {
     const res = await postJSON("/api/db/query", { ...dbProfile(st.form), password: st.password, sql });
     st.res = await res.json();
@@ -88,7 +88,7 @@ async function runDb(id) {
     st.res = { ok: false, reason: "network", error: "요청 실패: " + e.message };
   }
   st.busy = false;
-  paintDb(id);
+  viewUpdates.db?.(id);
 }
 
 function dbUseHistory(id, i) {

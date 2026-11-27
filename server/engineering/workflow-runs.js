@@ -4,15 +4,15 @@ const { createHash, randomUUID } = require("node:crypto");
 const { event } = require("./catalog");
 const { transaction } = require("../infrastructure/sqlite");
 const { string, integer } = require("./definitions");
-const { problem, redact } = require("./state");
+const { problem, redact, workflowTransitionAllowed } = require("./state");
 const { sdlcTasks } = require("./sdlc-tasks");
 const { projectBudget } = require("./project-budget");
 
 function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, workflows)) {
   const quota = projectBudget(db);
   function get(id) {
-    const run = db.prepare(`SELECT r.*,w.project FROM workflow_run r
-      JOIN workflow w ON r.workflow=w.id WHERE r.id=?`).get(id);
+    // 실행은 시작한 프로젝트를 직접 적는다(v14). 팀·개인 Workflow 는 여러 프로젝트에서 돌 수 있다.
+    const run = db.prepare("SELECT * FROM workflow_run WHERE id=?").get(id);
     if (!run) throw problem(404, "Workflow run not found");
     const { idempotency_key, request_hash, sdlc_instruction, ...publicRun } = run;
     return publicRun;
@@ -20,6 +20,11 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
   function setStatus(id, from, to, error = null) {
     const current = get(id);
     if (!from.includes(current.status)) throw problem(409, "Workflow run changed state");
+    if (!workflowTransitionAllowed(current.status, to)) {
+      // 테스트·CI 는 OMP_STRICT_TRANSITIONS=1 로 표 밖 전이를 바로 실패시킨다.
+      if (process.env.OMP_STRICT_TRANSITIONS === "1") throw problem(409, `Unexpected workflow transition: ${current.status} → ${to}`);
+      event(db, "workflow.transition.unexpected", { id, from: current.status, to });
+    }
     db.prepare("UPDATE workflow_run SET status=?,error=? WHERE id=?").run(to, error ? redact(error) : null, id);
     event(db, "workflow.run", { id, status: to });
     tasks.followRun(id, to);
@@ -58,9 +63,9 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
       const { id, version } = launch ? launch.prepare() : existingWorkflow;
       workflows.get(project, id, version);
       const run = randomUUID(), now = Date.now();
-      db.prepare(`INSERT INTO workflow_run (id,workflow,version,title,status,created,deadline,budget,idempotency_key,request_hash,sdlc_task,sdlc_instruction)
-        VALUES (?,?,?,?,'queued',?,?,?,?,?,?,?)`)
-        .run(run, id, version, title, now, now + timeout, budget, key, hash, task?.id ?? null, instruction);
+      db.prepare(`INSERT INTO workflow_run (id,workflow,version,title,status,created,deadline,budget,idempotency_key,request_hash,sdlc_task,sdlc_instruction,project)
+        VALUES (?,?,?,?,'queued',?,?,?,?,?,?,?,?)`)
+        .run(run, id, version, title, now, now + timeout, budget, key, hash, task?.id ?? null, instruction, project);
       tasks.followRun(run, "queued");
       event(db, "workflow.created", { id: run, project, workflow: id, version });
       return { run: get(run), created: true };
@@ -84,8 +89,8 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
     create, get, nodes,
     taskInstruction: (id) => db.prepare("SELECT sdlc_instruction FROM workflow_run WHERE id=?").get(id)?.sdlc_instruction ?? "",
     list(project) {
-      return db.prepare(`SELECT r.id,r.title,r.status,r.created,r.workflow,r.version FROM workflow_run r JOIN workflow w
-        ON r.workflow=w.id WHERE w.project=? ORDER BY r.created DESC,r.id LIMIT 100`).all(project);
+      return db.prepare(`SELECT r.id,r.title,r.status,r.created,r.workflow,r.version FROM workflow_run r
+        WHERE r.project=? ORDER BY r.created DESC,r.id LIMIT 100`).all(project);
     },
     change: (id, from, to, error) => transaction(db, () => setStatus(id, from, to, error)),
     workspace: (id, workspace) => db.prepare("UPDATE workflow_run SET workspace=? WHERE id=? AND workspace IS NULL").run(workspace, id),

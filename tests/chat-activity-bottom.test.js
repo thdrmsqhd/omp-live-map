@@ -2,7 +2,13 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { activityStaysAtBottom, actRange, chatActivityHTML } = require("../ui/js/view/chat-activity");
+// 브라우저에서는 model/activity.js 가 먼저 적재되어 전역이 된다. 테스트에서도 같은 순서를 만든다.
+const activity = require("../ui/js/model/activity");
+Object.assign(globalThis, activity);
+// viewmodel/live.js 의 actItems 와 같은 조립(테스트가 바꿔 끼우는 전역 liveItems·HIDE_DONE_SUBS 를 쓴다).
+globalThis.actItems = (id, st) => activity.actItemsOf(globalThis.liveItems(id), st, globalThis.HIDE_DONE_SUBS);
+const { actRange } = activity;
+const { activityStaysAtBottom, chatActivityHTML } = require("../ui/js/view/chat-activity");
 
 test("끝난 턴 활동은 다음 사용자 메시지가 생기면 목록 맨 아래에 두지 않는다", () => {
   const previous = { role: "user", ts: 10 };

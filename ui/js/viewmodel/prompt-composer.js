@@ -15,8 +15,8 @@ function submitPrompt(id){
   if(!n||dockReadOnly(id)||!promptCanSend(id))return;
   if(s.sendMode==="queue"||(promptBusy(id)&&capsOf(n).id==="claude")){
     if(capsOf(n).id==="claude"){void enqueueClaudePrompt(id);return;}
-    const q=promptQueue(id);if(q.length>=20){s.error="예약 지시는 최대 20개입니다";paintChat(id);return;}
-    q.push({id:crypto.randomUUID(),text:s.draft,files:s.files});s.draft="";s.files=[];persistPromptDraft(id,s);paintChat(id);
+    const q=promptQueue(id);if(q.length>=20){s.error="예약 지시는 최대 20개입니다";viewUpdates.chat?.(id);return;}
+    q.push({id:crypto.randomUUID(),text:s.draft,files:s.files});s.draft="";s.files=[];persistPromptDraft(id,s);viewUpdates.chat?.(id);
     // Idle sessions may dispatch only after an explicit queue request.
     if(!promptBusy(id))void drainPromptQueue(id);
     return;
@@ -32,14 +32,14 @@ async function drainPromptQueue(id,explicit=false){
   try{
     const result=await sendChat(id,{text:entry.text,files:entry.files,queued:true});
     if(result===true)q.shift();else s.queuePaused=true;
-  }finally{s.queueRunning=false;persistPromptDraft(id,s);paintChat(id);}
+  }finally{s.queueRunning=false;persistPromptDraft(id,s);viewUpdates.chat?.(id);}
 }
-function queuePromptDone(id,success){const s=chatState(id);if(!success){s.queuePaused=true;paintChat(id);return;}if(promptQueue(id).length)setTimeout(()=>void drainPromptQueue(id),400);}
+function queuePromptDone(id,success){const s=chatState(id);if(!success){s.queuePaused=true;viewUpdates.chat?.(id);return;}if(promptQueue(id).length)setTimeout(()=>void drainPromptQueue(id),400);}
 function promptQueueChange(id,index,action){
   const s=chatState(id),q=promptQueue(id);if(s.queueRunning||!q[index])return;
   if(action==="delete"){if(!confirm("예약 지시를 삭제할까요?"))return;clearAttachments(q[index].files);q.splice(index,1);}
   if(action==="up"&&index>0)[q[index-1],q[index]]=[q[index],q[index-1]];
   if(action==="down"&&index<q.length-1)[q[index+1],q[index]]=[q[index],q[index+1]];
   if(action==="edit"){const value=prompt("예약 지시 수정",q[index].text);if(value!==null&&(value.trim()||q[index].files.length))q[index].text=value;}
-  paintChat(id);
+  viewUpdates.chat?.(id);
 }

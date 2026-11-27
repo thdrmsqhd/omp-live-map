@@ -127,3 +127,6 @@ const saveDbProfiles = (id, list) => {
   if (list.length) DBPROF.set(id, list); else DBPROF.delete(id);
   writeJSON("omp-map-dbprofiles", Object.fromEntries(DBPROF));
 };
+
+mapMode = readJSON("omp-map-view-mode-v2", window.engineeringDesktop ? "map" : "overview");
+if (!["map","overview","workspace","design"].includes(mapMode) || (mapMode==="design" && !window.engineeringDesktop)) mapMode = "map";

@@ -21,7 +21,7 @@ function projectBudget(db) {
         (SELECT COALESCE(SUM(json_extract(outcome,'$.costCents')),0) FROM workflow_node WHERE run=r.id) +
         (SELECT COALESCE(SUM(json_extract(outcome,'$.costCents')),0) FROM workflow_retry WHERE run=r.id)
       END),0) AS total FROM workflow_run r JOIN workflow w ON r.workflow=w.id
-      WHERE w.project=? AND (r.created>=? OR r.status IN ('queued','running','paused','waiting_approval'))`).get(project, cutoff).total;
+      WHERE r.project=? AND (r.created>=? OR r.status IN ('queued','running','paused','waiting_approval'))`).get(project, cutoff).total;
     const trials = db.prepare(`SELECT COALESCE(SUM(COALESCE(json_extract(s.payload,'$.cost'),
       json_extract(r.payload,'$.budget'))),0) AS total FROM event r LEFT JOIN event s
       ON s.kind='harness.trial.settled' AND json_extract(s.payload,'$.id')=json_extract(r.payload,'$.id')

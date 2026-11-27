@@ -7,6 +7,18 @@ const transitions = {
   interrupted: ["cancelled"],
 };
 
+// Workflow 실행(workflow_run)의 상태 전이. 현재 코드가 쓰는 전이를 모두 적었다(workflow-engine.js, workflow-runs.js).
+// 이 표에 없는 전이는 아직 거부하지 않고 workflow.transition.unexpected 이벤트로 남긴다(관찰 후 거부로 바꾼다).
+const workflowTransitions = Object.freeze({
+  queued: ["running", "cancelled", "limit_exceeded", "interrupted", "failed"],
+  running: ["waiting_approval", "paused", "succeeded", "failed", "cancelled", "limit_exceeded", "interrupted"],
+  waiting_approval: ["queued", "cancelled"],
+  paused: ["running", "cancelled", "limit_exceeded", "interrupted", "failed"],
+  interrupted: ["running", "cancelled", "limit_exceeded", "interrupted", "failed"],
+  failed: ["queued"],
+});
+const workflowTransitionAllowed = (from, to) => Boolean(workflowTransitions[from]?.includes(to));
+
 function problem(status, message) {
   return Object.assign(new Error(message), { status });
 }
@@ -28,4 +40,4 @@ function redact(value, secrets = []) {
     .join("\n").slice(-8000);
 }
 
-module.exports = { checkTransition, problem, redact, maskSecrets };
+module.exports = { checkTransition, problem, redact, maskSecrets, workflowTransitions, workflowTransitionAllowed };

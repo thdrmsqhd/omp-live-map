@@ -91,9 +91,17 @@ function bindMapWorkflowLaunch() {
     } catch (error) { if (revision === generation) status.textContent = error.message; }
   }
   button.hidden = false;
+  // 설계 화면에서 열면 프로젝트·Workflow는 캔버스에서 이미 골랐으므로 보여 주기만 한다.
+  function lockSelection(locked) {
+    project.disabled = locked;
+    source.disabled = locked;
+    dialog.dataset.fromDesign = locked ? "1" : "";
+    $("workflow-launch-engineering").hidden = locked;
+  }
   async function open(preferredProject, preferredWorkflow, options) {
     if (dialog.open) return;
     returnToDesign = Boolean(options?.returnToDesign);
+    lockSelection(returnToDesign);
     dialog.showModal();
     const revision = ++generation;
     project.replaceChildren();
@@ -115,7 +123,7 @@ function bindMapWorkflowLaunch() {
   };
   $("workflow-launch-close").onclick = () => { if (!pending) dialog.close(); };
   dialog.addEventListener("cancel", (event) => { if (pending) event.preventDefault(); });
-  dialog.addEventListener("close", () => { generation++; returnToDesign = false; });
+  dialog.addEventListener("close", () => { generation++; returnToDesign = false; lockSelection(false); });
   project.onchange = () => void loadProject();
   for (const control of [source, ...roles.map((role) => form.elements[role])]) control.onchange = () => {
     status.textContent = "";

@@ -109,49 +109,65 @@ function paintChatAsk(box, id) {
       }
     }
   }
+  trackWorkflowAskCards(host, id, list);
   syncAskFields(host, list);updateAskDeadlines(host);
 }
 
+const workflowAskCards = new WeakMap();
+function trackWorkflowAskCards(host, id, list) {
+  for (const card of host.querySelectorAll("[data-ask-card]")) {
+    const request = list[+card.dataset.askCard];
+    if (request) workflowAskCards.set(card, { id, request });
+    for (const button of card.querySelectorAll("button")) button.type = "button";
+  }
+}
+function bindWorkflowAskControls(host, authorized = () => true) {
+  if (host.dataset.wired) return;
+  host.dataset.wired = "1";
+  const requestHit = (element) => {
+    const card = element.closest("[data-ask-card]"), hit = workflowAskCards.get(card);
+    return hit && host.contains(card) && authorized(hit.id) && asksOf(hit.id).includes(hit.request) ? hit : null;
+  };
+  const later = (node) => setTimeout(() => paintWorkflowAskSurfaces(node), 0);
+  host.addEventListener("submit", event => event.preventDefault());
+  host.addEventListener("change", (event) => {
+    const hit = requestHit(event.target);
+    if (!hit) return;
+    const field = event.target.dataset;
+    if (field.askOpt != null) askPick(hit.id, hit.request.id, +field.askOpt, field.askLabel);
+    else if (field.askSel != null) askSelect(hit.id, hit.request.id, +field.askSel);
+    later(hit.id);
+  });
+  host.addEventListener("input", (event) => {
+    const hit = requestHit(event.target);
+    if (!hit) return;
+    const field = event.target.dataset;
+    if (field.askCustom != null) askCustom(hit.id, hit.request.id, +field.askCustom, event.target.value);
+    else if (field.askValue != null) askValue(hit.id, hit.request.id, event.target.value);
+    // 입력 중인 두 화면을 같은 모델 상태에 맞추되, 포커스를 빼앗지 않는다.
+    later(hit.id);
+  });
+  host.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || event.isComposing) return;
+    const hit = requestHit(event.target);
+    if (!hit) return;
+    event.preventDefault();
+    if (hit.request.method === "confirm") askConfirm(hit.id, hit.request.id, true); else askSend(hit.id, hit.request.id);
+    later(hit.id);
+  });
+  host.addEventListener("click", (event) => {
+    const button = event.target.closest("button"), hit = requestHit(event.target);
+    if (!button || !hit) return;
+    if (button.dataset.askSend != null) askSend(hit.id, hit.request.id);
+    else if (button.dataset.askCancel != null) askCancel(hit.id, hit.request.id);
+    else if (button.dataset.askConfirm != null) askConfirm(hit.id, hit.request.id, button.dataset.askConfirm === "1");
+    later(hit.id);
+  });
+}
 function mountChatAsk(box) {
   const host = box.querySelector(".casks");
-  if (!host || host.dataset.wired) return;
-  host.dataset.wired = "1";
-  const cardOf = (el) => {
-    const card = el.closest("[data-ask-card]");
-    const id = box.closest(".node") ? box.closest(".node").dataset.id : "";
-    const r = card ? asksOf(id)[+card.dataset.askCard] : null;
-    return r ? { id, r } : null;
-  };
-  host.addEventListener("change", (e) => {
-    const el = e.target;
-    const hit = cardOf(el);
-    if (!hit) return;
-    if (el.dataset.askOpt != null) askPick(hit.id, hit.r.id, +el.dataset.askOpt, el.dataset.askLabel);
-    else if (el.dataset.askSel != null) askSelect(hit.id, hit.r.id, +el.dataset.askSel);
-  });
-  host.addEventListener("input", (e) => {
-    const el = e.target;
-    const hit = cardOf(el);
-    if (!hit || el.dataset.askCustom == null && el.dataset.askValue == null) return;
-    if (el.dataset.askCustom != null) askCustom(hit.id, hit.r.id, +el.dataset.askCustom, el.value);
-    else askValue(hit.id, hit.r.id, el.value);
-  });
-  host.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
-    const hit = cardOf(e.target);
-    if (!hit) return;
-    e.preventDefault();
-    if (hit.r.method === "confirm") askConfirm(hit.id, hit.r.id, true);
-    else askSend(hit.id, hit.r.id);
-  });
-  host.addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    const hit = cardOf(e.target);
-    if (!btn || !hit) return;
-    if (btn.dataset.askSend != null) askSend(hit.id, hit.r.id);
-    else if (btn.dataset.askCancel != null) askCancel(hit.id, hit.r.id);
-    else if (btn.dataset.askConfirm != null) askConfirm(hit.id, hit.r.id, btn.dataset.askConfirm === "1");
-  });
+  if (!host) return;
+  bindWorkflowAskControls(host, id => box.closest(".node")?.dataset.id === id);
 }
 
 function updateAskDeadlines(host=document){for(const el of host.querySelectorAll("[data-deadline]")){const s=Math.max(0,Math.ceil((Number(el.dataset.deadline)-Date.now())/1000));el.textContent=s?"남은 "+s+"초":"만료";}}
