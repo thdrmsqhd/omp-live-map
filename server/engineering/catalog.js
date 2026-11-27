@@ -154,6 +154,18 @@ function catalog(db) {
   return {
     project, saveProject, ensureProject, versionOf, writeDefinition, availableTo, availableToOwner, definitionOwner,
     saveDefinition: (body) => transaction(db, () => writeDefinition(body)),
+    // 관제의 새 세션 창이 고르는 하네스 목록(개인 → 팀 → 프로젝트 순, 이름순).
+    harnesses: () => db.prepare(`SELECT id FROM definition WHERE kind='harness'
+      ORDER BY CASE scope WHEN 'personal' THEN 1 WHEN 'team' THEN 2 ELSE 3 END, name`).all().map(({ id }) => versionOf(id)),
+    // 프로젝트 카드 ⋯ 메뉴의 이름 바꾸기. 폴더·브랜치는 그대로 둔다.
+    renameProject(id, name) {
+      return transaction(db, () => {
+        project(id);
+        db.prepare("UPDATE project SET name=? WHERE id=?").run(string(name, "project name"), id);
+        event(db, "project.saved", { id });
+        return project(id);
+      });
+    },
     projects: () => db.prepare("SELECT p.*, t.team FROM project p LEFT JOIN project_team t ON t.project=p.id ORDER BY p.name").all(),
     teams: () => db.prepare("SELECT name FROM harness_team ORDER BY name").all().map(({ name }) => name),
     saveTeam(name) {
@@ -164,13 +176,12 @@ function catalog(db) {
     definitions(id, scope, team) {
       if (scope) {
         const owner = definitionOwner(scope, id, team);
-        return db.prepare("SELECT id FROM definition WHERE kind<>'profile' AND scope=? AND project IS ? AND team IS ? ORDER BY kind,name")
+        return db.prepare("SELECT id FROM definition WHERE scope=? AND project IS ? AND team IS ? ORDER BY kind,name")
           .all(owner.scope, owner.project, owner.team).map(({ id }) => versionOf(id));
       }
       if (!id) return [];
       const owner = project(id);
-      // 세션 프로필(kind='profile')은 profile-definitions.js 가 따로 보여 준다.
-      return db.prepare(`SELECT id FROM definition WHERE kind<>'profile' AND (project=? OR team=? OR scope='personal')
+      return db.prepare(`SELECT id FROM definition WHERE (project=? OR team=? OR scope='personal')
         ORDER BY CASE scope WHEN 'project' THEN 1 WHEN 'team' THEN 2 ELSE 3 END, kind,name`)
         .all(id, owner.team).map(({ id }) => versionOf(id));
     },
@@ -188,7 +199,6 @@ function catalog(db) {
     },
     remove(id) {
       return transaction(db, () => {
-        if (versionOf(id).kind === "profile") throw problem(409, "Profiles are retired, not deleted");
         if (db.prepare("SELECT 1 FROM definition_ref WHERE target=?").get(id) ||
             db.prepare("SELECT 1 FROM run WHERE definition=?").get(id) ||
             db.prepare("SELECT 1 FROM workflow_definition WHERE target=?").get(id)) throw problem(409, "Definition is referenced");

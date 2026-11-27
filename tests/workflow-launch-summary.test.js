@@ -1,13 +1,13 @@
 "use strict";
 
-// 실행 창은 고른 하네스·Loop 가 무엇을 하는지 한 줄로 보여 준다. 하네스는 역할과 모델, Loop 는 실행할 하네스·최대 시도·검증 명령이다.
+// Task 칸반의 Workflow 칩은 단계마다 어떤 하네스·Loop 가 도는지 한 줄씩 보여 준다(title). 하네스는 역할과 모델, Loop 는 실행할 하네스·최대 시도·검증 명령이다.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "../ui/js/view/workflow-launch.js"), "utf8").replace(/\r\n/g, "\n");
+const source = fs.readFileSync(path.join(__dirname, "../ui/js/model/workflow-summary.js"), "utf8").replace(/\r\n/g, "\n");
 const pick = (start) => {
   const at = source.indexOf(start);
   assert.ok(at >= 0, start);
@@ -51,14 +51,13 @@ test("a saved workflow lists which harness or loop each step uses", () => {
     { id: "plan", type: "agent", label: "요구사항 및 계획", definition: "h1" },
     { id: "approve", type: "approval", label: "설계 승인" },
     { id: "work", type: "loop", label: "작업 및 검증", definition: "l1" },
-    { id: "p", type: "profile", profileId: "x", profileVersion: 1 },
     { id: "review", type: "agent", label: "코드 리뷰" },
     { id: "lost", type: "agent", label: "빈 단계", definition: "gone" },
-  ], edges: [{ from: "p", to: "review", port: "profile" }] };
+  ], edges: [] };
   assert.deepEqual([...sandbox.workflowStepSummaries(payload, definitions)], [
     "요구사항 및 계획 → 하네스 기본 · Node 개발 (역할 개발 · 모델 기본 · Claude Sonnet 5.5)",
     "작업 및 검증 → 루프 기능 개발 · Node (하네스 기본 · Node 개발 · 최대 3회 · 검증 npm test)",
-    "코드 리뷰 → 에이전트 프로필",
+    "코드 리뷰 → 연결 안 됨",
     "빈 단계 → 연결 안 됨",
   ]);
 });

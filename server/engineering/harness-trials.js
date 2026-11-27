@@ -1,6 +1,6 @@
 "use strict";
 
-const { randomUUID, createHash } = require("node:crypto");
+const { createHash } = require("node:crypto");
 const { git } = require("./catalog");
 const { integer, string } = require("./definitions");
 const { resolveHarness } = require("./harness-preview");
@@ -22,7 +22,7 @@ function pinnedMaterials(value = {}) {
   }));
 }
 
-function profileInfo({ record, harness, model }) {
+function sideInfo({ record, harness, model }) {
   return { name: harness.name, id: record?.id ?? null, version: record?.version ?? null, adapter: harness.adapter,
     model: { id: model.id, name: model.payload.model, version: model.version, provider: model.payload.provider,
       reasoning: model.payload.reasoning } };
@@ -58,8 +58,8 @@ function harnessTrials(catalog, runner, workspace, budget) {
 
   function view(trial) {
     return { id: trial.id, commit: trial.commit, inputHash: trial.inputHash, modelChanged: trial.modelChanged,
-      status: trial.status, results: trial.results, changes: configurationDiff(trial.profiles.baseline, trial.profiles.draft), materialHashes: sourceReferences([...trial.materials.values()]),
-      profiles: Object.fromEntries(sides.map((side) => [side, profileInfo(trial.profiles[side])])),
+      status: trial.status, results: trial.results, changes: configurationDiff(trial.sides.baseline, trial.sides.draft), materialHashes: sourceReferences([...trial.materials.values()]),
+      sides: Object.fromEntries(sides.map((side) => [side, sideInfo(trial.sides[side])])),
     };
   }
 
@@ -74,14 +74,13 @@ function harnessTrials(catalog, runner, workspace, budget) {
           continue;
         }
         const start = Date.now();
-        const fixture = { id: randomUUID() };
-        const { harness, model } = trial.profiles[side];
+        const { harness, model } = trial.sides[side];
         trial.results[side] = { status: "running" };
-        let location;
         let charged = false;
         try {
           const adapter = runtime.requireAdapter(harness, model.payload, []);
-          location = await workspace.create(trial.project, fixture, null, trial.commit);
+          // 두 쪽 모두 같은 작업 폴더에서 차례로 실행한다(복사본을 만들지 않는다).
+          const location = await workspace.create(trial.project);
           const repository = await resolveSources(harness, trial.project, location, [], signal, { trial: true });
           const sources = [...repository, ...(harness.assets?.inputs ?? []).map((name) => trial.materials.get(name))];
           const effective = withSources(harness, sources);
@@ -105,11 +104,6 @@ function harnessTrials(catalog, runner, workspace, budget) {
           uncertain ||= charged;
           trial.results[side] = { status: control.signal.aborted ? "cancelled" : signal.aborted ? "timed_out" : "failed",
             error: redact(error.message), elapsedMs: Date.now() - start };
-        } finally {
-          if (location) {
-            try { await workspace.remove(trial.project, location); }
-            catch { trial.results[side].workspace = location; }
-          }
         }
       }
       trial.status = control.signal.aborted ? "cancelled" : signal.aborted ? "timed_out" : "finished";
@@ -123,7 +117,7 @@ function harnessTrials(catalog, runner, workspace, budget) {
     if (active.has(trial.project.id)) throw problem(409, "A harness comparison is already running for the project");
     const runtime = runner.snapshot?.() ?? runner;
     for (const side of queue) {
-      const { harness, model } = trial.profiles[side];
+      const { harness, model } = trial.sides[side];
       runtime.requireAdapter(harness, model.payload, []);
     }
     const hold = budget.reserveTrial(trial.project.id, trial.budgetCents * queue.length);
@@ -149,8 +143,8 @@ function harnessTrials(catalog, runner, workspace, budget) {
       if (baseline.project.archived) throw problem(409, "Project is archived");
       const instruction = string(body.instruction, "trial instruction", 12000);
       const materials = pinnedMaterials(body.materials);
-      for (const profile of [baseline, draft]) {
-        for (const name of profile.harness.assets?.inputs ?? []) {
+      for (const side of [baseline, draft]) {
+        for (const name of side.harness.assets?.inputs ?? []) {
           if (!materials.has(name)) throw problem(400, "Trial input is missing: " + name);
         }
       }
@@ -160,7 +154,7 @@ function harnessTrials(catalog, runner, workspace, budget) {
       const commit = await git(root, ["rev-parse", "--verify", "refs/heads/" + baseline.project.branch + "^{commit}"]);
       if (trials.has(id)) return this.start(project, body);
       const trial = { id, requestHash, project: baseline.project, commit, instruction, materials, budgetCents, timeoutMs,
-        profiles: { baseline, draft }, modelChanged: baseline.model.id !== draft.model.id || baseline.model.version !== draft.model.version,
+        sides: { baseline, draft }, modelChanged: baseline.model.id !== draft.model.id || baseline.model.version !== draft.model.version,
         inputHash: hash(JSON.stringify([commit, instruction, sourceReferences([...materials.values()])])), results: {} };
       launch(trial, sides);
       trials.set(id, trial);

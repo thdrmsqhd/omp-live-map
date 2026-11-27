@@ -113,7 +113,7 @@ let velocity = { x: 0, y: 0, t: 0, raf: 0 };
 // View notifications are subscribed by app.js; state transitions do not own rendering.
 const viewUpdates = {};
 
-// 화면 모드(overview·workspace·map·design). 저장값은 persist.js 가 읽는다. design 은 데스크톱 앱에서만 쓴다(design-mode.js).
+// 화면 모드(overview·workspace·map·design·tasks). 저장값은 persist.js 가 읽는다. design 은 design-mode.js, tasks 는 engineering.js 가 맡는다.
 let mapMode = "map";
 
 // 지금 조작 중인 큰 카드(워크스페이스 모드에서 보이는 카드).

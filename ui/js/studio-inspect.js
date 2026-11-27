@@ -8,7 +8,7 @@ const TRIAL_LABELS = { baseline: "기준 버전", draft: "수정 초안", runnin
   queued: "대기", succeeded: "성공", failed: "실패", cancelled: "취소", timed_out: "시간 초과",
   role: "역할", instructions: "작업 지시", adapter: "실행기", model: "모델", rules: "프로젝트 규칙",
   skills: "스킬", files: "저장소 파일", inputs: "Workflow 입력", result: "결과 형식" };
-const KIND_NAMES = { model: "모델", harness: "하네스", loop: "루프", profile: "에이전트 프로필" };
+const KIND_NAMES = { model: "모델", harness: "하네스", loop: "루프" };
 
 export function bindStudioInspect({ root, h, request, project, payloadOf, loadVersion, say }) {
   let node = null, revision = 0, trialTimer = 0, trialRecord = null, trialKey = null;
@@ -29,7 +29,7 @@ export function bindStudioInspect({ root, h, request, project, payloadOf, loadVe
   // ---- 버전 기록 -------------------------------------------------------------
   function versions(current) {
     const record = current.record;
-    if (!record || current.kind === "profile") return null;
+    if (!record) return null;
     const picker = h("select", { "aria-label": "버전" }, ...Array.from({ length: record.version }, (_, index) => {
       const number = record.version - index;
       return h("option", { value: String(number) }, "v" + number + (number === record.version ? " (최신)" : ""));
@@ -74,17 +74,16 @@ export function bindStudioInspect({ root, h, request, project, payloadOf, loadVe
       const query = saved ? { id: current.record.id, version: current.record.version } : { payload: payloadOf(current) };
       const result = await request("harness/preview", {}, { ...query, project: project() });
       if (mine !== revision) return;
-      const { profile, model, prompt, policy, ready, blockedReason, sources, workflowInputs } = result;
+      const { target, model, prompt, policy, ready, blockedReason, sources, workflowInputs } = result;
       const settings = [
-        ["대상", profile.version ? profile.name + " v" + profile.version : profile.name + " · 초안"],
-        ["실행기", profile.adapter === "claude" ? "Claude Code" : "OMP"],
+        ["대상", target.version ? target.name + " v" + target.version : target.name + " · 초안"],
+        ["실행기", target.adapter === "claude" ? "Claude Code" : "OMP"],
         ["모델", model.name + " v" + model.version + " · " + model.provider + "/" + model.id],
       ];
       if (model.reasoning) settings.push(["추론 수준", model.reasoning]);
       if (policy) {
-        settings.push(["작업 폴더", "관리되는 Git worktree (" + policy.directory + ")"]);
-        settings.push(["런타임에서 강제하는 범위", "작업 폴더 내 쓰기 허용 · 네트워크 격리"]);
-        settings.push(["사용 도구", policy.tools.join(", ")]);
+        settings.push(["작업 폴더", "고른 작업 폴더에서 바로 실행(복사본 없음)"]);
+        settings.push(["실행 권한", "이 PC 사용자 계정 권한 · 네트워크 그대로 사용 (터미널에서 직접 실행하는 것과 같음)"]);
       }
       for (const source of sources) settings.push(["저장소 자료", source.path + " · " + source.commit.slice(0, 12) + " · SHA-256 " + source.sha256]);
       if (workflowInputs.length) settings.push(["Workflow에서 연결할 입력", workflowInputs.join(", ")]);
@@ -168,9 +167,9 @@ export function bindStudioInspect({ root, h, request, project, payloadOf, loadVe
       cancel.hidden = data.status !== "running";
       start.disabled = data.status === "running";
       results.replaceChildren(...["baseline", "draft"].map((side) => {
-        const result = data.results[side] ?? {}, profile = data.profiles[side];
-        const panel = h("article", {}, text("h4", TRIAL_LABELS[side]), text("p", profile.name + (profile.version ? " v" + profile.version : "")),
-          text("p", profile.adapter + " · " + profile.model.name + " v" + profile.model.version), text("p", TRIAL_LABELS[result.status] ?? "대기"));
+        const result = data.results[side] ?? {}, info = data.sides[side];
+        const panel = h("article", {}, text("h4", TRIAL_LABELS[side]), text("p", info.name + (info.version ? " v" + info.version : "")),
+          text("p", info.adapter + " · " + info.model.name + " v" + info.model.version), text("p", TRIAL_LABELS[result.status] ?? "대기"));
         if (result.elapsedMs !== undefined) panel.append(text("p", (result.elapsedMs / 1000).toFixed(2) + "초"));
         if (result.costCents !== undefined) panel.append(text("p", result.costCents.toFixed(2) + "센트" + (result.costBasis === "reserved" ? " (예약 기준)" : "")));
         if (result.error) panel.append(text("p", result.error));

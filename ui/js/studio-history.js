@@ -9,8 +9,7 @@ export function bindStudioHistory(S) {
   let pending = null;
 
   const libraryFields = (node) => ({ draft: node.draft, ref: node.ref, owner: node.owner ?? null, x: node.x, y: node.y, collapsed: node.collapsed, isNew: node.isNew });
-  const stepFields = (node) => ({ data: node.data, ref: node.ref, x: node.x, y: node.y, collapsed: node.collapsed, version: node.version,
-    profileVersion: node.profileVersion, profileSpot: node.profileSpot });
+  const stepFields = (node) => ({ data: node.data, ref: node.ref, x: node.x, y: node.y, collapsed: node.collapsed, version: node.version });
 
   function snapshot() {
     return {

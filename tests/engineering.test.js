@@ -14,7 +14,7 @@ const { runStore } = require("../server/engineering/run-store");
 const { loopEngine } = require("../server/engineering/loop");
 const { secureRunner } = require("../server/engineering/runner");
 const { previewHarness } = require("../server/engineering/harness-preview");
-const { worktrees } = require("../server/engineering/worktree");
+const { workFolders } = require("../server/engineering/work-folder");
 
 async function fixture(t, directory) {
   const root = path.join(directory, "source");
@@ -55,7 +55,7 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-db-"));
   try {
     const { db, file, definitions, model, project, harness, body, store } = await fixture(t, directory);
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 15);
     assert.throws(() => definitions.remove(model.id), /referenced/);
     const newer = definitions.saveDefinition({ id: model.id, version: 1, project: project.id, kind: "model",
       payload: { ...model.payload, model: "fake-2" } });
@@ -69,12 +69,12 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
     assert.equal(saved.payload.assets.skills[0].name, "verify");
     assert.deepEqual(definitions.versionOf(harness.id, 1).payload.assets.skills, []);
     assert.equal(definitions.dependency(saved).payload.model, "fake-2");
-    const isolated = secureRunner();
-    const previous = await previewHarness(definitions, isolated, { project: project.id, id: harness.id, version: 1 });
+    const unavailable = secureRunner();
+    const previous = await previewHarness(definitions, unavailable, { project: project.id, id: harness.id, version: 1 });
     assert.equal(previous.model.id, "fake-1");
     assert.equal(previous.ready, false);
-    assert.match(previous.blockedReason, /verified isolation/);
-    const draft = await previewHarness(definitions, isolated, { project: project.id, payload: saved.payload });
+    assert.match(previous.blockedReason, /실행기/);
+    const draft = await previewHarness(definitions, unavailable, { project: project.id, payload: saved.payload });
     assert.equal(draft.model.id, "fake-2");
     assert.deepEqual(draft.prompt.map(({ name }) => name), ["role", "assets"]);
     assert.match(draft.prompt[1].text, /Run phased tests/);
@@ -118,11 +118,11 @@ test("versioned definitions, transactional recovery, backups, and run idempotenc
   }
 });
 
-test("verified fixture runner fails checks twice, succeeds, and preserves a dirty worktree", async (t) => {
+test("verified fixture runner fails checks twice, succeeds, and leaves its changes in the work folder", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-loop-"));
   try {
     const { body, definitions, project, store, root } = await fixture(t, directory);
-    const tools = worktrees(path.join(directory, "worktrees"));
+    const tools = workFolders();
     const feedback = [];
     const agent = {
       enforced: true, supports: () => true,
@@ -153,8 +153,9 @@ test("verified fixture runner fails checks twice, succeeds, and preserves a dirt
     assert.deepEqual(attempts.map(({ status }) => status), ["rejected", "rejected", "passed"]);
     assert.equal(feedback[1][0].log, "api_key=[redacted]");
     assert.equal(attempts[2].outcome.sessionId, "fixture-3");
-    assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }), "");
-    await assert.rejects(tools.remove(project, result.workspace), /local changes/);
+    // 실행은 작업 폴더에서 바로 하므로 결과 파일은 이미 그 폴더에 있다.
+    assert.equal(result.workspace, await fs.realpath(root));
+    assert.match(execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }), /verify\.js/);
 
     const unavailable = loopEngine(store, definitions, secureRunner(), tools);
     const blocked = unavailable.start(body, randomUUID());
@@ -170,7 +171,7 @@ test("active Loop cancels without another attempt and budget blocks verification
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-controls-"));
   try {
     const { body, definitions, store } = await fixture(t, directory);
-    const tools = worktrees(path.join(directory, "worktrees"));
+    const tools = workFolders();
     let verified = 0;
     const commands = { enforced: true, allows: () => true, async execute() { verified++; return { code: 0 }; } };
     const agent = { enforced: true, supports: () => true,
@@ -242,7 +243,7 @@ test("harness result validation detects missing JSON fields and accepts an empty
   assert.throws(() => resultContract({ ...contract, path: "../review.json" }), /relative paths/);
 });
 
-test("harness comparison shares one commit and inputs, with isolated worktrees and budget", async (t) => {
+test("harness comparison shares one commit and inputs, runs both sides in the work folder, and holds budget", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-harness-trial-"));
   const { db, definitions, harness, project } = await fixture(t, directory);
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -250,7 +251,7 @@ test("harness comparison shares one commit and inputs, with isolated worktrees a
   const { harnessTrials } = require("../server/engineering/harness-trials");
   const budget = projectBudget(db);
   budget.save(project.id, { cap: 12, days: 1 });
-  const work = worktrees(path.join(directory, "worktrees"));
+  const work = workFolders();
   const actual = [];
   const runner = {
     requireAdapter() {
@@ -282,7 +283,7 @@ test("harness comparison shares one commit and inputs, with isolated worktrees a
   assert.equal(actual.length, 2);
   assert.equal(actual[0].commit, end.commit);
   assert.equal(actual[1].commit, end.commit);
-  assert.notEqual(actual[0].cwd, actual[1].cwd);
+  assert.equal(actual[0].cwd, actual[1].cwd);
   assert.equal(actual[0].instruction, actual[1].instruction);
   assert.equal(actual[1].sources[0].text, "Tests passed");
   assert.equal(budget.get(project.id).committed, 2);

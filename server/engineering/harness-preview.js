@@ -37,7 +37,7 @@ async function previewHarness(catalog, runner, input) {
   }
 
   return {
-    profile: { name: harness.name, adapter: harness.adapter, version: record?.version ?? null },
+    target: { name: harness.name, adapter: harness.adapter, version: record?.version ?? null },
     model: { name: model.name, version: model.version, provider: model.payload.provider,
       id: model.payload.model, reasoning: model.payload.reasoning },
     prompt: promptSections(withSources(harness, sources)),

@@ -17,13 +17,13 @@ export function h(tag, props = {}, ...children) {
   return element;
 }
 
-export const KIND_LABELS = { model: "모델", harness: "하네스", loop: "루프", profile: "에이전트 프로필", step: "Workflow 단계" };
+export const KIND_LABELS = { model: "모델", harness: "하네스", loop: "루프", step: "Workflow 단계" };
 export const STEP_TYPES = {
   start: "Start", end: "End", agent: "Agent", loop: "Loop 단계", command: "Command", condition: "Condition",
   parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph",
 };
 export const STEP_HINTS = {
-  agent: "하네스나 프로필로 에이전트 작업 실행", loop: "루프(재시도·검증)로 작업 실행", command: "검증 명령 한 번 실행",
+  agent: "하네스로 에이전트 작업 실행", loop: "루프(재시도·검증)로 작업 실행", command: "검증 명령 한 번 실행",
   condition: "앞 단계 결과로 분기", parallel: "여러 갈래 동시 실행", join: "갈래 합치기", approval: "사람의 승인·거절",
   subgraph: "다른 Workflow 호출",
 };
@@ -88,7 +88,7 @@ export function harnessContractDetails(role, { open = false, visible = false } =
 
 const lines = (value) => value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
-// 노드의 소켓. slot 이름은 연결 대상 정의 종류와 같다(model·harness·loop·profile), 실행 순서는 flow.
+// 노드의 소켓. slot 이름은 연결 대상 정의 종류와 같다(model·harness·loop), 실행 순서는 flow.
 export function socketsOf(node) {
   if (node.kind === "model") return { inputs: [], outputs: [{ slot: "model", type: "model", label: "모델" }] };
   if (node.kind === "harness") {
@@ -102,10 +102,9 @@ export function socketsOf(node) {
   if (node.kind === "loop") {
     return { inputs: [{ slot: "harness", type: "harness", label: "하네스" }], outputs: [{ slot: "loop", type: "loop", label: "루프" }] };
   }
-  if (node.kind === "profile") return { inputs: [], outputs: [{ slot: "profile", type: "profile", label: "프로필" }] };
   const type = node.data.type;
   const inputs = type === "start" ? [] : [{ slot: "flow", type: "flow", label: type === "join" || type === "end" ? "입력 (여러 개)" : "입력" }];
-  if (type === "agent") inputs.push({ slot: "harness", type: "harness", label: "하네스" }, { slot: "profile", type: "profile", label: "프로필" });
+  if (type === "agent") inputs.push({ slot: "harness", type: "harness", label: "하네스" });
   if (type === "loop") inputs.push({ slot: "loop", type: "loop", label: "루프" });
   return { inputs, outputs: outputsOf(type).map((port) => ({ slot: port, type: "flow", label: PORT_LABELS[port] })) };
 }
@@ -127,7 +126,7 @@ export function blankPayload(kind, catalog, template) {
     return { name: "새 루프", harness: "", attempts: 3, timeoutMs: 600000, budgetCents: 300,
       checks: [{ command: "node", args: ["--test"], code: 0 }] };
   }
-  return { name: "새 프로필", adapter: "claude", provider: "", model: "", role: "", instructions: "" };
+  throw new Error("Unknown definition kind: " + kind);
 }
 
 export function blankStep(type, workflows, current) {
@@ -146,13 +145,12 @@ export function problemsOf(node, ctx) {
   if (node.kind === "harness" && !node.ref.model) list.push("모델을 연결하세요.");
   if (node.kind === "loop" && !node.ref.harness) list.push("하네스를 연결하세요.");
   if (node.kind === "model" && !node.draft.model) list.push("모델을 고르세요.");
-  if (["model", "harness", "loop", "profile"].includes(node.kind) && !node.draft.name?.trim()) list.push("이름을 입력하세요.");
+  if (["model", "harness", "loop"].includes(node.kind) && !node.draft.name?.trim()) list.push("이름을 입력하세요.");
   if (node.kind === "harness" && !node.draft.role?.trim()) list.push("역할을 입력하세요.");
-  if (node.kind === "profile" && node.draft.adapter === "omp" && node.draft.model && !node.draft.provider) list.push("OMP 모델은 제공자가 필요합니다.");
   if (node.kind !== "step") return list.concat(Object.values(node.errors ?? {}));
   const { type } = node.data;
   if (type === "agent" && isEvaluationHarness(ctx.node(node.ref.harness))) list.push("평가 하네스는 실행 흐름 밖에 있어 이 단계에 연결할 수 없습니다.");
-  if (type === "agent" && !node.ref.harness && !node.ref.profile) list.push("하네스 또는 프로필을 연결하세요.");
+  if (type === "agent" && !node.ref.harness) list.push("하네스를 연결하세요.");
   if (type === "loop" && !node.ref.loop) list.push("루프를 연결하세요.");
   if (["agent", "loop"].includes(type) && !node.data.instruction?.trim()) list.push("작업 지시를 입력하세요.");
   if (type === "approval" && !node.data.prompt?.trim()) list.push("승인 안내를 입력하세요.");
@@ -220,10 +218,7 @@ function details(summary, open, ...children) {
 
 function scopeWidget(ctx, node) {
   if (!node.isNew) return null;
-  // 프로필은 맵 세션에서도 쓰므로 프로젝트 범위 없이 개인·팀만 고른다(엔지니어링 DB가 있는 데스크톱에서만).
-  const choices = node.kind !== "profile" ? ctx.scopeChoices() : ctx.desktop() ? ctx.scopeChoices().filter(([scope]) => scope !== "project") : [];
-  if (node.kind === "profile" && choices.length < 2) return null;
-  return field("저장 범위", select(choices, node.owner.scope, (value) => ctx.setScope(node, value)));
+  return field("저장 범위", select(ctx.scopeChoices(), node.owner.scope, (value) => ctx.setScope(node, value)));
 }
 
 // ---- 노드별 위젯 -------------------------------------------------------------
@@ -345,32 +340,6 @@ function loopWidgets(ctx, node) {
   ];
 }
 
-function profileWidgets(ctx, node) {
-  const draft = node.draft;
-  const adapter = draft.adapter;
-  const saved = ctx.profileModels(adapter);
-  const models = [...(ctx.catalog[adapter] ?? []), ...saved].map((model) => adapter === "claude" ? { ...model, provider: "" } : model);
-  const picker = h("select", { onchange: (event) => {
-    [draft.provider, draft.model] = event.target.value ? JSON.parse(event.target.value) : ["", ""];
-    ctx.changed(node);
-  } });
-  showModelOptions(picker, models, draft.model ? modelKey(adapter === "claude" ? "" : draft.provider, draft.model) : "", "실행기 기본 모델");
-  return [
-    scopeWidget(ctx, node),
-    field("이름", textInput(ctx, node, draft, "name", { maxLength: 120, rename: true })),
-    h("div", { class: "studio-row" },
-      field("실행기", select([["claude", "Claude Code"], ["omp", "OMP"]], adapter, (value) => {
-        draft.adapter = value;
-        draft.provider = "";
-        draft.model = "";
-        ctx.changed(node, { rerender: true });
-      })),
-      field("모델", picker)),
-    field("역할", textInput(ctx, node, draft, "role", { maxLength: 240 })),
-    details("작업 지시", Boolean(draft.instructions), textArea(ctx, node, draft, "instructions", { rows: 4, maxLength: 12000, "aria-label": "작업 지시" })),
-  ];
-}
-
 function versionPicker(ctx, node, slot) {
   const target = ctx.node(node.ref[slot]);
   if (!target) return null;
@@ -384,15 +353,6 @@ function versionPicker(ctx, node, slot) {
   });
   const stale = node.version && node.version < latest;
   return field(stale ? "고정 버전 · 최신 아님" : "고정 버전", control, stale ? "is-stale" : "");
-}
-
-function profileVersion(ctx, node) {
-  const target = ctx.node(node.ref.profile);
-  if (!target?.record) return null;
-  const latest = target.record.version, pinned = node.profileVersion ?? latest;
-  if (pinned >= latest) return h("p", { class: "studio-note" }, `프로필 v${pinned} 사용 · 하네스 입력보다 우선`);
-  return h("p", { class: "studio-note is-stale" }, `프로필 v${pinned} 사용 (최신 v${latest}) `,
-    h("button", { type: "button", class: "studio-mini", onclick: () => { node.profileVersion = latest; ctx.changed(node, { rerender: true }); } }, "최신 적용"));
 }
 
 function contractWidget(ctx, node) {
@@ -412,7 +372,7 @@ function stepWidgets(ctx, node) {
   if (type === "start" || type === "end") return [h("p", { class: "studio-note" }, type === "start" ? "Workflow가 여기서 시작합니다." : "모든 갈래가 여기서 끝납니다.")];
   const label = field("이름", textInput(ctx, node, data, "label", { maxLength: 240, rename: true }));
   if (type === "agent") {
-    return [label, node.ref.profile ? profileVersion(ctx, node) : versionPicker(ctx, node, "harness"),
+    return [label, versionPicker(ctx, node, "harness"),
       field("작업 지시", textArea(ctx, node, data, "instruction", { maxLength: 12000 })), contractWidget(ctx, node)];
   }
   if (type === "loop") {
@@ -450,6 +410,6 @@ function stepWidgets(ctx, node) {
 }
 
 export function widgetsOf(node, ctx) {
-  const build = { model: modelWidgets, harness: harnessWidgets, loop: loopWidgets, profile: profileWidgets, step: stepWidgets }[node.kind];
+  const build = { model: modelWidgets, harness: harnessWidgets, loop: loopWidgets, step: stepWidgets }[node.kind];
   return build(ctx, node).filter(Boolean);
 }

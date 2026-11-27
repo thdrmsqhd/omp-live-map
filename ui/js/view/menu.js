@@ -169,9 +169,9 @@ function openCardMenu(clientX, clientY, id) {
     null,
     ...blockMenuItems(n),
   ];
-  if (n.kind !== "local" && (/^[a-zA-Z]:[\\/]/.test(n.cwd || "") || String(n.cwd || "").startsWith("/")) && window.ompQuickRun) {
-    items.splice(1, 0, { label: "이 폴더에서 Workflow 실행", hint: n.cwd.replace(/[\\/]+$/, "").split(/[\\/]/).pop(),
-      run: () => { setMapMode("design"); void window.ompQuickRun.target(n.cwd); } });
+  if (n.kind !== "local" && (/^[a-zA-Z]:[\\/]/.test(n.cwd || "") || String(n.cwd || "").startsWith("/")) && window.ompTasks) {
+    items.splice(1, 0, { label: "이 폴더에서 Task 만들기", hint: n.cwd.replace(/[\\/]+$/, "").split(/[\\/]/).pop(),
+      run: () => void window.ompTasks.quick({ folder: n.cwd }) });
   }
   if (n.kind === "main") {
     const to = capsOf(n).id === "claude" ? "omp" : "Claude Code";

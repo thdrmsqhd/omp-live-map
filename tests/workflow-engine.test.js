@@ -20,7 +20,7 @@ test("a workflow executes the selected branch, persists approval and never repla
     db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Fixture", "main");
     const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
     const runs = workflowRuns(db, definitions, workflows);
-    const liveMap = workflowObservability(db, runs, directory).liveMapRuns;
+    const liveMap = workflowObservability(db, runs, definitions).liveMapRuns;
     const observed = [];
     const runner = { async verify(checks, workspace) {
       const [{ command }] = checks;
@@ -133,54 +133,51 @@ test("retrying a known failed node keeps successful predecessors and stores its 
   }
 });
 
-test("parallel workflow branches run in distinct Git worktrees and publish outputs before Join", { timeout: 12000 }, async () => {
-  const { execFileSync } = require("node:child_process");
-  const { worktrees } = require("../server/engineering/worktree");
+test("parallel workflow branches run one after another in the same work folder before Join", { timeout: 12000 }, async () => {
+  const { workFolders } = require("../server/engineering/work-folder");
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-parallel-"));
-  const root = path.join(directory, "repo");
+  const root = path.join(directory, "folder");
   fs.mkdirSync(root);
-  const git = (...args) => execFileSync("git", args, { cwd: root, stdio: "ignore" });
-  git("init", "-b", "main");
   fs.writeFileSync(path.join(root, "seed.txt"), "seed");
-  git("add", "seed.txt");
-  git("-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-m", "fixture");
   const db = openDatabase(path.join(directory, "engineering.sqlite"));
   try {
     db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", root, "Fixture", "main");
     const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
     const runs = workflowRuns(db, definitions, workflows);
-    let release;
-    const bothStarted = new Promise((resolve) => { release = resolve; });
-    const seen = [];
+    const order = [], locations = new Set();
+    let active = 0;
     const engine = workflowEngine(runs, workflows, definitions, {
-      async verify([{ command }], location, signal) {
-        assert.equal(fs.readFileSync(path.join(location, "seed.txt"), "utf8"), "seed");
-        if (command === "verify-join") {
-          assert.equal(fs.readFileSync(path.join(location, "left.txt"), "utf8"), "left");
-          assert.equal(fs.readFileSync(path.join(location, "right.txt"), "utf8"), "right");
-        } else {
-          seen.push(location);
-          if (seen.length === 2) release();
-          await Promise.race([bothStarted, delay(3000, null, { signal, ref: false }).then(() => { throw Error("Branches did not run concurrently"); })]);
-          const sibling = command === "left" ? "right" : "left";
-          assert.equal(fs.existsSync(path.join(location, sibling + ".txt")), false);
-          fs.writeFileSync(path.join(location, command + ".txt"), command);
-        }
-        return [{ command, passed: true }];
+      async verify([{ command }], location) {
+        assert.equal(active++, 0, "branches never overlap");
+        try {
+          locations.add(location);
+          order.push(command);
+          assert.equal(fs.readFileSync(path.join(location, "seed.txt"), "utf8"), "seed");
+          if (command === "verify-join") {
+            assert.equal(fs.readFileSync(path.join(location, "left.txt"), "utf8"), "left");
+            assert.equal(fs.readFileSync(path.join(location, "right.txt"), "utf8"), "right");
+          } else {
+            await delay(20);
+            fs.writeFileSync(path.join(location, command + ".txt"), command);
+          }
+          return [{ command, passed: true }];
+        } finally { active--; }
       },
-    }, worktrees(path.join(directory, "worktrees")));
+    }, workFolders());
     const n = (id, type, config = {}) => ({ id, type, label: id, ...config });
     const command = (id, outputs = []) => n(id,"command",{ check: { command: id,args: [] }, outputs });
     const a = (from, to) => ({ from,to });
-    const plan = workflows.save({ project: "one", payload: { name: "isolated parallel", nodes: [
+    const plan = workflows.save({ project: "one", payload: { name: "sequential parallel", nodes: [
       n("s", "start"), n("p", "parallel"), command("left", [{ name: "left", path: "left.txt" }]),
       command("right", [{ name: "right", path: "right.txt" }]), n("j", "join"), command("verify-join"), n("e", "end"),
     ], edges: [a("s","p"),a("p","left"),a("p","right"),a("left","j"),a("right","j"),a("j","verify-join"),a("verify-join","e")] } });
     const run = engine.start({ project: "one", workflow: plan.id, version: 1, title: "parallel", timeoutMs: 10000, budgetCents: 0 }, "parallel-key");
     for (let i = 0; i < 800 && ["running","queued"].includes(runs.get(run.id).status); i++) await delay(10);
     assert.equal(runs.get(run.id).status, "succeeded", JSON.stringify({ run: runs.get(run.id), nodes: runs.nodes(run.id) }));
-    assert.equal(new Set(seen).size, 2);
-    assert.equal(fs.existsSync(path.join(root, "left.txt")), false);
+    assert.deepEqual([...locations], [fs.realpathSync(root)], "every step runs in the chosen folder");
+    assert.deepEqual(order.slice(0, 2).sort(), ["left", "right"]);
+    assert.equal(order[2], "verify-join");
+    assert.equal(fs.readFileSync(path.join(root, "left.txt"), "utf8"), "left", "results stay in the work folder");
   } finally {
     db.close();
     fs.rmSync(directory, { force: true, recursive: true });
@@ -231,7 +228,7 @@ test("workflow rework archives the failed verification and returns evidence to t
   }
 });
 
-test("verification-only retry uses the previous Loop worktree without calling its agent", async () => {
+test("verification-only retry uses the previous Loop work folder without calling its agent", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-verify-only-"));
   const db = openDatabase(path.join(directory, "engineering.sqlite"));
   try {
@@ -249,14 +246,14 @@ test("verification-only retry uses the previous Loop worktree without calling it
       { id: "loop", type: "loop", label: "Implement and verify", definition: loop.id, instruction: "Reconnect" },
       { id: "end", type: "end", label: "End" },
     ], edges: [{ from: "start", to: "loop" }, { from: "loop", to: "end" }] } });
-    let calls = 0, checks = 0, worktrees = 0;
+    let calls = 0, checks = 0, folders = 0;
     const engine = workflowEngine(runs, workflows, definitions, {
       requireAdapter() { return { async run() { calls++; return { costCents: 1 }; } }; },
       async verify(checksToRun, cwd) {
         assert.equal(cwd, directory);
         return checksToRun.map(({ command }) => ({ command, passed: ++checks === 2 }));
       },
-    }, { async create() { worktrees++; return directory; } });
+    }, { async create() { folders++; return directory; } });
     const run = engine.start({ project: "one", workflow: graph.id, version: 1, title: "Test Loop", timeoutMs: 6000, budgetCents: 30 }, "verify-only");
     const settle = async () => {
       for (let i = 0; i < 150 && ["queued","running"].includes(runs.get(run.id).status); i++) await delay(10);
@@ -269,63 +266,8 @@ test("verification-only retry uses the previous Loop worktree without calling it
     assert.equal(runs.nodes(run.id).find(({ node }) => node === "loop").outcome.verificationOnly, true);
     assert.equal(calls, 1);
     assert.equal(checks, 2);
-    assert.equal(worktrees, 1);
+    assert.equal(folders, 1);
   } finally {
-    db.close();
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
-});
-
-test("a linked profile supplies the Agent settings without becoming an execution step", async () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-flow-profile-"));
-  const db = openDatabase(path.join(directory, "engineering.sqlite"));
-  const previousState = process.env.OMP_MAP_STATE;
-  process.env.OMP_MAP_STATE = directory;
-  const { save, remove, close } = require("../server/harness/session-profiles");
-  try {
-    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Fixture", "main");
-    const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
-    const runs = workflowRuns(db, definitions, workflows);
-    const profile = save({ name: "Fixture reviewer", adapter: "claude", model: "claude-sonnet-4-6",
-      role: "Reviewer", instructions: "Use the v1 rules." });
-    const nodes = [
-      { id: "start", label: "Start", type: "start" },
-      { id: "profile", label: "Reviewer", type: "profile", profileId: profile.id, profileVersion: profile.version },
-      { id: "agent", label: "Agent", type: "agent", instruction: "Review the changes." },
-      { id: "end", label: "End", type: "end" },
-    ];
-    const edges = [{ from: "start", to: "agent" }, { from: "agent", to: "end" }, { from: "profile", to: "agent", port: "profile" }];
-    const payload = { name: "Review fixture", nodes, edges };
-    assert.throws(() => workflows.plan("one", { ...payload, edges: [...edges, edges[2]] }), /one profile/);
-    assert.throws(() => workflows.plan("one", { ...payload, edges: [...edges.slice(0, 2), { from: "profile", to: "end", port: "profile" }] }), /profile input/);
-    const workflow = workflows.save({ project: "one", payload });
-    const latest = save({ ...profile, instructions: "Use the v2 rules." });
-    remove(latest.id, latest.version);
-    const observed = [];
-    const runner = { requireAdapter(harness, model) {
-      observed.push([harness, model]);
-      return { async run({ instruction }) {
-        assert.equal(instruction, "Review the changes.");
-        return { costCents: 1, sessionId: "fixture-review" };
-      } };
-    } };
-    const engine = workflowEngine(runs, workflows, definitions, runner, { async create() { return directory; } });
-    const run = engine.start({ project: "one", workflow: workflow.id, version: 1, title: "Profile run",
-      timeoutMs: 3000, budgetCents: 50 }, "profile-run");
-    const detail = workflows.executionPlan("one", workflow.payload, workflow.id);
-    assert.deepEqual(detail.order, ["start", "agent", "end"]);
-    assert.equal(detail.display.nodes.some(({ type }) => type === "profile"), true);
-    for (let i = 0; i < 100 && observed.length === 0; i++) await delay(10);
-    for (let i = 0; i < 100 && runs.get(run.id).status === "running"; i++) await delay(10);
-    assert.equal(runs.get(run.id).status, "succeeded", runs.get(run.id).error);
-    assert.equal(runs.nodes(run.id).some(({ node }) => node === "profile"), false);
-    assert.equal(observed[0][0].instructions, "Use the v1 rules.");
-    assert.equal(observed[0][1].model, "claude-sonnet-4-6");
-    assert.equal(runs.nodes(run.id).find(({ node }) => node === "agent").outcome.definitions.harness.version, 1);
-  } finally {
-    close();
-    if (previousState === undefined) delete process.env.OMP_MAP_STATE;
-    else process.env.OMP_MAP_STATE = previousState;
     db.close();
     fs.rmSync(directory, { recursive: true, force: true });
   }

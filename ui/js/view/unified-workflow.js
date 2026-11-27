@@ -94,7 +94,7 @@
     $('unified-empty-run').hidden = !!detail || wfMap.opening;
     snapshot.hidden = !detail || !!matches;
     if (!detail && !wfMap.opening) inspector.hidden = true;
-    const graph = detail?.graph.nodes.filter(n => n.type !== 'profile') || [];
+    const graph = detail?.graph.nodes || [];
     const current = new Map(graph.map(n => [n.id, n]));
     const state = new Map((detail?.nodes || []).map(n => [n.node, n.status]));
     for (const card of cards.querySelectorAll('[data-runtime-status]')) {

@@ -13,48 +13,49 @@ const { workflowObservability } = require("../engineering/workflow-observability
 const { independentEvaluation } = require("../engineering/independent-evaluation");
 const { workflowDelivery } = require("../engineering/workflow-delivery");
 const { retryOptions } = require("../engineering/workflow-retry-plan");
-const { addPresetDefinitions, addPresetWorkflows, ensureProfiles } = require("../engineering/workflow-presets");
+const { addPresetDefinitions, addPresetWorkflows } = require("../engineering/workflow-presets");
 const { projectBudget } = require("../engineering/project-budget");
 const { workflowStaging } = require("../engineering/workflow-staging");
 const { runStore } = require("../engineering/run-store");
 const { loopEngine } = require("../engineering/loop");
 const { secureRunner } = require("../engineering/runner");
-const { worktrees } = require("../engineering/worktree");
+const { workFolders } = require("../engineering/work-folder");
 const { harnessTrials } = require("../engineering/harness-trials");
 const workflowLive = require("../engineering/workflow-live");
 const shadowRepo = require("../engineering/shadow-repo");
-const { profileDefinitions, importLegacyProfiles } = require("../engineering/profile-definitions");
-const sessionProfiles = require("../harness/session-profiles");
+const { mergeProfilesIntoHarnesses } = require("../engineering/harness-merge");
+const sessionHarness = require("../harness/session-harness");
 
 
 function createEngineeringServices({ directory, runner = secureRunner() }) {
-  let services;
+  let services, opened;
   function initialize() {
     if (services) return services;
     workflowLive.configure({ directory: path.resolve(directory) });
     shadowRepo.configure(path.resolve(directory, "shadow"));
     const db = openDatabase(path.resolve(directory, "engineering.sqlite"));
+    opened = db;
     try {
       const definitions = catalog(db);
-      // 프로필은 정의 저장소로 옮겨 쓴다. 이전 저장소가 있으면 한 번 가져오고, 세션 배정은 이전 저장소에 남긴다.
-      importLegacyProfiles(db, sessionProfiles.legacyRows());
-      sessionProfiles.useDefinitions(profileDefinitions(db, definitions));
+      // 예전 에이전트 프로필은 하네스로 합친다(한 번만). 세션 배정(assignments)은 session-harness.sqlite 에 남는다.
+      mergeProfilesIntoHarnesses(db, definitions, sessionHarness.legacyRows());
       const runs = runStore(db, definitions);
       const workflows = workflowCatalog(db, definitions);
-      const tasks = sdlcTasks(db, definitions, workflows);
+      const stages = sdlcStages(db, definitions);
+      const tasks = sdlcTasks(db, definitions, workflows, stages);
       const flowRuns = workflowRuns(db, definitions, workflows, tasks);
-      const workspaceRoot = path.resolve(directory, "worktrees");
-      const workspace = worktrees(workspaceRoot);
-      const delivery = workflowDelivery(db, flowRuns, definitions, workspaceRoot);
+      // 실행은 고른 작업 폴더(project.root)에서 바로 한다.
+      const workspace = workFolders();
+      const delivery = workflowDelivery(db, flowRuns, definitions);
       runs.recover();
       flowRuns.recover();
       const budget = projectBudget(db);
       services = { definitions, workflows, runs, flowRuns, tasks, budget, trials: harnessTrials(definitions, runner, workspace, budget),
-        presetDefinitions: (project) => ({ ...addPresetDefinitions(db, definitions, project), profiles: ensureProfiles() }),
+        presetDefinitions: (project) => addPresetDefinitions(db, definitions, project),
         presetWorkflows: (project) => addPresetWorkflows(db, definitions, workflows, project),
-        stages: sdlcStages(db, definitions, workflows),
-        observability: workflowObservability(db, flowRuns, workspaceRoot),
-        evaluation: independentEvaluation({ db, directory, workspaceRoot, runs: flowRuns, definitions, workflows }),
+        stages,
+        observability: workflowObservability(db, flowRuns, definitions),
+        evaluation: independentEvaluation({ db, directory, runs: flowRuns, definitions, workflows }),
         delivery, staging: workflowStaging(db, delivery),
         templates: workflowTemplates(definitions, workflows),
         flow: workflowEngine(flowRuns, workflows, definitions, runner, workspace),
@@ -62,9 +63,16 @@ function createEngineeringServices({ directory, runner = secureRunner() }) {
       return services;
     } catch (error) {
       db.close();
+      opened = undefined;
       throw error;
     }
   }
+  // 테스트·종료 때 SQLite 를 닫는다(Windows 는 열린 파일을 지우지 못한다). 다음 요청은 다시 연다.
+  initialize.close = () => {
+    opened?.close();
+    opened = undefined;
+    services = undefined;
+  };
   return initialize;
 }
 function workflowLiveMap({ observability, flowRuns }) {
@@ -89,8 +97,8 @@ function workflowRunDetail({ flowRuns, workflows, observability, delivery, stagi
     delivery: delivery.get(id), staging: staging.get(id),
     labels: Object.fromEntries(graph.nodes.map(({ id, label }) => [id, label])),
     // 관제 화면이 단계 안에서 어떤 프롬프트가 어떤 정의로 실행되는지 보여 주는 데 쓴다.
-    graph: { name: display.name, nodes: display.nodes.map(({ id, label, type, x, y, profileVersion, definition, version, instruction, prompt, check, workflow, gate }) => ({
-      id, label, type, x, y, profileVersion, definition, version, workflow, gate,
+    graph: { name: display.name, nodes: display.nodes.map(({ id, label, type, x, y, definition, version, instruction, prompt, check, workflow, gate }) => ({
+      id, label, type, x, y, definition, version, workflow, gate,
       instruction: typeof instruction === "string" ? instruction.slice(0, 600) : undefined,
       prompt: typeof prompt === "string" ? prompt.slice(0, 600) : undefined,
       check: check ? { command: check.command, args: check.args } : undefined })),

@@ -15,11 +15,11 @@ const { independentEvaluation } = require("../server/engineering/independent-eva
 
 test("independent evaluation scores a sealed rubric without changing the completed run", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-independent-eval-"));
-  const worktrees = path.join(directory, "worktrees");
-  fs.mkdirSync(worktrees);
+  const folder = path.join(directory, "work");
+  fs.mkdirSync(folder);
   const db = openDatabase(path.join(directory, "engineering.sqlite"));
   try {
-    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Fixture", "main");
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", folder, "Fixture", "main");
     const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
     const runs = workflowRuns(db, definitions, workflows);
     const engine = workflowEngine(runs, workflows, definitions, {
@@ -27,11 +27,7 @@ test("independent evaluation scores a sealed rubric without changing the complet
         fs.writeFileSync(path.join(workspace, "answer.json"), JSON.stringify({ summary: { count: 2 } }));
         return [{ command, passed: true }];
       },
-    }, { async create(_project, run) {
-      const workspace = path.join(worktrees, run.id);
-      fs.mkdirSync(workspace);
-      return workspace;
-    } });
+    }, { async create(project) { return project.root; } });
     const saved = workflows.save({ project: "one", payload: { name: "eval target", nodes: [
       { id: "s", label: "s", type: "start" },
       { id: "make", label: "make", type: "command", check: { command: "make", args: [] }, outputs: [{ name: "answer", path: "answer.json" }] },
@@ -45,7 +41,7 @@ test("independent evaluation scores a sealed rubric without changing the complet
     const nodeRows = () => db.prepare("SELECT * FROM workflow_node WHERE run=? ORDER BY node").all(run.id);
     const beforeRow = runRow();
     const beforeNodes = nodeRows();
-    const evaluation = independentEvaluation({ db, directory, workspaceRoot: worktrees, runs, definitions, workflows });
+    const evaluation = independentEvaluation({ db, directory, runs, definitions, workflows });
     const rubric = evaluation.post({ operation: "seal", project: "one", workflow: saved.id, rubric: { name: "count", cases: [{ path: "/summary/count", operator: "equals", value: 2 }] } });
     const result = await evaluation.post({ operation: "evaluate", project: "one", id: run.id, node: "make", artifact: "answer", rubricDigest: rubric.digest });
     assert.equal(result.score, 100);

@@ -13,7 +13,7 @@ const lineage = require("../lineage");
 const uiAsk = require("../ui-requests");
 const claude = require("./claude");
 const model = require("./claude-model");
-const profiles = require("./session-profiles");
+const sessionHarness = require("./session-harness");
 const { withPromptFile } = require("./prompt-file");
 const input = require("./claude-input");
 const settings=require("./claude-settings");
@@ -91,13 +91,13 @@ function onFrame(s, o) {
 }
 
 function effectiveModel(loc) {
-  return model.modelOf(loc.card) || model.modelOf(loc.file) || loc.profile?.model || model.DEFAULT_MODEL;
+  return model.modelOf(loc.card) || model.modelOf(loc.file) || loc.sessionHarness?.model || model.DEFAULT_MODEL;
 }
 
 function spawnClaude(args, loc) {
   const selectedModel = effectiveModel(loc);
   if (selectedModel !== "default") args.push("--model", selectedModel);
-  return withPromptFile(profiles.systemPrompt(loc.profile), (file) => {
+  return withPromptFile(sessionHarness.systemPrompt(loc.sessionHarness), (file) => {
     if (file) args.push("--append-system-prompt-file", file);
     return spawn("claude", args, { cwd: loc.cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   });
@@ -181,7 +181,7 @@ function spawnStream(s,loc,text,images){
 function startTurn(card, text, images) {
   const existing=runs.get(norm(card));
   const loc = locate(card);
-  loc.profile = profiles.assigned(loc.file, "claude") || profiles.assigned(card, "claude");
+  loc.sessionHarness = sessionHarness.assigned(loc.file, "claude") || sessionHarness.assigned(card, "claude");
   if(existing?.transport&&!existing.busy&&existing.state==="idle"){const signature=JSON.stringify([settings.get(card),effectiveModel(loc)]);if(signature!==existing.optionsSignature||existing.sessionId!==loc.sessionId){clearTimeout(existing.idleTimer);existing.state="closing";existing.transport.close();setTimeout(()=>{if(!existing.transport.ended)killTree(existing.child);},3000).unref();return {ok:false,out:"실행 설정이 변경되어 기존 프로세스를 정리 중입니다. 잠시 후 다시 보내세요."};}return streamTurn(existing,text,images);}
   if(existing)return {ok:false,out:"이전 실행이 아직 정리되지 않았습니다"};
   if(runs.size>=MAX_RUNS||!policy().admit){const idle=[...runs.values()].filter(x=>!x.busy&&x.state==="idle").sort((a,b)=>(a.idleSince||0)-(b.idleSince||0));if(idle.length)closeIdle(idle[0]);return {ok:false,retryable:true,out:!policy().admit?"가용 RAM 부족 · 실행 대기":"Claude 동시 실행 제한 "+MAX_RUNS+"개 · 실행 대기"};}
@@ -218,7 +218,7 @@ function answerAsk(card, text) {
   return startTurn(card, text, []);
 }
 
-function newSession(cwd, text, images, profile) {
+function newSession(cwd, text, images, chosen) {
   const dir = cwd || process.env.USERPROFILE || "";
   let stat = null;
   try { stat = fs.statSync(dir); } catch { /* 없음 */ }
@@ -227,7 +227,7 @@ function newSession(cwd, text, images, profile) {
   if (!String(text || "").trim() && !(images && images.length)) return { ok: false, out: "Claude Code 세션은 첫 지시가 필요합니다" };
   const id = crypto.randomUUID();
   const file = claude.fileFor(dir, id);
-  if (profile) profiles.assign(file, profile);
+  if (chosen) sessionHarness.assign(file, chosen);
   cwds.set(norm(file), dir);
   const r=startTurn(file,text,images);if(r.retryable){const q=queue.enqueue(file,text,images);return q.ok?{...q,node:file,queued:true,out:r.out}:q;}return r;
 }

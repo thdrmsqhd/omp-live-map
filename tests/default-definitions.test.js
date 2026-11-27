@@ -23,7 +23,7 @@ test("기본 하네스는 최신 Claude 모델을 쓰고 설계와 리뷰는 서
     const models = byName("model");
     assert.deepEqual([...models.keys()].sort(), Object.values(MODELS).map(({ name }) => name).sort());
     for (const { name, model } of Object.values(MODELS)) {
-      assert.ok(allowed.has(model), `${model} must be allowed by the Anthropic broker`);
+      assert.ok(allowed.has(model), `${model} must be in the Engineering model list`);
       assert.equal(models.get(name).payload.model, model);
     }
 

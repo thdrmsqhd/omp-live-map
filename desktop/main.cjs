@@ -2,35 +2,15 @@
 
 const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
-const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const credentials = require("./credentials.cjs");
 const icon = path.join(__dirname, "icons", "omp-live-map.png");
 
-const token = randomBytes(32).toString("hex");
 let child, origin, shutdown = false, window;
 let stage = "starting the app";
 const userData = app.commandLine.getSwitchValue("user-data-dir");
 if (userData && path.isAbsolute(userData)) app.setPath("userData", userData);
 const root = app.isPackaged ? path.join(process.resourcesPath, "runtime") : path.resolve(__dirname, "..");
-const endpoints = new Set([
-  "projects", "projects/archive", "teams", "definitions", "definitions/remove", "definitions/version", "harness/preview", "harness/uses", "harness/apply",
-  "harness/trial", "harness/trial/cancel", "harness/trial/retry",
-  "workflows", "workflows/launch", "workflows/launch-loop", "workflows/save-canvas", "workflow", "workflows/plan", "workflows/export", "workflows/import", "workflows/presets",
-  "workflows/presets/defaults", "workflows/presets/all",
-  "workflow-runs", "workflow-run", "workflow-transcript", "workflow-runs/action", "workflow-runs/approval", "workflow-runs/retry",
-  "tasks", "tasks/move", "sdlc-stages", "project-budget",
-  "workflow-approvals", "workflow-live-map", "workflow-dashboard", "workflow-review", "workflow-artifact", "independent-evaluation",
-  "workflow-delivery/approve", "workflow-delivery/apply", "workflow-delivery/pr", "workflow-delivery/ci", "workflow-delivery/release", "workflow-delivery/staging",
-  "runs", "run", "runs/action", "capabilities", "events", "runtime", "runtime/key", "runtime/login",
-  "projects/register-picked", "projects/ensure",
-]);
-
-// 관제 화면(/)은 Live Map 과 설계(노드 캔버스) 모드를 함께 담으므로 정의·Workflow 편집과 실행 API 를 모두 쓴다.
-// 비밀 값(API 키)·로그인·프로젝트 등록·보관·팀 등록 같은 설정 쓰기는 Engineering 설정 페이지에서만 한다.
-// 실행 창에서 폴더를 고르면 바로 등록하도록 projects/ensure 는 관제 화면도 허용한다(경로 검사는 서버가 한다).
-const settingsOnlyWrites = new Set(["runtime", "runtime/key", "runtime/login", "projects", "projects/archive", "teams"]);
 
 function startServer() {
   const data = app.getPath("userData");
@@ -38,7 +18,7 @@ function startServer() {
   child = spawn(process.execPath, [path.join(root, "server.js"), "--port", "0"], {
     windowsHide: true,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1",
-      OMP_MAP_ENGINEERING_TOKEN: token, OMP_MAP_ENGINEERING_DATA: data,
+      OMP_MAP_ENGINEERING_DATA: data,
       ...(app.isPackaged ? { OMP_MAP_STATE: path.join(data, "legacy-state") } : {}) },
     stdio: ["ignore", "ignore", "pipe", "ipc"],
   });
@@ -78,45 +58,16 @@ function trustedPage(event) {
   return location.pathname;
 }
 
-// 첫 실행 안내에서 고른 폴더. 렌더러가 임의 경로를 등록하지 못하게, 메인 프로세스가 대화상자로 받은 경로만 등록을 허용한다.
-let pickedFolder = null;
+// 데스크톱 앱만 더하는 기능: 네이티브 폴더 대화상자. 고른 경로는 화면이 웹과 같은 HTTP API(projects/ensure)로 등록하고 서버가 검사한다.
+// Engineering 데이터 읽기·쓰기는 IPC 없이 웹과 똑같이 같은 출처 HTTP 로 한다(서버 토큰은 index.html 에 심겨 온다).
 ipcMain.handle("dialog:pick-folder", async (event) => {
   if (trustedPage(event) === null) return { ok: false, error: "Request denied" };
   // 개발 실행(패키지 전)의 검증 스크립트만 대화상자 대신 경로를 넘길 수 있다.
   const scripted = !app.isPackaged && process.env.OMP_MAP_TEST_PICK_FOLDER;
   const result = scripted ? { canceled: false, filePaths: [scripted] }
     : await dialog.showOpenDialog(window, { title: "작업 폴더 선택", properties: ["openDirectory"] });
-  pickedFolder = result.canceled ? null : result.filePaths[0] ?? null;
-  return pickedFolder ? { ok: true, value: pickedFolder } : { ok: false, error: "선택을 취소했습니다." };
-});
-
-ipcMain.handle("engineering:request", async (event, { endpoint, params, payload }) => {
-  const page = trustedPage(event);
-  const fromEngineering = page === "/engineering.html" && endpoints.has(endpoint);
-  const fromLiveMap = page === "/" && endpoints.has(endpoint) && (payload === undefined || !settingsOnlyWrites.has(endpoint));
-  if (!(fromEngineering || fromLiveMap)) return { ok: false, error: "Request denied" };
-  if (endpoint === "projects/register-picked") {
-    if (!pickedFolder || payload?.root !== pickedFolder) return { ok: false, error: "폴더를 먼저 선택해 주세요." };
-    pickedFolder = null;
-    endpoint = "projects/ensure";
-    payload = { root: payload.root };
-  }
-  if (endpoint === "runtime/key") {
-    try {
-      if (payload?.remove) credentials.remove();
-      else credentials.save(payload?.value);
-      child.send({ type: "desktop-runtime-key", key: payload?.remove ? null : payload.value });
-      return { ok: true, value: {} };
-    } catch (error) { return { ok: false, error: error.message }; }
-  }
-  const target = new URL("/api/engineering/" + endpoint, origin);
-  target.search = new URLSearchParams(params ?? {}).toString();
-  const headers = { "x-omp-engineering-token": token, "content-type": "application/json" };
-  const response = await fetch(target, { method: payload === undefined ? "GET" : "POST", headers,
-    body: payload === undefined ? undefined : JSON.stringify(payload),
-    redirect: "error", signal: AbortSignal.timeout(15000) });
-  const value = await response.json();
-  return response.ok ? { ok: true, value } : { ok: false, error: value.error };
+  const picked = result.canceled ? null : result.filePaths[0] ?? null;
+  return picked ? { ok: true, value: picked } : { ok: false, error: "선택을 취소했습니다." };
 });
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -130,8 +81,6 @@ else app.whenReady().then(async () => {
   }
   await startServer();
   stage = "opening the app window";
-  const key = credentials.load();
-  if (key) child.send({ type: "desktop-runtime-key", key });
   window = new BrowserWindow({
     width: 1450, height: 960,
     icon,
@@ -143,7 +92,7 @@ else app.whenReady().then(async () => {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
-    if (![origin + "/", origin + "/engineering.html"].includes(new URL(url).origin + new URL(url).pathname)) {
+    if (new URL(url).origin + new URL(url).pathname !== origin + "/") {
       event.preventDefault();
     }
   });

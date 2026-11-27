@@ -2,7 +2,7 @@
 
 const { problem } = require("./state");
 const { transaction } = require("../infrastructure/sqlite");
-const { MODELS, HARNESSES, PROFILES, LOOPS, PRESET_LOOPS, assetsOf } = require("./default-definitions");
+const { MODELS, HARNESSES, LOOPS, PRESET_LOOPS, assetsOf } = require("./default-definitions");
 
 function addPresetDefinitions(db, catalog, project) {
   return transaction(db, () => {
@@ -23,14 +23,6 @@ function addPresetDefinitions(db, catalog, project) {
     return { author: harnesses.author.id, reviewer: harnesses.reviewer.id, triage: harnesses.triage.id, loop: loops.feature.id,
       loops: Object.fromEntries(Object.entries(PRESET_LOOPS).map(([preset, key]) => [preset, loops[key].id])) };
   });
-}
-
-// 기본 에이전트 프로필을 만든다. 프로필 저장소는 Engineering DB 와 따로이고 범위(개인·프로젝트)가 없으며,
-// 같은 이름이 이미 있으면 사용자가 고쳤을 수 있으므로 건드리지 않는다.
-function ensureProfiles(store = require("../harness/session-profiles")) {
-  const existing = store.list();
-  return Object.fromEntries(Object.entries(PROFILES).map(([key, payload]) =>
-    [key, (existing.find(({ name }) => name === payload.name) ?? store.save(payload)).id]));
 }
 
 // 기본 제공 Workflow 템플릿. 단계마다 어떤 하네스(역할)가 맡는지 정해 두고, 노드 지시문은 그 하네스의 역할과 이어지게 쓴다.
@@ -162,4 +154,4 @@ function addPresetWorkflows(db, catalog, workflows, project) {
   return { created, skipped };
 }
 
-module.exports = { addPresetDefinitions, addPresetWorkflows, ensureProfiles, buildPreset, listPresets };
+module.exports = { addPresetDefinitions, addPresetWorkflows, buildPreset, listPresets };

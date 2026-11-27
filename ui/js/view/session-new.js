@@ -15,12 +15,12 @@ function openNewSession(at) {
   box.id = "newsess";
   box.innerHTML = `<div class="nsbox">
     <div class="nst">새 세션</div>
-    <label>세션 하네스<select class="nsprofile">
-      <option value="">기본 실행 설정</option>
+    <label>하네스<select class="nsdef">
+      <option value="">하네스 없이 · 실행기 기본 설정</option>
     </select></label>
     <div class="nsharness-tools">
-      <small class="nsprofile-note" role="status"></small>
-      <a href="/?mode=design">프로필 관리</a>
+      <small class="nsdef-note" role="status"></small>
+      <a href="/?mode=design">하네스 관리(설계)</a>
     </div>
     <label>실행기<select class="nshz">
       <option value="omp">omp (기본)</option>
@@ -36,34 +36,36 @@ function openNewSession(at) {
   const ta = box.querySelector(".nstext");
   const err = box.querySelector(".nserr");
   const hz = box.querySelector(".nshz");
-  const profileSelect = box.querySelector(".nsprofile");
-  const profileNote = box.querySelector(".nsprofile-note");
-  let profiles = [];
-  const selectedProfile = () => profiles.find(({ id }) => id === profileSelect.value);
-  const paintProfile = () => {
-    const selected = selectedProfile();
+  // 하네스(설계 탭의 하네스 정의)를 고르면 그 역할·지시가 세션의 시스템 프롬프트가 되고 실행기·모델도 하네스를 따른다.
+  const defSelect = box.querySelector(".nsdef");
+  const defNote = box.querySelector(".nsdef-note");
+  let harnesses = [];
+  const selectedHarness = () => harnesses.find(({ id }) => id === defSelect.value);
+  const scopeOf = ({ scope, team }) => scope === "team" ? "팀 " + team : scope === "project" ? "프로젝트" : "개인";
+  const paintHarness = () => {
+    const selected = selectedHarness();
     hz.disabled = Boolean(selected);
     hz.value = selected?.adapter ?? (NEW_HARNESS === "claude" ? "claude" : "omp");
-    profileNote.textContent = selected ? [selected.role, selected.model].filter(Boolean).join(" · ") : "";
+    defNote.textContent = selected ? [selected.role, selected.modelName || selected.model].filter(Boolean).join(" · ") : "";
   };
-  async function loadProfiles() {
+  async function loadHarnesses() {
     try {
       const response = await fetch("/api/session-harnesses");
       const result = await response.json();
       if (!result.ok) throw new Error(result.out);
-      profiles = result.profiles;
-      profileSelect.replaceChildren(new Option("기본 실행 설정", ""),
-        ...profiles.map(({ id, name, adapter, version }) =>
-          new Option(`${name} · ${adapter === "omp" ? "OMP" : "Claude Code"} · v${version}`, id)));
-      paintProfile();
+      harnesses = result.harnesses;
+      defSelect.replaceChildren(new Option("하네스 없이 · 실행기 기본 설정", ""),
+        ...harnesses.map((item) => new Option(`${item.name} · ${item.adapter === "omp" ? "OMP" : "Claude Code"} · ${scopeOf(item)} · v${item.version}`, item.id)));
+      paintHarness();
+      if (!harnesses.length) defNote.textContent = "저장된 하네스가 없습니다. 설계 탭에서 '기본 구성 추가'로 만들 수 있습니다.";
     } catch (error) {
-      profileNote.textContent = "저장된 하네스를 불러오지 못했습니다. " + error.message;
+      defNote.textContent = "하네스를 불러오지 못했습니다. " + error.message;
     }
   }
   const go = box.querySelector("button[data-open]");
   hz.value = NEW_HARNESS === "claude" ? "claude" : "omp";
   hz.addEventListener("change", () => saveNewHarness(hz.value));
-  profileSelect.addEventListener("change", paintProfile);
+  defSelect.addEventListener("change", paintHarness);
   cwd.value = ENV.localCwd || "";
   installCwdSuggest(box, cwd);
   const files = box.__files = [];
@@ -84,10 +86,10 @@ function openNewSession(at) {
     const pend = addPending(at, cwd.value.trim());
     let out;
     try {
-      const selected = selectedProfile();
-      const profile = selected && { id: selected.id, version: selected.version };
+      const selected = selectedHarness();
+      const definition = selected && { id: selected.id, version: selected.version };
       const res = await postJSON("/api/session/new", { cwd: cwd.value.trim(), text,
-        files: attachPayload(files), harness: hz.value, profile });
+        files: attachPayload(files), harness: hz.value, definition });
       out = await res.json().catch(() => ({ ok: false, out: "HTTP " + res.status }));
     } catch (e) {
       out = { ok: false, out: e.message };
@@ -126,6 +128,6 @@ function openNewSession(at) {
   // 창 안의 우클릭이 맵 메뉴를 띄우지 않게 한다.
   box.addEventListener("contextmenu", (e) => e.stopPropagation());
   document.body.appendChild(box);
-  void loadProfiles();
+  void loadHarnesses();
   (cwd.value ? ta : cwd).focus();
 }

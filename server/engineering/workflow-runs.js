@@ -47,7 +47,7 @@ function workflowRuns(db, catalog, workflows, tasks = sdlcTasks(db, catalog, wor
     const timeout = integer(input.timeoutMs, "workflow timeout", 100, 3600000);
     const budget = integer(input.budgetCents, "workflow budget", 0, 100000);
     const key = string(idempotencyKey, "idempotency key");
-    const instruction = task?.instruction ?? (launch ? string(input.instruction, "run instruction", 12000) : null);
+    const instruction = task ? tasks.instructionFor(task) : (launch ? string(input.instruction, "run instruction", 12000) : null);
     const identity = launch ? ["quick", project, title, timeout, budget, instruction, launch.source] :
       [project, existingWorkflow.id, existingWorkflow.version, title, timeout, budget, task?.id ?? null, instruction];
     const hash = createHash("sha256").update(JSON.stringify(identity)).digest("hex");

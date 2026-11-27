@@ -8,16 +8,8 @@ const { promptAssets } = require("./harness-assets");
 const { problem, redact } = require("./state");
 const { acceptsWorkflowAsk, rejectsWorkflowAsk } = require("./workflow-gates");
 const { claudeStreamProgress, ompToolLine } = require("./stream-progress");
-const { brokerFailure } = require("./anthropic");
 const { adapterIds } = require("./adapter-registry");
 
-// 브로커가 호출을 막았으면(구독 로그인 만료·예산 소진) CLI 의 일반 오류 대신 그 사유로 실패한다.
-function throwBrokerFailure(child) {
-  const code = child?.failure?.();
-  if (code) throw brokerFailure(code);
-}
-
-const claudeTools = ["Read", "Edit", "Write", "Glob", "Grep"];
 // 암호·결제 정보·OS 승인 문구는 질문 카드에 담지 않는다. 일치 문구는 오류문에도 남기지 않는다.
 const blockedAsk = /(?:\b(?:password|passwd|passphrase|cvv|cvc|uac|sudo)\b|credit\s*card|card\s*number|payment\s*(?:data|info|details|card)|os\s+approval|administrator\s+approval|admin(?:istrator)?\s+privileges?|비밀번호|패스워드|카드\s*번호|결제\s*정보|관리자\s*권한|사용자\s*계정\s*컨트롤)/i;
 
@@ -134,21 +126,17 @@ function progressOf(context) {
   };
 }
 
+// 실행은 이 PC 에서 고른 작업 폴더에 바로 한다. 화면에 그대로 보여 주는 실행 조건이다(격리하지 않는다).
+const hostPolicy = Object.freeze({ directory: "selected-folder", permission: "user", network: "host" });
+
 function execution(backend, name, run) {
   return {
     enforced: backend.enforced === true,
-    executionPolicy: backend.protocol === "docker-anthropic" ? Object.freeze({
-      directory: "/workspace",
-      workspace: "managed-worktree",
-      permission: "workspace-only",
-      workspaceWritable: true,
-      network: "isolated",
-      tools: Object.freeze(name === "claude" ? claudeTools : ["read", "edit", "write"]),
-    }) : null,
+    executionPolicy: hostPolicy,
     supports(model, harness) { return backend.supports(name, model, harness); },
     run(context) {
       if (backend.enforced !== true || !backend.supports(name, context.model, context.harness)) {
-        throw problem(409, "Isolated adapter is unavailable");
+        throw problem(409, "이 실행기(" + name + ")를 이 PC에서 사용할 수 없습니다");
       }
       context.signal.throwIfAborted();
       return run(backend, context);
@@ -164,7 +152,7 @@ async function omp(backend, context, io) {
     mainPrompt: backend.ompPrompt,
   });
   let diagnostics = "";
-  if (backend.protocol) rpc.child.stderr.on("data", (data) => { diagnostics = (diagnostics + data).slice(-4000); });
+  rpc.child.stderr?.on("data", (data) => { diagnostics = (diagnostics + data).slice(-4000); });
   const closed = once(rpc.child, "close");
   closed.catch(() => {});
   const onAbort = () => backend.terminate(rpc.child);
@@ -236,7 +224,7 @@ async function omp(backend, context, io) {
   };
   try {
     const session = await call({ type: "get_state" });
-    await call({ type: "set_model", provider: backend.protocol ? "omp-bridge" : model.provider, modelId: model.model });
+    await call({ type: "set_model", provider: model.provider, modelId: model.model });
     if (model.reasoning) await call({ type: "set_thinking_level", level: model.reasoning });
     // 핀된 omp 는 set_ask_dialog 이후에만 method ask 를 낸다. 실패해도 select·confirm 대기는 유지한다.
     if (context.workflowAsk === true) {
@@ -247,9 +235,8 @@ async function omp(backend, context, io) {
     await done;
     signal.throwIfAborted();
     if (!turns || !session.sessionId) throw new Error("OMP returned no completed turn or session");
-    return { ...(capture ? { output: output || null, tools: [...tools] } : {}), sessionId: session.sessionId, model: model.model, costCents: rpc.child.cost?.() ?? costCents, costBasis: backend.protocol ? "reserved" : "reported" };
+    return { ...(capture ? { output: output || null, tools: [...tools] } : {}), sessionId: session.sessionId, model: model.model, costCents, costBasis: "reported" };
   } catch (error) {
-    if (!signal.aborted) throwBrokerFailure(rpc.child);
     if (diagnostics) throw new Error(error.message + ": " + redact(diagnostics));
     throw error;
   } finally {
@@ -266,8 +253,6 @@ async function claude(backend, context) {
   const sessionId = randomUUID();
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
     "--permission-mode", "acceptEdits", "--session-id", sessionId, "--model", model.model];
-  if (backend.protocol) args.push("--tools", claudeTools.join(","), "--allowedTools", claudeTools.join(","),
-    "--setting-sources", "user", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
   const child = backend.launch("claude", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] }, { budgetCents, signal, model });
   const closed = once(child, "close");
   closed.catch(() => {});
@@ -292,7 +277,6 @@ async function claude(backend, context) {
     }
     const [code] = await closed;
     signal.throwIfAborted();
-    if (code !== 0 || !result || result.is_error || !Number.isFinite(result.total_cost_usd)) throwBrokerFailure(child);
     // Claude Code 가 오류 결과를 냈으면(예: 모델에 비해 CLI 버전이 낮음) 그 이유를 그대로 남겨 관제 화면에서 보이게 한다.
     if (result?.is_error && typeof result.result === "string" && result.result) {
       throw new Error("Claude Code 실행 실패: " + redact(result.result).slice(0, 600));
@@ -300,7 +284,7 @@ async function claude(backend, context) {
     if (code !== 0 || !result || result.is_error || !Number.isFinite(result.total_cost_usd) || result.total_cost_usd < 0) {
       throw new Error("Claude returned no successful result with valid cost");
     }
-    return { ...(capture ? { output: typeof result.result === "string" ? redact(result.result) : null, tools: [...tools] } : {}), sessionId, model: model.model, costCents: child.cost?.() ?? result.total_cost_usd * 100, costBasis: backend.protocol ? "reserved" : "reported" };
+    return { ...(capture ? { output: typeof result.result === "string" ? redact(result.result) : null, tools: [...tools] } : {}), sessionId, model: model.model, costCents: result.total_cost_usd * 100, costBasis: "reported" };
   } finally {
     signal.removeEventListener("abort", terminate);
     lines.close();

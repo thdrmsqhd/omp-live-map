@@ -1,11 +1,11 @@
 "use strict";
 
-const { timingSafeEqual } = require("node:crypto");
 const { secureRunner } = require("../engineering/runner");
 const { integer, string } = require("../engineering/definitions");
 const { problem } = require("../engineering/state");
 const { listPresets, buildPreset } = require("../engineering/workflow-presets");
-const { quickLaunch, loopLaunch } = require("../engineering/workflow-launch");
+const { quickLaunch } = require("../engineering/workflow-launch");
+const sessionHarness = require("../harness/session-harness");
 const { previewHarness } = require("../engineering/harness-preview");
 const { projectContext } = require("../engineering/project-context");
 const workflowLive = require("../engineering/workflow-live");
@@ -34,22 +34,30 @@ async function body(req) {
     throw problem(400, "JSON object required");
   }
 }
-function authenticated(req, token) {
-  if (!token) return false;
-  const supplied = Buffer.from(String(req.headers["x-omp-engineering-token"] ?? ""));
-  const expected = Buffer.from(token);
-  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
-}
-function createEngineeringRoutes({ token, directory, runner = secureRunner() }) {
+// authorize(req): 서버 시작마다 만든 토큰(ops-token.js)을 확인한다. 화면은 같은 출처 index.html 에 심긴 토큰을 헤더로 돌려보낸다.
+function createEngineeringRoutes({ authorize, directory, runner = secureRunner() }) {
   const initialize = createEngineeringServices({ directory, runner });
+  // 관제의 ＋ 세션 창이 하네스 목록을 같은 정의 저장소에서 읽는다(routes-chat.js → harness/session-harness.js).
+  sessionHarness.useCatalog(() => initialize().definitions);
   async function route(req, res, url) {
-    if (!authenticated(req, token)) return reply(res, 403, { error: "Engineering session is required" });
+    if (!authorize?.(req)) return reply(res, 403, { error: "Engineering token is required", out: "Engineering API 토큰이 없습니다. 화면을 새로 고쳐 주세요." });
     try {
       const { definitions, workflows, runs, loop, flowRuns, flow, templates, tasks, stages, observability, delivery, budget, staging, trials, presetDefinitions, presetWorkflows, evaluation } = initialize();
       const endpoint = url.pathname.slice(prefix.length);
       const query = (key) => string(url.searchParams.get(key), key);
       const observations = createObservationReads({ definitions, flowRuns, evaluation, observability, projectContext, workflowLive });
       let result;
+      // 칸반 ＋ 줄에서 템플릿(8종)을 고르면 그 템플릿의 Workflow 를 프로젝트에 한 번 만들어(기본 하네스·루프) 카드에 고정한다.
+      function taskTemplate(input) {
+        const project = string(input.project, "project");
+        const preset = listPresets().find(({ id }) => id === input.template);
+        if (!preset) throw problem(400, "Unknown workflow template");
+        presetWorkflows(project);
+        const flow = workflows.list(project).find(({ name, scope }) => name === preset.name && scope === "project")
+          ?? workflows.list(project).find(({ name }) => name === preset.name);
+        if (!flow) throw problem(409, "Workflow template could not be prepared");
+        return { workflow: flow.id, version: flow.version, template: undefined };
+      }
       if (req.method === "GET") {
         const observed = await observations.get(endpoint, url);
         if (observed) result = observed.value;
@@ -103,19 +111,20 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
         const input = await body(req);
         if (endpoint === "independent-evaluation") result = await evaluation.post(input);
         if (endpoint === "runtime" && runner.prepare) {
-          void runner.prepare(input.build === true);
-          result = runner.status();
-        }
-        if (endpoint === "runtime/login" && runner.login) {
-          runner.login(input.cancel === true);
+          await runner.prepare();
           result = runner.status();
         }
         if (endpoint === "projects") result = await definitions.saveProject(input);
         if (endpoint === "projects/ensure") result = await definitions.ensureProject(input);
+        if (endpoint === "projects/rename") result = definitions.renameProject(string(input.id, "project"), input.name);
         if (endpoint === "teams") result = definitions.saveTeam(input.name);
         if (endpoint === "project-budget") result = budget.save(string(input.project, "project"), input);
-        if (endpoint === "tasks") result = tasks.save(input);
-        if (endpoint === "sdlc-stages") result = stages.save(input);
+        if (endpoint === "tasks") result = tasks.save(input.template ? { ...input, ...taskTemplate(input) } : input);
+        if (endpoint === "tasks/run") result = flow.start(tasks.prepareRun(string(input.id, "task")), input.key);
+        if (endpoint === "sdlc-stages") result = stages.rename(input);
+        if (endpoint === "sdlc-stages/add") result = stages.add(input);
+        if (endpoint === "sdlc-stages/order") result = stages.order(input);
+        if (endpoint === "sdlc-stages/remove") result = stages.remove(input);
         if (endpoint === "tasks/move") result = tasks.move(string(input.id, "task"), input.status, input.revision);
         if (endpoint === "workflows") result = workflows.save(input);
         if (endpoint === "workflows/save-canvas") result = workflows.saveCanvas(input);
@@ -134,7 +143,6 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           input.id ? string(input.id, "workflow") : undefined);
         if (endpoint === "workflow-runs") result = flow.start(input, input.key);
         if (endpoint === "workflows/launch") result = quickLaunch(definitions, workflows, flow, runner, input);
-        if (endpoint === "workflows/launch-loop") result = loopLaunch(definitions, workflows, flow, runner, input);
         if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
         if (endpoint === "workflow-runs/retry") {
           const node = string(input.node, "node");
@@ -145,7 +153,6 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           result = await flow.decide(string(input.id, "run"), string(input.node, "node"), input.decision, input.reason);
         }
         if (endpoint === "workflow-delivery/approve") result = await delivery.approve(string(input.id, "run"), input.branch);
-        if (endpoint === "workflow-delivery/apply") result = await delivery.applyToFolder(string(input.id, "run"));
         if (endpoint === "workflow-delivery/pr") result = await delivery.createPR(string(input.id, "run"));
         if (endpoint === "workflow-delivery/ci") result = await delivery.checkCI(string(input.id, "run"));
         if (endpoint === "workflow-delivery/release") result = await delivery.approveRelease(string(input.id, "run"));
@@ -170,6 +177,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
       return reply(res, error.status ?? 500, { error: error.status ? error.message : "Engineering operation failed" });
     }
   }
+  route.close = initialize.close;
   return route;
 }
 

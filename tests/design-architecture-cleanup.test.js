@@ -63,7 +63,7 @@ test("F2: session strip preserves active session and pending question without mu
   assert.equal(context.sessionStripSnapshot(), null);
 });
 
-test("D3: infrastructure Docker backend has no engineering imports", () => {
-  const source = readFileSync(path.join(root, "server/infrastructure/docker.js"), "utf8");
+test("D3: infrastructure host process backend has no engineering imports", () => {
+  const source = readFileSync(path.join(root, "server/infrastructure/host-process.js"), "utf8");
   assert.doesNotMatch(source, /require\s*\(\s*["']\.\.\/engineering\//);
 });

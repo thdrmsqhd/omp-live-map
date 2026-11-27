@@ -128,5 +128,5 @@ const saveDbProfiles = (id, list) => {
   writeJSON("omp-map-dbprofiles", Object.fromEntries(DBPROF));
 };
 
-mapMode = readJSON("omp-map-view-mode-v2", window.engineeringDesktop ? "map" : "overview");
-if (!["map","overview","workspace","design"].includes(mapMode) || (mapMode==="design" && !window.engineeringDesktop)) mapMode = "map";
+mapMode = readJSON("omp-map-view-mode-v2", "overview");
+if (!["map","overview","workspace","design","tasks"].includes(mapMode)) mapMode = "map";

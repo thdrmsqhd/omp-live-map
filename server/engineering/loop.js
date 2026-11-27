@@ -5,7 +5,7 @@ const { executionDefinitions } = require("./harness-provenance");
 const { verifyResult } = require("./harness-result");
 const { problem, redact } = require("./state");
 
-function loopEngine(store, catalog, runner, worktrees) {
+function loopEngine(store, catalog, runner, folders) {
   const active = new Map();
   function resolve(run) {
     const loop = catalog.versionOf(run.definition, run.version);
@@ -27,7 +27,7 @@ function loopEngine(store, catalog, runner, worktrees) {
       if (remaining <= 0) return store.change(id, "limit_exceeded");
       const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(remaining)]);
       store.change(id, "running");
-      const workspace = run.workspace ?? await worktrees.create(catalog.project(run.project), run);
+      const workspace = run.workspace ?? await folders.create(catalog.project(run.project), run);
       store.workspace(id, workspace);
       const project = catalog.project(run.project);
       const history = store.attempts(id);
@@ -46,7 +46,7 @@ function loopEngine(store, catalog, runner, worktrees) {
           });
           signal.throwIfAborted();
           if (!Number.isFinite(output.costCents) || output.costCents < 0) {
-            throw new Error("The isolated adapter returned no valid usage");
+            throw new Error("The adapter returned no valid usage");
           }
           used += output.costCents;
           const overBudget = used > loop.budgetCents;

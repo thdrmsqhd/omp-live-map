@@ -75,12 +75,20 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
 
     try {
       const toRef = ({ id, version }) => ({ id, version });
-      const ompProfile = (await post("/api/session-harnesses", {
-        name: "Shared OMP profile", adapter: "omp", provider: "fake", model: "fake-2", role: "Reviewer",
-        instructions: "OMP profile instructions",
-      })).profile;
-      const omp = await post("/api/session/new", { cwd: directory, profile: toRef(ompProfile) });
-      assert.match(launches.find(({ command }) => command === "omp").prompt, /Role: Reviewer\n\nOMP profile instructions/);
+      // ＋ 세션 창은 Engineering 하네스 정의를 고른다(예전 에이전트 프로필은 하네스로 합쳐졌다).
+      async function define(kind, payload, extra = {}) {
+        const response = await request("/api/engineering/definitions", { method: "POST",
+          headers: { "content-type": "application/json" }, body: JSON.stringify({ scope: "personal", kind, payload, ...extra }) });
+        assert.equal(response.status, 200, response.text);
+        return JSON.parse(response.text);
+      }
+      const ompModel = await define("model", { name: "Fake OMP", provider: "fake", model: "fake-2" });
+      const ompHarness = await define("harness", { name: "Shared OMP harness", adapter: "omp", model: ompModel.id, role: "Reviewer",
+        instructions: "OMP harness instructions" });
+      const listed = JSON.parse((await request("/api/session-harnesses")).text);
+      assert.ok(listed.harnesses.some(({ id, model, provider }) => id === ompHarness.id && model === "fake-2" && provider === "fake"));
+      const omp = await post("/api/session/new", { cwd: directory, definition: toRef(ompHarness) });
+      assert.match(launches.find(({ command }) => command === "omp").prompt, /Role: Reviewer\n\nOMP harness instructions/);
       assert.ok(JSON.parse((await fs.readFile(path.join(directory, "omp-rpc.jsonl"), "utf8"))
         .split("\n").find((line) => line.includes('"command":"set_model"'))).frame.success);
       await post("/api/prompt", { node: omp.node, text: "fixture prompt" });
@@ -88,21 +96,21 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
       await post("/api/prompt/cancel", { node: omp.node });
       await post("/api/session/stop", { node: omp.node });
 
-      const claudeProfile = (await post("/api/session-harnesses", {
-        name: "Shared Claude profile", adapter: "claude", model: "sonnet", instructions: "Claude profile v1 instructions",
-      })).profile;
-      const claude = await post("/api/session/new", { cwd: directory, profile: toRef(claudeProfile), text: "fixture prompt" });
+      const claudeModel = await define("model", { name: "Sonnet alias", provider: "anthropic", model: "sonnet" });
+      const claudeHarness = await define("harness", { name: "Shared Claude harness", adapter: "claude", model: claudeModel.id,
+        role: "Writer", instructions: "Claude harness v1 instructions" });
+      const claude = await post("/api/session/new", { cwd: directory, definition: toRef(claudeHarness), text: "fixture prompt" });
       const claudeLaunch = launches.find(({ command }) => command === "claude");
-      assert.equal(claudeLaunch.prompt, "Claude profile v1 instructions");
+      assert.equal(claudeLaunch.prompt, "Role: Writer\n\nClaude harness v1 instructions");
       assert.equal(claudeLaunch.args[claudeLaunch.args.indexOf("--model") + 1], "sonnet");
-      const revised = (await post("/api/session-harnesses", { ...claudeProfile, instructions: "Claude profile v2 instructions" })).profile;
+      const revised = await define("harness", { ...claudeHarness.payload, instructions: "Claude harness v2 instructions" }, toRef(claudeHarness));
       assert.equal(revised.version, 2);
       const invalid = await request("/api/session/new", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cwd: directory, profile: toRef(claudeProfile), text: "stale profile" }),
+        body: JSON.stringify({ cwd: directory, definition: toRef(claudeHarness), text: "stale harness" }),
       });
       assert.equal(JSON.parse(invalid.text).ok, false);
-      assert.equal(require("../server/harness/session-profiles").assigned(claude.node, "claude").version, 1);
+      assert.equal(require("../server/harness/session-harness").assigned(claude.node, "claude").version, 1);
       await waitForText(claude.node, '"type":"cost-state"');
       require("../server/harness/claude").scan();
       const graph = JSON.parse((await request("/api/graph")).text);
@@ -112,8 +120,8 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
       const list=async()=>JSON.parse((await request("/api/session/list")).text).sessions;
       async function idle(){for(let i=0;i<150;i++){const s=(await list()).find(x=>x.node===claude.node);if(s?.state==="idle"&&!s.busy)return s;await delay(20);}assert.fail("Claude stream did not become idle");}
       const first=await idle();
-      await post("/api/session-harnesses", { ...toRef(revised), remove: true });
-      assert.equal(require("../server/harness/session-profiles").assigned(claude.node, "claude").instructions, "Claude profile v1 instructions");
+      assert.equal(require("../server/harness/session-harness").assigned(claude.node, "claude").instructions, "Claude harness v1 instructions",
+        "a running session keeps the harness it started with");
       await post("/api/prompt",{node:claude.node,text:"second fixture"});
       await waitForText(claude.node,"second fixture");
       const second=await idle();assert.equal(second.pid,first.pid,"stream must reuse same process");
@@ -127,7 +135,7 @@ test("기존 세션 API로 두 가짜 CLI를 연결하고 OMP 턴을 취소한�
       const remaining = [...children];
       for (const { child } of remaining) child.kill();
       await Promise.all(remaining.map(({ closed }) => closed));
-      require("../server/harness/session-profiles").close();
+      require("../server/harness/session-harness").close();
     }
   });
 });

@@ -26,10 +26,9 @@ test('Desktop: one canvas with a real workflow saved, launched, approved and rec
     await page.getByRole('button', { name: '설계', exact:true }).waitFor();
     const origin = new URL(page.url()).origin;
     const request = async (name, params, body) => {
-      const result = await page.evaluate(([n,p,b]) => window.engineeringDesktop.request(n,p,b), [name,params??{},body]);
+      const result = await page.evaluate(([n,p,b]) => window.engineeringApi.request(n,p,b), [name,params??{},body]);
       assert.equal(result.ok,true,`${name}: ${result.error}`); return result.value;
     };
-    await page.goto(origin + '/engineering.html');
     const { id: project } = await request('projects', {}, { name: '통합 관제 검증 프로젝트', root, branch: 'main' });
     const { id: workflow } = await request('workflows', {}, { project, payload: {name:'검증 결과 승인', nodes:[{id:'start',type:'start',label:'시작',x:0,y:0},{id:'review',type:'approval',label:'결과 검토',prompt:'작업 결과를 확인하고 승인하세요.',x:330,y:0},{id:'end',type:'end',label:'완료',x:680,y:0}],edges:[{from:'start',to:'review',port:'next'},{from:'review',to:'end',port:'approved'}]} });
     await page.goto(origin + '/?mode=design&project=' + project + '&workflow=' + workflow);

@@ -36,8 +36,8 @@ node tests/verification/readme-screenshots.cjs all   # main | engineering | all
 ```
 
 - `main`: 가짜 omp·Claude Code 세션 기록을 둔 HOME 으로 서버를 띄워 관제·워크스페이스·Live Map(`docs/media/v8/01~03`)을 찍습니다.
-- `engineering`: 같은 HOME 으로 데스크톱 앱(Electron)을 띄워 Engineering 화면, 노드 캔버스(버그 수정 Workflow, 1920×1080), 승인 대기 실행(`11~18`)을 찍습니다. 사용자 데이터 폴더도 데모용으로 따로 둡니다.
-- `OMP_README_LIVE=1`: 실행 중 화면(`19-live-map-running.png`)을 찍려고 코드 리뷰 Workflow 를 실제로 한 번 돌립니다(모델 호출 비용·구독 한도 사용). Claude Code 로그인은 `CLAUDE_CONFIG_DIR`(기본 `~/.claude`)에서 읽고, Docker 컨텍스트 메타데이터만 데모 HOME 으로 복사합니다. 리뷰가 최종 승인 대기에 이르면 멈춥니다.
+- `engineering`: 같은 HOME 으로 데스크톱 앱(Electron)을 띄워 Task 탭(개발 Task), 노드 캔버스(버그 수정 Workflow, 1920×1080), 승인 대기 실행(`11~18`)을 찍습니다. 사용자 데이터 폴더도 데모용으로 따로 둡니다.
+- `OMP_README_LIVE=1`: 실행 중 화면(`19-live-map-running.png`)을 찍려고 코드 리뷰 Workflow 를 실제로 한 번 돌립니다(모델 호출 비용·구독 한도 사용). Claude Code 로그인은 `CLAUDE_CONFIG_DIR`(기본 `~/.claude`)에서 읽습니다. 리뷰가 최종 승인 대기에 이르면 멈춥니다.
 - 캡처 대상 화면의 요소 이름이 바뀌면 스크립트의 선택자를 고치세요. 실패한 단계는 `[skip]`으로 표시하고 나머지를 계속 찍습니다.
 - CI에서는 실행하지 않습니다. 자원 수치(CPU·RAM)는 캡처한 PC의 값입니다.
 

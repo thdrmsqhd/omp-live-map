@@ -1,9 +1,9 @@
-// 노드 캔버스(studio.js)에서 나눈 모듈: 저장·되돌리기·삭제(정의·프로필·Workflow API).
+// 노드 캔버스(studio.js)에서 나눈 모듈: 저장·되돌리기·삭제(정의·Workflow API).
 // studio.js 의 상태·함수는 S 로 받는다. let 상태(wf·project 등)는 S 의 getter·setter 로 읽고 쓴다.
 import { KIND_LABELS } from "./studio-nodes.js";
 import { KIND_ORDER } from "./studio-shared.js";
 export function bindStudioPersist(S) {
-  const { desktop, el, fingerprint, isDirty, libraryNodes, nameOf, nodes, notifyChanged, ownerOf, pinned, profilesChanged, reinspect, request, say, steps, workflowDirty, workflowName } = S;
+  const { el, fingerprint, isDirty, libraryNodes, nameOf, nodes, notifyChanged, ownerOf, pinned, reinspect, request, say, steps, workflowDirty, workflowName } = S;
   const fillWorkflowPicker = (...args) => S.fillWorkflowPicker(...args);
   const idOf = (...args) => S.idOf(...args);
   const libraryNode = (...args) => S.libraryNode(...args);
@@ -16,15 +16,6 @@ export function bindStudioPersist(S) {
   const spots = (...args) => S.spots(...args);
   const updateToolbar = (...args) => S.updateToolbar(...args);
   // ---- 저장·삭제 ---------------------------------------------------------------
-  async function profileRequest(input) {
-    const response = await fetch("/api/session-harnesses", input === undefined ? undefined : {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
-    });
-    if (!response.ok) throw new Error("프로필 요청 실패 (" + response.status + ")");
-    const result = await response.json();
-    if (!result.ok) throw new Error(result.out);
-    return result;
-  }
   function rekey(node, key) {
     if (node.key === key) return;
     const old = node.key;
@@ -55,26 +46,13 @@ export function bindStudioPersist(S) {
       if (target?.isNew) await saveNode(target, { batch: true });
     }
     const previous = node.record?.version;
-    if (node.kind === "profile") {
-      const owner = ownerOf(node);
-      const { profile } = await profileRequest({ ...node.draft, id: node.record?.id, version: node.record?.version,
-        ...(node.record ? {} : { scope: owner.scope === "team" ? "team" : "personal", team: owner.team ?? undefined }) });
-      node.record = profile;
-      node.draft = { name: profile.name, adapter: profile.adapter, provider: profile.provider ?? "", model: profile.model ?? "",
-        role: profile.role ?? "", instructions: profile.instructions ?? "" };
-      rekey(node, "profile:" + profile.id);
-      S.profiles = [...profiles.filter(({ id }) => id !== profile.id), profile];
-      profilesChanged?.(S.profiles);
-    } else {
-      if (!desktop()) throw new Error("데스크톱 앱에서 Engineering을 열어 주세요.");
-      const owner = ownerOf(node);
-      const saved = await request("definitions", {}, { scope: owner.scope, project: owner.project ?? undefined, team: owner.team ?? undefined,
-        kind: node.kind, payload: payloadOf(node), id: node.record?.id, version: node.record?.version });
-      node.record = saved;
-      node.draft = structuredClone(saved.payload);
-      rekey(node, "def:" + saved.id);
-      S.defs = [...S.defs.filter(({ id }) => id !== saved.id), saved];
-    }
+    const owner = ownerOf(node);
+    const saved = await request("definitions", {}, { scope: owner.scope, project: owner.project ?? undefined, team: owner.team ?? undefined,
+      kind: node.kind, payload: payloadOf(node), id: node.record?.id, version: node.record?.version });
+    node.record = saved;
+    node.draft = structuredClone(saved.payload);
+    rekey(node, "def:" + saved.id);
+    S.defs = [...S.defs.filter(({ id }) => id !== saved.id), saved];
     node.isNew = false;
     delete node.owner;
     delete node.raw;
@@ -85,10 +63,9 @@ export function bindStudioPersist(S) {
     // 이전 최신 버전에 고정돼 있던 Workflow 단계는 새 버전을 따라간다(Workflow 저장 전까지는 초안).
     let bumped = 0;
     for (const step of steps()) {
-      const slot = node.kind === "profile" ? "profile" : node.kind;
-      if (step.ref[slot] !== node.key) continue;
-      if (slot === "profile" ? (step.profileVersion ?? previous) === previous : (step.version ?? previous) === previous) {
-        if (slot === "profile") step.profileVersion = node.record.version; else step.version = node.record.version;
+      if (step.ref[node.kind] !== node.key) continue;
+      if ((step.version ?? previous) === previous) {
+        step.version = node.record.version;
         bumped++;
       }
     }
@@ -111,7 +88,7 @@ export function bindStudioPersist(S) {
         await saveNode(node, { batch: true });
         count++;
       }
-      let message = count ? `정의·프로필 ${count}개 저장` : "";
+      let message = count ? `정의 ${count}개 저장` : "";
       if (workflowDirty()) {
         const saved = await saveWorkflow(true);
         message += (message ? " · " : "") + `Workflow ‘${saved.name}’ v${saved.version} 저장`;
@@ -131,7 +108,7 @@ export function bindStudioPersist(S) {
     const owner = S.project.id;
     // 저장 범위는 새 Workflow 를 처음 저장할 때만 고른다(서버가 이후 변경을 막는다).
     const scope = S.wf.record ? undefined : el("workflow-scope").value;
-    if (scope === "team" && !S.project.team) throw new Error("이 프로젝트에는 팀이 없습니다. 프로젝트 설정에서 팀을 지정하세요.");
+    if (scope === "team" && !S.project.team) throw new Error("이 프로젝트에는 팀이 없습니다. 프로젝트 범위나 개인 범위로 저장하세요.");
     const saved = await request("workflows", {}, { project: owner, payload: serialize(true), id: S.wf.record?.id, version: S.wf.record?.version, scope });
     if (owner !== S.project?.id) return saved;
     await loadWorkflows();
@@ -145,9 +122,7 @@ export function bindStudioPersist(S) {
   }
   function revert(node) {
     if (node.isNew) return;
-    const fresh = node.kind === "profile" ? libraryNode("profile", node.record, {
-      name: node.record.name, adapter: node.record.adapter, provider: node.record.provider ?? "", model: node.record.model ?? "",
-      role: node.record.role ?? "", instructions: node.record.instructions ?? "" }) : libraryNode(node.kind, node.record, node.record.payload);
+    const fresh = libraryNode(node.kind, node.record, node.record.payload);
     Object.assign(fresh, { x: node.x, y: node.y, collapsed: node.collapsed });
     nodes.set(node.key, fresh);
     render();
@@ -167,15 +142,12 @@ export function bindStudioPersist(S) {
     if (!node.isNew) {
       if (!window.confirm(`‘${nameOf(node)}’ ${KIND_LABELS[node.kind]}을(를) 삭제할까요? 되돌릴 수 없습니다.`)) return;
       try {
-        if (node.kind === "profile") await profileRequest({ remove: true, id: node.record.id, version: node.record.version });
-        else await request("definitions/remove", {}, { id: node.record.id });
+        await request("definitions/remove", {}, { id: node.record.id });
       } catch (error) {
         throw new Error(/referenced/i.test(error.message) ? "다른 정의나 Workflow가 이 정의를 쓰고 있어 삭제할 수 없습니다. 먼저 연결을 바꿔 저장하세요." : error.message);
       }
       S.historyClear();   // 서버에서 지운 정의는 되돌릴 수 없다
       S.defs = S.defs.filter(({ id }) => id !== node.record.id);
-      S.profiles = S.profiles.filter(({ id }) => id !== node.record.id);
-      if (node.kind === "profile") profilesChanged?.(S.profiles);
       notifyChanged?.();
     }
     for (const other of users) for (const [slot, value] of Object.entries(other.ref)) if (value === node.key) other.ref[slot] = "";
@@ -187,5 +159,5 @@ export function bindStudioPersist(S) {
     say(`${nameOf(node)}을(를) 삭제했습니다.` + (users.length ? ` 연결 ${users.length}개를 해제했습니다.` : ""));
   }
 
-  return { payloadOf, profileRequest, rekey, removeNode, revert, saveAll, saveNode, saveWorkflow };
+  return { payloadOf, rekey, removeNode, revert, saveAll, saveNode, saveWorkflow };
 }

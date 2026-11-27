@@ -10,7 +10,7 @@ const { isHeld } = require("./omp-lease");
 const lineage = require("./lineage");
 const harness = require("./harness");
 const claudeRun = require("./harness/claude-run");
-const profiles = require("./harness/session-profiles");
+const sessionHarness = require("./harness/session-harness");
 const { pushChat } = require("./sse");
 const live = require("./live");
 const uiReq = require("./ui-requests");
@@ -50,8 +50,8 @@ function onFrame(s, e) {
 }
 
 // omp 를 띄워 등록한다. resume 이 없으면 get_state 의 sessionFile 이 node 가 된다.
-async function start(cwd, resume, profile = resume && profiles.assigned(lineage.cardOf(resume) || resume, "omp")) {
-  const rpc = open({ cwd, resume, systemPrompt: profiles.systemPrompt(profile) });
+async function start(cwd, resume, chosen = resume && sessionHarness.assigned(lineage.cardOf(resume) || resume, "omp")) {
+  const rpc = open({ cwd, resume, systemPrompt: sessionHarness.systemPrompt(chosen) });
   const s = { rpc, node: resume || "", card: resume || "", busy: false, running: false, cancelled: false, closing: false, full: "" };
   rpc.onEvent((e) => onFrame(s, e));
   try {
@@ -62,11 +62,11 @@ async function start(cwd, resume, profile = resume && profiles.assigned(lineage.
     const file = st.success && st.data && st.data.sessionFile;
     if (!s.node && file) s.node = path.normalize(file);
     if (!s.node) throw new Error("omp 가 세션 파일을 알려 주지 않았습니다");
-    if (!resume && profile?.model) {
-      const changed = await rpc.send({ type: "set_model", provider: profile.provider, modelId: profile.model });
+    if (!resume && chosen?.model) {
+      const changed = await rpc.send({ type: "set_model", provider: chosen.provider, modelId: chosen.model });
       if (!changed.success) throw new Error(changed.error || "하네스의 OMP 모델을 적용하지 못했습니다");
     }
-    if (!resume && profile) profiles.assign(s.node, profile);
+    if (!resume && chosen) sessionHarness.assign(s.node, chosen);
   } catch (e) {
     rpc.close();
     throw e;
@@ -107,14 +107,14 @@ async function attach(st) {
 }
 
 // 새 세션. kind 는 하네스 id("omp" 기본, "claude").
-async function newSession(cwd, text, images, kind, profile) {
-  if (kind === "claude") return claudeRun.newSession(cwd, text, images, profile);
+async function newSession(cwd, text, images, kind, chosen) {
+  if (kind === "claude") return claudeRun.newSession(cwd, text, images, chosen);
   const dir = cwd || HOME;
   let stat = null;
   try { stat = fs.statSync(dir); } catch { /* 없음 */ }
   if (!stat || !stat.isDirectory()) return { ok: false, out: "폴더 없음: " + dir };
   let s;
-  try { s = await start(dir, null, profile); } catch (e) { return { ok: false, out: errText(e) }; }
+  try { s = await start(dir, null, chosen); } catch (e) { return { ok: false, out: errText(e) }; }
   if (!text) return { ok: true, node: s.node };
   const r = await sendPrompt(s, text, images);
   if (!r.ok) stopSession(s.node);

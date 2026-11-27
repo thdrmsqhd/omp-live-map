@@ -8,14 +8,13 @@ const { expandSubgraphs } = require("./workflow-subgraphs");
 const { string, integer } = require("./definitions");
 const { resultContract } = require("./harness-result");
 const { problem } = require("./state");
-const profiles = require("../harness/session-profiles");
 const { listPresets } = require("./workflow-presets");
 
 // 템플릿으로 빠른 실행할 때 자동으로 생기는 사본(workflow-launch.js makePreset: "<템플릿 이름> · <해시 12자>")이면
 // 템플릿 이름을 돌려준다. 목록에서 사용자가 저장한 Workflow 와 구분해 보여 주려고 쓴다.
 function generatedTemplate(name) {
   const match = /^(.+) · ([0-9a-f]{12})$/.exec(name);
-  if (match?.[1].startsWith("Loop 실행 · ")) return "Loop 실행";   // workflow-launch.js loopLaunch 가 만든 사본
+  if (match?.[1].startsWith("Loop 실행 · ")) return "Loop 실행";   // 예전 Loop 실행 탭이 만든 사본(이력 표시용)
   return match && listPresets().some((preset) => preset.name === match[1]) ? match[1] : null;
 }
 
@@ -33,24 +32,16 @@ function workflowCatalog(db, catalog) {
   // 프로젝트에서 보이는 Workflow: 그 프로젝트 것 + 개인 + 같은 팀.
   const VISIBLE = "(w.scope='personal' OR (w.scope='project' AND w.project=?) OR (w.scope='team' AND w.team IS ?))";
 
-  function resolveProfile(node) {
-    const profile = profiles.pinned(node.profileId, node.profileVersion);
-    if (!profile) throw problem(400, "프로필 버전을 찾을 수 없습니다: " + node.label);
-    if (!profile.model) throw problem(400, "Workflow에서 사용할 모델을 프로필에 지정하세요: " + node.label);
-    return profile;
-  }
-
   // A schema ID names the producer artifact validated by its pinned harness result contract.
   // The receiver must bind that exact artifact to a name its pinned harness actually consumes.
   function validateHandoffs(project, document, definitions) {
     const typed = document.edges.filter(({ schema }) => schema !== undefined);
     if (!typed.length) return;
-    const profiles = new Set(document.edges.filter(({ port }) => port === "profile").map(({ to }) => to));
     const nodes = new Map(document.nodes.map((node) => [node.id, node]));
     const harnesses = new Map();
     function harness(id) {
       if (harnesses.has(id)) return harnesses.get(id);
-      const target = profiles.has(id) ? null : definitions.get(id);
+      const target = definitions.get(id);
       const pinned = target?.kind === "loop" ? catalog.dependency(target) : target;
       const supported = pinned?.kind === "harness" && catalog.availableTo(pinned, project) ? pinned.payload : null;
       harnesses.set(id, supported);
@@ -78,7 +69,6 @@ function workflowCatalog(db, catalog) {
     const result = compileGraph(payload);
     const definitions = new Map();
     for (const item of result.document.nodes) {
-      if (item.type === "profile") resolveProfile(item);
       if (item.type === "subgraph") {
         const sub = get(project, item.workflow, item.version);
         if (owner && owner.scope !== "project" && !catalog.availableToOwner(sub, owner)) {
@@ -101,12 +91,7 @@ function workflowCatalog(db, catalog) {
 
   function executionPlan(project, payload, id) {
     const { document } = plan(project, payload);
-    const expanded = compileGraph(expandSubgraphs(document, (workflow, version) => get(project, workflow, version).payload, id), { expanded: true });
-    for (const node of expanded.document.nodes) {
-      const linked = expanded.configuration.get(node.id);
-      if (linked) node.sessionProfile = resolveProfile(linked);
-    }
-    return expanded;
+    return compileGraph(expandSubgraphs(document, (workflow, version) => get(project, workflow, version).payload, id), { expanded: true });
   }
 
   function writeWorkflow(body) {
@@ -171,7 +156,7 @@ function workflowCatalog(db, catalog) {
       const next = catalog.versionOf(string(body.harness, "harness"),
         integer(body.harnessVersion, "harness version", 1, Number.MAX_SAFE_INTEGER));
       if (!previous || !catalog.availableTo(next, project) || next.kind !== "harness" || next.id !== previous.id) {
-        throw problem(400, "The selected profile does not match the workflow's harness");
+        throw problem(400, "The selected harness does not match the workflow's harness");
       }
       if (next.version === previous.version) return { workflow, loop: null };
       const missing = (next.payload.assets?.inputs ?? []).filter((name) => !node.inputs.some((input) => input.name === name));

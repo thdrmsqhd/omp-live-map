@@ -1,10 +1,10 @@
 "use strict";
 
-const fs = require("node:fs/promises");
 const { mkdirSync } = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
 const { artifactText } = require("./workflow-artifact");
+const { runFolder } = require("./work-folder");
 const { transaction } = require("../infrastructure/sqlite");
 const { string } = require("./definitions");
 const { problem, redact } = require("./state");
@@ -120,7 +120,7 @@ function summary({ runCreated, baseline, decision, note, reviewed, ...row }) {
   } : null, manual: decision ? { decision, note, reviewed } : null };
 }
 
-function independentEvaluation({ db, directory, workspaceRoot, runs, definitions, workflows }) {
+function independentEvaluation({ db, directory, runs, definitions, workflows }) {
   let store;
   const database = () => store ??= openStore(directory);
   function completed(project, id) {
@@ -187,14 +187,12 @@ function independentEvaluation({ db, directory, workspaceRoot, runs, definitions
     const ref = matches[0];
     let bytes;
     try {
-      const root = await fs.realpath(workspaceRoot);
-      const workspace = await fs.realpath(run.workspace);
-      if (path.dirname(workspace) !== root || path.basename(workspace) !== run.id) throw new Error();
+      const workspace = await runFolder(definitions, run);
       const verified = await artifactText(workspace, ref, artifactBytes);
       if (verified.byteLength !== ref.byteLength) throw new Error();
       bytes = verified.bytes;
     } catch {
-      throw problem(409, "Recorded artifact is changed, unavailable or outside the run worktree");
+      throw problem(409, "Recorded artifact is changed, unavailable or outside the run work folder");
     }
     let document;
     try { document = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch {

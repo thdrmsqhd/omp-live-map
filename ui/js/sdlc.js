@@ -1,188 +1,205 @@
-const columns = {
-  backlog: "Backlog", ready: "준비", running: "진행 중", waiting_approval: "승인 대기",
-  blocked: "보류", completed: "완료",
-};
+// 개발 Task 칸반. 폼은 없다.
+//  - 칸: 제목 두 번 누르기 = 이름 바꾸기, 칸 머리 끌기 = 순서 바꾸기, '＋ 칸' = 칸 더하기, 칸 ⋯ = 지우기(카드는 Backlog 로).
+//  - Backlog 맨 아래 ＋ = 한 줄(글 + Workflow 칩)로 카드 만들기. 카드 ▶ = 그 Workflow 로 프로젝트 폴더에서 실행.
+//  - 카드를 끌어 Backlog·준비·보류·사용자 칸으로 옮긴다(진행 중·승인 대기·완료는 실행이 정한다).
+import { taskCard, quickLine, TASK_DEFAULTS } from "./sdlc-card.js";
+import { bindSummary } from "./sdlc-summary.js";
 
-export function bindSdlc({ find, request, report, showRun }) {
-  const form = find("sdlc-form"), selector = form.elements.workflow, board = find("sdlc-board");
-  const stageForm = find("sdlc-stage-form");
-  let project = "", editing, tasks = [], workflows = [], stages = [], refreshPending = false, lastMetrics = 0;
-  const pending = new Map();
+const STATUS = { backlog: "Backlog", ready: "준비", running: "진행 중", waiting_approval: "승인 대기", blocked: "보류", completed: "완료" };
+const DEFAULT_STAGES = Object.entries(STATUS).map(([status, label], position) => ({ status, label, position, builtin: true }));
+const RUN_COLUMNS = new Set(["running", "waiting_approval", "completed"]);
+const FLOW_KEY = "omp-tasks-flow";
 
-  function formOptions() {
-    const mapped = stages.find(({ status, workflow }) => status === "backlog" && workflow) ?? stages.find(({ status }) => status === "ready");
-    const fallback = mapped?.workflow ? mapped.workflow + ":" + mapped.workflow_version : "";
-    const selected = editing ? editing.workflow + ":" + editing.workflow_version : selector.value || fallback;
-    const options = workflows.map((entry) => new Option(engineeringWorkflowLabel(entry), entry.id + ":" + entry.version));
-    if (editing && !options.some(({ value }) => value === selected)) {
-      options.unshift(new Option(editing.workflow_name + " · v" + editing.workflow_version, selected));
-    } else if (fallback && !options.some(({ value }) => value === fallback)) {
-      options.unshift(new Option("단계 기본 Workflow · v" + mapped.workflow_version, fallback));
+export function bindSdlc({ find, request, report, showRun, need }) {
+  const board = find("sdlc-board");
+  const summary = bindSummary({ find, request, need });
+  const open = new Set(), flushers = new Map(), pending = new Map();
+  let project = "", tasks = [], stages = DEFAULT_STAGES, workflows = [], presets = [], definitions = null, quick = null, refreshing = false;
+  const described = new Map();
+  let dragging = null, rename = null;
+  const editing = () => (board.contains(document.activeElement) && /^(input|textarea|select)$/i.test(document.activeElement.tagName))
+    || Boolean(document.querySelector(".inline-menu")) || Boolean(dragging);
+  const el = (tag, props = {}, ...children) => {
+    const node = Object.assign(document.createElement(tag), props);
+    node.append(...children.filter(Boolean));
+    return node;
+  };
+
+  // Workflow 칩: 템플릿 8종 + 이 프로젝트에서 쓸 수 있는 저장 Workflow(템플릿 사본·자동 사본은 템플릿으로 묶는다).
+  function flowOptions() {
+    const presetNames = new Set(presets.map(({ name }) => name));
+    return [["템플릿", presets.map((preset) => ({ value: "preset:" + preset.id, name: preset.name, title: preset.summary,
+      id: workflows.find(({ name }) => name === preset.name)?.id ?? null }))],
+    ["저장된 Workflow", workflows.filter(({ generated, name }) => !generated && !presetNames.has(name))
+      .map((flow) => ({ value: "flow:" + flow.id, id: flow.id, name: engineeringWorkflowLabel(flow), title: "" }))]];
+  }
+  const allFlows = () => flowOptions().flatMap(([, items]) => items);
+  const lastFlow = () => { const saved = readJSON(FLOW_KEY, ""); return allFlows().some(({ value }) => value === saved) ? saved : "preset:feature"; };
+
+  async function create(text, value, run) {
+    const owner = await need();
+    const body = value.startsWith("preset:") ? { project: owner, text, template: value.slice(7) }
+      : { project: owner, text, workflow: value.slice(5), version: workflows.find(({ id }) => id === value.slice(5))?.version };
+    const task = await request("tasks", {}, body);
+    writeJSON(FLOW_KEY, value);
+    await refresh(true, true);
+    if (run) { quick = null; await runTask(tasks.find(({ id }) => id === task.id) ?? task); }
+  }
+  async function runTask(task) {
+    await flushers.get(task.id)?.();
+    const warning = engineeringRuntimeWarning(await request("runtime").catch(() => null));
+    if (warning && !window.confirm(warning + "\n\n그래도 실행할까요?")) return;
+    const key = pending.get(task.id) ?? crypto.randomUUID();
+    pending.set(task.id, key);
+    const run = await request("tasks/run", {}, { id: task.id, key });
+    pending.delete(task.id);
+    await refresh(false, true);
+    await showRun(run.id);
+  }
+  async function save(task, patch, { quiet } = {}) {
+    // 주기 갱신이 목록을 새 객체로 바꿨을 수 있으므로 지금 목록의 같은 카드에도 반영한다(리비전이 어긋나지 않게).
+    const latest = tasks.find(({ id }) => id === task.id) ?? task;
+    const saved = await request("tasks", {}, { project, id: task.id, revision: latest.revision, ...patch });
+    const fields = { ...saved, timeoutMs: saved.timeout_ms ?? TASK_DEFAULTS.minutes * 60000, budgetCents: saved.budget_cents ?? TASK_DEFAULTS.budgetCents };
+    for (const target of new Set([task, latest, tasks.find(({ id }) => id === task.id)])) if (target) Object.assign(target, fields);
+    if (!quiet) paint(true);
+  }
+  async function move(task, status) {
+    const latest = tasks.find(({ id }) => id === task.id) ?? task;
+    await request("tasks/move", {}, { id: task.id, status, revision: latest.revision });
+    await refresh(false, true);
+  }
+  async function stageCall(endpoint, body) {
+    const owner = await need();
+    stages = await request(endpoint, {}, { project: owner, ...body });
+    paint(true);
+  }
+
+  // 칩 title: 단계마다 어떤 하네스·Loop 가 도는지(model/workflow-summary.js). 프로젝트에 아직 없는 템플릿은 요약만 보여 준다.
+  async function describe(value) {
+    const option = allFlows().find((item) => item.value === value);
+    if (!option?.id || !project) return option?.title ?? "";
+    if (!described.has(value)) {
+      described.set(value, (async () => {
+        definitions ??= await request("definitions", { project });
+        const flow = await request("workflow", { project, id: option.id });
+        return [option.title, ...workflowStepSummaries(flow.payload, definitions)].filter(Boolean).join("\n");
+      })().catch(() => option.title ?? ""));
     }
-    selector.replaceChildren(new Option("Workflow 선택", ""), ...options);
-    selector.value = selected;
+    return described.get(value);
   }
 
-  function stageValues() {
-    const stage = stages.find(({ status }) => status === stageForm.elements.status.value);
-    if (!stage) return;
-    stageForm.elements.label.value = stage.label;
-    stageForm.elements.position.value = stage.position;
-    const mapping = stage.workflow ? stage.workflow + ":" + stage.workflow_version : "";
-    const options = workflows.map((flow) => new Option(engineeringWorkflowLabel(flow), flow.id + ":" + flow.version));
-    if (mapping && !options.some(({ value }) => value === mapping)) options.unshift(new Option("이전 기본 버전", mapping));
-    stageForm.elements.workflow.replaceChildren(new Option("지정 안 함", ""), ...options);
-    stageForm.elements.workflow.value = mapping;
-  }
+  const ctx = { open, flushers, describe, report, showRun, move, save, run: runTask, create, flowOptions, lastFlow,
+    rememberFlow: (value) => writeJSON(FLOW_KEY, value), closeQuick: () => { quick = null; paint(true); },
+    statusLabel: (status) => stages.find((stage) => stage.status === status)?.label ?? STATUS[status] ?? status,
+    paint: () => paint(true), get stages() { return stages; } };
 
-  function edit(task) {
-    editing = task;
-    form.reset();
-    if (task) {
-      form.elements.title.value = task.title;
-      form.elements.instruction.value = task.instruction;
+  function columnHead(stage) {
+    const title = el("h3", { className: "sdlc-col-title", textContent: stage.label, title: "두 번 눌러 이름 바꾸기 · 끌어서 순서 바꾸기" });
+    const startRename = () => inlineEdit(title, { value: stage.label, label: "칸 이름",
+      onSave: (label) => label ? stageCall("sdlc-stages", { status: stage.status, label }) : undefined });
+    title.ondblclick = startRename;
+    const more = el("button", { type: "button", className: "sdlc-more", textContent: "⋯", title: "칸 메뉴" });
+    more.setAttribute("aria-label", stage.label + " 칸 메뉴");
+    more.onclick = () => inlineMenu(more, [{ label: "이름 바꾸기", run: startRename },
+      { label: "칸 지우기", disabled: stage.builtin, title: stage.builtin ? "기본 칸은 실행 상태와 이어져 있어 지울 수 없습니다. 이름만 바꿀 수 있습니다." : "카드는 Backlog로 돌아갑니다",
+        run: report(async () => stageCall("sdlc-stages/remove", { status: stage.status })) }]);
+    const count = el("span", { className: "sdlc-count", textContent: String(tasks.filter(({ status }) => status === stage.status).length) });
+    const head = el("header", { className: "sdlc-col-head", draggable: true }, title, count, more);
+    head.addEventListener("dragstart", (event) => {
+      if (event.target.closest("button, input")) return;
+      dragging = { column: stage.status };
+      event.dataTransfer.setData("text/x-omp-column", stage.status);
+      event.dataTransfer.effectAllowed = "move";
+    });
+    head.addEventListener("dragend", () => { dragging = null; paint(true); });
+    if (rename === stage.status) { rename = null; setTimeout(startRename); }
+    return head;
+  }
+  function column(stage) {
+    const section = el("section", { className: "sdlc-col" });
+    section.dataset.status = stage.status;
+    const cards = el("div", { className: "sdlc-cards" }, ...tasks.filter(({ status }) => status === stage.status).map((task) => taskCard(task, ctx)));
+    section.append(columnHead(stage), cards);
+    if (stage.status === "backlog") {
+      section.append(quick ? quickLine(ctx, quick) : el("button", { type: "button", className: "sdlc-add-task", textContent: "＋",
+        title: "Task 한 줄로 만들기", onclick: () => { quick = {}; paint(true); } }));
+      section.querySelector(".sdlc-add-task")?.setAttribute("aria-label", "Backlog에 Task 추가");
     }
-    formOptions();
-  }
-
-  function control(label, handler) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = label;
-    button.onclick = report(handler);
-    return button;
-  }
-
-  function card(task) {
-    const item = document.createElement("article"), title = document.createElement("h4"), flow = document.createElement("p");
-    title.textContent = task.title;
-    flow.textContent = task.workflow_name + " · v" + task.workflow_version;
-    item.append(title, flow);
-    item.append(control("상세", async () => edit(task)));
-    if (task.latest_run) item.append(control("실행 이력", async () => showRun(task.latest_run)));
-    if (task.status === "ready") item.append(control("Workflow 실행", async () => {
-      const timeoutMs = Number(find("sdlc-minutes").value) * 60000, budgetCents = Number(find("sdlc-budget").value);
-      const input = { task: task.id, timeoutMs, budgetCents };
-      const warning = engineeringLoginWarning(await request("runtime").catch(() => null), timeoutMs);
-      if (warning && !window.confirm(warning + "\n\n그래도 실행할까요?")) return;
-      const fingerprint = JSON.stringify(input), entry = pending.get(task.id);
-      const key = entry?.fingerprint === fingerprint ? entry.key : crypto.randomUUID();
-      pending.set(task.id, { fingerprint, key });
-      const run = await request("workflow-runs", {}, { ...input, key });
-      pending.delete(task.id);
-      await refresh();
-      await showRun(run.id);
+    section.addEventListener("dragover", (event) => {
+      const types = event.dataTransfer.types;
+      if (types.includes("text/x-omp-column") || (types.includes("text/x-omp-task") && !RUN_COLUMNS.has(stage.status))) {
+        event.preventDefault();
+        section.classList.add("is-drop");
+      }
+    });
+    section.addEventListener("dragleave", () => section.classList.remove("is-drop"));
+    section.addEventListener("drop", report(async (event) => {
+      section.classList.remove("is-drop");
+      const moving = event.dataTransfer.getData("text/x-omp-column"), card = event.dataTransfer.getData("text/x-omp-task");
+      dragging = null;
+      if (moving && moving !== stage.status) {
+        const order = stages.map(({ status }) => status).filter((status) => status !== moving);
+        order.splice(order.indexOf(stage.status), 0, moving);
+        await stageCall("sdlc-stages/order", { order });
+      }
+      const task = card && tasks.find(({ id }) => id === card);
+      if (task && task.status !== stage.status) await move(task, stage.status);
     }));
-    for (const next of ["ready", "backlog"]) {
-      if (next === task.status || ["running", "waiting_approval"].includes(task.status)) continue;
-      item.append(control(columns[next] + "로 이동", async () => {
-        await request("tasks/move", {}, { id: task.id, status: next, revision: task.revision });
-        await refresh();
-      }));
-    }
-    return item;
+    return section;
   }
-
-  function render() {
-    const configured = stages.length ? stages.map(({ status, label }) => [status, label]) : Object.entries(columns);
-    board.replaceChildren(...configured.map(([status, label]) => {
-      const section = document.createElement("section"), heading = document.createElement("h3");
-      heading.textContent = label;
-      section.append(heading, ...tasks.filter((task) => task.status === status).map(card));
-      return section;
+  function paint(force = false) {
+    if (!force && editing()) return;
+    const add = el("button", { type: "button", className: "sdlc-add-col", textContent: "＋ 칸", title: "칸 더하기" });
+    add.onclick = report(async () => {
+      const before = new Set(stages.map(({ status }) => status));
+      await stageCall("sdlc-stages/add", { label: "새 칸" });
+      rename = stages.find(({ status }) => !before.has(status))?.status ?? null;
+      paint(true);
+    });
+    board.replaceChildren(...stages.map(column), add);
+  }
+  function paintInbox(approvals) {
+    find("sdlc-inbox").replaceChildren(...approvals.map((approval) => {
+      const review = el("button", { type: "button", textContent: "승인 검토", onclick: report(async () => showRun(approval.run)) });
+      return el("li", {}, approval.title + " · " + approval.prompt + " ", review);
     }));
   }
 
-  async function refresh(loadWorkflows = false) {
+  async function refresh(full = false, force = false) {
     const owner = project;
-    if (!owner) { tasks = []; workflows = []; formOptions(); render(); return; }
-    const loadMetrics = loadWorkflows || Date.now() - lastMetrics >= 15000;
-    const [rows, saved, approvals, metrics, settings, budget] = await Promise.all([request("tasks", { project: owner }),
-      loadWorkflows ? request("workflows", { project: owner }) : Promise.resolve(null),
+    if (!presets.length) presets = await request("workflows/presets").catch(() => []);
+    if (!owner) { tasks = []; stages = DEFAULT_STAGES; workflows = []; paint(force); paintInbox([]); return; }
+    const [rows, approvals, columns, flows] = await Promise.all([request("tasks", { project: owner }),
       request("workflow-approvals", { project: owner }),
-      loadMetrics ? request("workflow-dashboard", { project: owner, days: find("sdlc-period").value }) : null,
-      loadWorkflows ? request("sdlc-stages", { project: owner }) : null,
-      loadWorkflows ? request("project-budget", { project: owner }) : null]);
+      full ? request("sdlc-stages", { project: owner }) : null,
+      full ? request("workflows", { project: owner }) : null]);
     if (owner !== project) return;
     tasks = rows;
-    if (settings) {
-      stages = settings;
-      const previous = stageForm.elements.status.value;
-      stageForm.elements.status.replaceChildren(...stages.map(({ status, label }) => new Option(label, status)));
-      if (stages.some(({ status }) => status === previous)) stageForm.elements.status.value = previous;
-    }
-    if (saved) { workflows = saved; formOptions(); stageValues(); }
-    if (budget) showBudget(budget.current);
-    render();
-    find("sdlc-inbox").replaceChildren(...approvals.map((approval) => {
-      const item = document.createElement("li");
-      item.append(approval.title + " · " + approval.prompt, control("승인 검토", async () => showRun(approval.run)));
-      return item;
-    }));
-    if (!metrics) return;
-    lastMetrics = Date.now();
-    const categories = { reported: "보고 비용", reserved: "예약 비용", unknown_basis: "출처 미확인", missing: "비용 미수집" };
-    find("sdlc-metrics").replaceChildren(...[
-      "완료 " + metrics.measures.completed + "/" + metrics.measures.count + "건 · 노드 재시도 " + metrics.measures.retries +
-        "건 · 승인·거절 " + metrics.measures.decisions + "건",
-      ...(metrics.measures.averageMs === null ? [] : ["완료 실행 평균 소요 " + (metrics.measures.averageMs / 1000).toFixed(1) + "초"]),
-      ...metrics.states.map(({ status, count }) => status + " " + count + "건"),
-      ...metrics.usage.map(({ category, model, agent, count, costCents }) =>
-        [categories[category], model, agent, count + "건", costCents === null ? "" : "$" + (costCents / 100).toFixed(2)].filter(Boolean).join(" · ")),
-    ].map((label) => { const line = document.createElement("p"); line.textContent = label; return line; }));
+    if (columns) stages = columns;
+    if (flows) workflows = flows;
+    paint(force);
+    paintInbox(approvals);
   }
-
-  find("sdlc-new").onclick = () => edit(null);
-  const budgetForm = find("project-budget-form");
-  function showBudget(current) {
-    budgetForm.elements.cap.value = current?.cap ?? "";
-    budgetForm.elements.days.value = current?.days ?? 30;
-    find("project-budget-status").textContent = current
-      ? "사용 및 실행 중인 예약 " + Math.ceil(current.committed) + " / " + current.cap + "센트"
-      : "프로젝트 예산 제한 없음";
-  }
-  budgetForm.addEventListener("submit", report(async () => {
-    if (!project) throw new Error("프로젝트를 선택해 주세요.");
-    const owner = project, { cap, days } = budgetForm.elements;
-    const result = await request("project-budget", {}, { project: owner, cap: Number(cap.value), days: Number(days.value) });
-    if (owner === project) showBudget(result.current);
-  }));
-  find("project-budget-remove").onclick = report(async () => {
-    if (!project) return;
-    const owner = project;
-    const result = await request("project-budget", {}, { project: owner, remove: true });
-    if (owner === project) showBudget(result.current);
-  });
-  find("sdlc-period").onchange = report(async () => { lastMetrics = 0; await refresh(); });
-  stageForm.elements.status.onchange = stageValues;
-  stageForm.addEventListener("submit", report(async () => {
-    if (!project) throw new Error("프로젝트를 선택해 주세요.");
-    const fields = Object.fromEntries(new FormData(stageForm)), [workflow, version] = fields.workflow.split(":");
-    await request("sdlc-stages", {}, { project, status: fields.status, label: fields.label,
-      position: Number(fields.position), workflow, version: Number(version) });
-    await refresh(true);
-  }));
-  find("sdlc-nav").addEventListener("click", report(async () => refresh(true)));
-  form.addEventListener("submit", report(async () => {
-    if (!project) throw new Error("프로젝트를 선택해 주세요.");
-    const [workflow, version] = selector.value.split(":");
-    const owner = project;
-    await request("tasks", {}, { project: owner, title: form.elements.title.value, instruction: form.elements.instruction.value,
-      workflow, version: Number(version), id: editing?.id, revision: editing?.revision });
-    if (owner !== project) return;
-    edit(null);
-    await refresh();
-  }));
 
   setInterval(async () => {
-    if (refreshPending || find("sdlc").hidden || !project) return;
-    refreshPending = true;
-    try { await refresh(); } catch { /* the next poll retries */ } finally { refreshPending = false; }
+    if (refreshing || find("engineering").hidden || !project) return;
+    refreshing = true;
+    try { await refresh(); } catch { /* 다음 주기에 다시 받는다 */ } finally { refreshing = false; }
   }, 2000);
+  setInterval(() => { if (!find("engineering").hidden) void summary.refresh().catch(() => {}); }, 15000);
 
-  return { async selectProject(id) {
-    if (id === project) return;
-    project = id; tasks = []; workflows = []; stages = []; lastMetrics = 0; edit(null);
-    await refresh(true);
-  } };
+  return {
+    async selectProject(id) {
+      if (id === project) return refresh(true, true);
+      project = id; tasks = []; workflows = []; definitions = null; described.clear(); open.clear();
+      await Promise.all([refresh(true, true), summary.load(id)]);
+    },
+    // ＋ 새 실행·설계의 '실행 시작': Backlog ＋ 줄을 열고 Workflow 를 미리 고른다(run 이면 Enter = 만들고 실행).
+    openQuick({ workflow, run } = {}) {
+      quick = { workflow, run: Boolean(run) };
+      paint(true);
+      board.querySelector(".sdlc-quick")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    },
+  };
 }

@@ -1,5 +1,5 @@
-// 노드 캔버스: 모델 → 하네스 → 루프 → Workflow 단계, 에이전트 프로필 → Agent 를 한 캔버스에서 연결해 엔지니어링한다.
-// 저장 형식은 기존 화면과 같다(정의 API·프로필 API·Workflow API). 이 화면만의 상태는 노드 위치(localStorage)뿐이다.
+// 노드 캔버스: 모델 → 하네스 → 루프 → Workflow 단계를 한 캔버스에서 연결해 엔지니어링한다.
+// 저장 형식은 기존 화면과 같다(정의 API·Workflow API). 이 화면만의 상태는 노드 위치(localStorage)뿐이다.
 import { bindStudioCanvas } from "./studio-canvas.js";
 import { bindStudioInspect } from "./studio-inspect.js";
 import { bindStudioLayout } from "./studio-layout.js";
@@ -17,7 +17,7 @@ import {
 
 import { PORT_NAMES, READABLE, SX, SY, TYPE_LABELS, WORKFLOW_X, blankDocument, clamp, readLayout } from "./studio-shared.js";
 
-export function bindStudio({ find, request, report, currentProject, changed: notifyChanged, openWorkflow, profilesChanged }) {
+export function bindStudio({ find, request, report, currentProject, changed: notifyChanged, openWorkflow }) {
   const el = (id) => find("studio-" + id);
   const viewport = el("viewport"), surface = el("surface"), layer = el("nodes"), lines = el("lines");
   const statusLine = el("status"), menu = el("menu"), menuList = el("menu-list"), menuSearch = el("menu-search");
@@ -25,12 +25,11 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   const nodes = new Map();
   const pinned = new Set();
   let layout = readLayout();
-  let defs = [], profiles = [], workflows = [], catalog = { engineering: [], claude: [], omp: [] };
+  let defs = [], workflows = [], catalog = { engineering: [], claude: [], omp: [] };
   let project = null, wf = null, mode = "linked";
   let selected = "", selectedEdge = "", link = null, drawQueued = false, active = false, loadedFor = null, busy = false;
 
   const say = (message, tone = "") => { statusLine.textContent = message ?? ""; statusLine.dataset.tone = tone; };
-  const desktop = () => Boolean(window.engineeringDesktop);
   // 이 화면의 오류는 캔버스 바로 위 상태 줄에 보여 준다. 서버의 영문 검사 오류는 한국어로 풀고 문제 단계를 고른다.
   const guard = (work) => async (...args) => {
     try { return await work(...args); } catch (error) { explain(error.message); }
@@ -42,7 +41,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       [/^A graph cannot contain cycles or unreachable nodes$/, () => "연결되지 않은 단계가 있거나 순환이 있습니다. 모든 단계가 Start에서 이어지도록 연결하세요."],
       [/^Missing or duplicate output (.+)\.(\w+)$/, (id, port) => `${label(id)} 단계의 ‘${PORT_NAMES[port] ?? port}’ 출력을 다음 단계 하나에 연결하세요.`],
       [/^Invalid incoming connections for (.+)$/, (id) => `${label(id)} 단계의 입력 연결이 없거나 너무 많습니다.`],
-      [/^Select a harness or connect a profile to (.+)$/, (id) => `${label(id)} 단계에 하네스나 프로필을 연결하세요.`],
+      [/^Select a harness for (.+)$/, (id) => `${label(id)} 단계에 하네스를 연결하세요.`],
       [/^Invalid node instruction$/, () => "Agent·Loop 단계의 작업 지시를 입력하세요."],
       [/^Invalid approval prompt$/, () => "Approval 단계의 승인 안내를 입력하세요."],
       [/^Invalid node definition$/, () => "Loop 단계에 루프를 연결하세요."],
@@ -54,7 +53,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       [/^Condition source must be a compatible predecessor$/, () => "Condition의 기준 단계는 앞에 있는 단계여야 합니다(검증 통과 조건은 Command·Loop 단계만)."],
       [/^Input must reference a predecessor artifact$/, () => "산출물 입력은 앞 단계가 내는 산출물만 참조할 수 있습니다."],
       [/^Invalid handoff schema ID$/, () => "인계 스키마 ID는 소문자로 시작하는 최대 48자의 소문자·숫자·밑줄이어야 합니다."],
-      [/^Handoff (.+) → (.+) \((.+)\): both endpoints/, (from, to, schema) => `${label(from)} → ${label(to)} (${schema}): 양쪽 단계 모두 이 프로젝트에서 쓸 수 있는 저장된 Agent·Loop 하네스를 선택하세요. 세션 프로필은 지원하지 않습니다.`],
+      [/^Handoff (.+) → (.+) \((.+)\): both endpoints/, (from, to, schema) => `${label(from)} → ${label(to)} (${schema}): 양쪽 단계 모두 이 프로젝트에서 쓸 수 있는 저장된 Agent·Loop 하네스를 선택하세요.`],
       [/^Handoff (.+) → (.+) \((.+)\): source must/, (from, to, schema) => `${label(from)} → ${label(to)} (${schema}): 송신 단계의 산출물 경로를 저장된 하네스의 결과 파일 경로와 일치시키세요.`],
       [/^Handoff (.+) → (.+) \((.+)\): target must/, (from, to, schema) => `${label(from)} → ${label(to)} (${schema}): 수신 하네스가 선언한 입력 이름에 이 산출물을 연결하세요.`],
       [/^Workflow name is already in use$/, () => "같은 이름의 Workflow가 이미 있습니다."],
@@ -105,7 +104,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   }
   function scopeChoices() {
     const list = [["personal", "개인 · 모든 프로젝트"]];
-    if (project?.team) list.push(["team", "팀 · " + project.team]);
+    // 팀은 화면에서 만들지 않는다(데이터 모델만 남김). 예전에 저장한 팀 범위 정의는 이름 앞 [팀 · …]으로만 보인다.
     if (project && !project.archived) list.push(["project", "프로젝트 · " + project.name]);
     return list;
   }
@@ -120,7 +119,6 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       return "";
     }
     if (source.kind !== slot) return `${TYPE_LABELS[slot]} 입력에는 ${TYPE_LABELS[slot]} 노드만 연결합니다.`;
-    if (slot === "profile") return "";
     const from = ownerOf(source), to = target.kind === "step" ? null : ownerOf(target);
     if (target.kind === "harness" && !sameOwner(from, to)) return "하네스와 모델은 같은 저장 범위여야 합니다.";
     if (target.kind === "loop" && !availableToOwner(from, to)) return "이 루프의 저장 범위에서는 쓸 수 없는 하네스입니다.";
@@ -138,11 +136,11 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   function labelOf(node) {
     if (node.kind === "step") return node.data.label;
     const owner = ownerOf(node);
-    const prefix = node.kind === "profile" ? (owner?.scope === "team" ? "[팀 · " + owner.team + "] " : "") : "[" + (owner.scope === "team" ? "팀 · " + owner.team : SCOPE_LABELS[owner.scope]) + "] ";
+    const prefix = "[" + (owner.scope === "team" ? "팀 · " + owner.team : SCOPE_LABELS[owner.scope]) + "] ";
     return prefix + nameOf(node) + (node.isNew ? " (저장 전)" : "");
   }
   function libraryNode(kind, record, payload) {
-    const key = kind === "profile" ? "profile:" + record.id : "def:" + record.id;
+    const key = "def:" + record.id;
     const draft = structuredClone(payload);
     const ref = {};
     if (kind === "harness") ref.model = draft.model ? "def:" + draft.model : "";
@@ -163,15 +161,10 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       nodes.set(node.key, node);
     };
     for (const record of defs) keep(libraryNode(record.kind, record, record.payload));
-    for (const record of profiles) {
-      const { id, version, ...payload } = record;
-      keep(libraryNode("profile", record, { name: payload.name, adapter: payload.adapter, provider: payload.provider ?? "",
-        model: payload.model ?? "", role: payload.role ?? "", instructions: payload.instructions ?? "" }));
-    }
     for (const node of libraryNodes()) if (!node.isNew && !seen.has(node.key)) nodes.delete(node.key);
   }
   function uniqueName(kind, base, owner) {
-    const taken = new Set(libraryNodes().filter((node) => node.kind === kind && (kind === "profile" || sameOwner(ownerOf(node), owner)))
+    const taken = new Set(libraryNodes().filter((node) => node.kind === kind && sameOwner(ownerOf(node), owner))
       .map((node) => node.draft.name));
     let name = base, index = 2;
     while (taken.has(name)) name = `${base} ${index++}`;
@@ -203,10 +196,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     clearEdgeSelection();
     for (const node of steps()) nodes.delete(node.key);
     if (!payload) { wf = null; return; }
-    const profileNodes = new Map(payload.nodes.filter(({ type }) => type === "profile").map((node) => [node.id, node]));
-    const profileOf = new Map(payload.edges.filter(({ port }) => port === "profile").map(({ from, to }) => [to, profileNodes.get(from)]));
     for (const raw of payload.nodes) {
-      if (raw.type === "profile") continue;
       const data = structuredClone(raw);
       const ref = {};
       let version;
@@ -220,33 +210,25 @@ export function bindStudio({ find, request, report, currentProject, changed: not
         collapsed: Boolean(layout.steps?.[data.id]) };
       delete data.x;
       delete data.y;
-      const profile = profileOf.get(data.id);
-      if (profile) {
-        ref.profile = "profile:" + profile.profileId;
-        node.profileVersion = profile.profileVersion;
-        node.profileSpot = { id: profile.id, x: profile.x, y: profile.y };
-      }
       nodes.set(node.key, node);
     }
-    wf = { record, edges: payload.edges.filter(({ port }) => port !== "profile").map((edge) => ({ ...edge })) };
+    wf = { record, edges: payload.edges.map((edge) => ({ ...edge })) };
     workflowName.value = payload.name ?? "";
     wf.initial = JSON.stringify(serialize(false));
   }
   function idOf(key, strict, what) {
     if (!key) return "";
     if (key.startsWith("def:")) return key.slice(4);
-    if (key.startsWith("profile:")) return key.slice(8);
     if (strict) throw new Error(`‘${what}’ 노드를 먼저 저장하세요.`);
     return key;
   }
   function serialize(strict) {
     const out = [], edges = wf.edges.map((edge) => ({ ...edge }));
-    const groups = new Map();
     for (const node of steps()) {
       const data = structuredClone(node.data);
       data.x = clamp((node.x - WORKFLOW_X) / SX);
       data.y = clamp(node.y / SY);
-      if (data.type === "agent" && !node.ref.profile && node.ref.harness) {
+      if (data.type === "agent" && node.ref.harness) {
         data.definition = idOf(node.ref.harness, strict, nameOf(nodes.get(node.ref.harness) ?? node));
         const version = node.version ?? nodes.get(node.ref.harness)?.record?.version;
         if (version) data.version = version;
@@ -257,20 +239,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
         if (version) data.version = version;
       }
       out.push(data);
-      if (data.type === "agent" && node.ref.profile) {
-        const profileId = idOf(node.ref.profile, strict, nameOf(nodes.get(node.ref.profile) ?? node));
-        const profileVersion = node.profileVersion ?? nodes.get(node.ref.profile)?.record?.version ?? 1;
-        const group = profileId + "@" + profileVersion;
-        if (!groups.has(group)) {
-          const spot = node.profileSpot;
-          groups.set(group, { id: spot?.id && ![...groups.values()].some(({ id }) => id === spot.id) ? spot.id : "profile-" + crypto.randomUUID().slice(0, 8),
-            type: "profile", label: nameOf(nodes.get(node.ref.profile) ?? node).slice(0, 240), profileId, profileVersion,
-            inputs: [], outputs: [], x: spot?.x ?? clamp(data.x), y: spot?.y ?? clamp(data.y + 120) });
-        }
-        edges.push({ from: groups.get(group).id, to: data.id, port: "profile" });
-      }
     }
-    return { name: workflowName.value.trim(), nodes: [...out, ...groups.values()], edges };
+    return { name: workflowName.value.trim(), nodes: out, edges };
   }
   const workflowDirty = () => Boolean(wf) && JSON.stringify(serialize(false)) !== wf.initial;
   const dirtyCount = () => libraryNodes().filter(isDirty).length + (workflowDirty() ? 1 : 0);
@@ -313,10 +283,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       if (problem) { say(problem, "error"); return false; }
     }
     node.ref[slot] = key;
-    if (node.kind === "step") {
-      if (slot === "profile") node.profileVersion = key ? nodes.get(key)?.record?.version : undefined;
-      else node.version = key ? nodes.get(key)?.record?.version : undefined;
-    }
+    if (node.kind === "step") node.version = key ? nodes.get(key)?.record?.version : undefined;
     if (!quiet) say(key ? `${nameOf(nodes.get(key))} → ${nameOf(node)} 연결됨` : "연결을 해제했습니다.");
     return true;
   }
@@ -403,12 +370,10 @@ export function bindStudio({ find, request, report, currentProject, changed: not
   const ctx = {
     catalog: null,
     node: (key) => nodes.get(key),
-    scopeChoices, desktop,
+    scopeChoices,
     workflows: () => workflows,
     currentWorkflow: () => wf?.record?.id ?? "",
     hasIncoming,
-    profileModels: (adapter) => profiles.filter((item) => item.adapter === adapter && item.model)
-      .map(({ provider, model }) => ({ provider, id: model, name: model })),
     stepChoices: (node) => steps().filter((item) => item !== node && !["start", "end"].includes(item.data.type))
       .map((item) => [item.data.id, item.data.label]),
     changed(node, { title, rerender, refreshInspect } = {}) {
@@ -440,7 +405,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const role = node.kind === "harness" ? harnessTypeOf(node.draft.role)?.label : null;
     if (node.isNew) return (role ? role + " · " : "") + "저장 전";
     const owner = ownerOf(node);
-    const scope = node.kind === "profile" ? (owner?.scope === "team" ? "팀 " + owner.team + " · " : "") : (owner.scope === "team" ? "팀 " + owner.team : SCOPE_LABELS[owner.scope]) + " · ";
+    const scope = (owner.scope === "team" ? "팀 " + owner.team : SCOPE_LABELS[owner.scope]) + " · ";
     return (role ? role + " · " : "") + scope + "v" + node.record.version;
   }
   function socket(node, direction, spec) {
@@ -467,17 +432,13 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     const row = h("div", { class: "studio-in", dataset: { type: input.type } }, socket(node, "in", input), h("span", { class: "studio-slot" }, input.label));
     if (input.type === "flow") return row;
     const current = node.ref[input.slot] ?? "";
-    const entries = [["", input.slot === "profile" ? "없음" : "연결 안 됨"], ...refOptions(node, input.slot)];
+    const entries = [["", "연결 안 됨"], ...refOptions(node, input.slot)];
     if (current && !entries.some(([key]) => key === current)) entries.push([current, nodes.has(current) ? labelOf(nodes.get(current)) : "(사용할 수 없는 정의)"]);
     const picker = h("select", { "aria-label": nameOf(node) + " · " + input.label, onchange: (event) => {
       if (!setRef(node, input.slot, event.target.value)) event.target.value = current;
       render();
     } }, ...entries.map(([key, label]) => h("option", { value: key }, label)));
     picker.value = current;
-    if (node.kind === "step" && input.slot === "harness" && node.ref.profile) {
-      picker.disabled = true;
-      picker.title = "프로필이 연결되어 있어 프로필 설정을 사용합니다.";
-    }
     row.append(picker);
     return row;
   }
@@ -563,7 +524,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     updateToolbar();
     scheduleDraw();
   }
-  // 위치가 없는 정의 노드를 자기 열(모델·하네스·루프/프로필)에 놓는다. 오른쪽 열부터 놓아 쓰는 노드 높이에 맞춘다.
+  // 위치가 없는 정의 노드를 자기 열(모델·하네스·루프)에 놓는다. 오른쪽 열부터 놓아 쓰는 노드 높이에 맞춘다.
   // ---- 툴바·불러오기 -------------------------------------------------------------
   function updateToolbar() {
     const count = dirtyCount();
@@ -577,8 +538,8 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     el("run").disabled = !wf?.record;
     el("undo").disabled = !editHistory?.canUndo();
     el("redo").disabled = !editHistory?.canRedo();
-    workflowPicker.disabled = !project || !desktop();
-    for (const [id, hide] of [["lane-profile", Boolean(wf)], ["lane-workflow", !wf], ["lane-line", !wf]]) el(id).hidden = hide;
+    workflowPicker.disabled = !project;
+    for (const [id, hide] of [["lane-workflow", !wf], ["lane-line", !wf]]) el(id).hidden = hide;
     el("lane-workflow").style.left = WORKFLOW_X + "px";
     el("lane-line").style.left = (WORKFLOW_X - 50) + "px";
     paintExternalLane();
@@ -611,7 +572,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     workflowPicker.dataset.value = workflowPicker.value;
   }
   async function loadWorkflows() {
-    workflows = project && desktop() ? await request("workflows", { project: project.id }) : [];
+    workflows = project ? await request("workflows", { project: project.id }) : [];
   }
   async function load() {
     const owner = project?.id ?? "";
@@ -619,15 +580,13 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       catalogRequest = null;
       return { engineering: [], claude: [], omp: [] };
     });
-    const [records, profileList, models, flows] = await Promise.all([
-      desktop() ? request("definitions", owner ? { project: owner } : { scope: "personal" }) : [],
-      profileRequest().then(({ profiles }) => profiles).catch(() => []),
+    const [records, models, flows] = await Promise.all([
+      request("definitions", owner ? { project: owner } : { scope: "personal" }),
       catalogRequest,
-      owner && desktop() ? request("workflows", { project: owner }) : [],
+      owner ? request("workflows", { project: owner }) : [],
     ]);
     if (owner !== (project?.id ?? "")) return false;
     defs = records;
-    profiles = profileList;
     catalog = { engineering: models.engineering ?? [], claude: models.claude ?? [], omp: models.omp ?? [] };
     ctx.catalog = catalog;
     workflows = flows;
@@ -651,7 +610,6 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     fillWorkflowPicker(wf ? wf.record?.id ?? "new" : "");
     render();
     if (!keepView) fit();
-    if (!desktop()) say("정의와 Workflow는 데스크톱 앱에서만 읽고 쓸 수 있습니다. 지금은 에이전트 프로필만 보여 줍니다.");
   }
   function boxes(list) {
     return list.filter((node) => node.el && node.x !== undefined).map((node) => ({ x: node.x, y: node.y, width: node.el.offsetWidth, height: node.el.offsetHeight }));
@@ -669,7 +627,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
       if (!canvas.fit(boxes(visible), options)) canvas.fit([{ x: 0, y: 0, width: 800, height: 400 }]);
     });
   }
-  // 왼쪽부터 모델 → 하네스 → 루프·프로필 → Workflow 순서로 다시 놓는다. 쓰는 쪽(오른쪽) 높이에 맞춰 줄을 세운다.
+  // 왼쪽부터 모델 → 하네스 → 루프 → Workflow 순서로 다시 놓는다. 쓰는 쪽(오른쪽) 높이에 맞춰 줄을 세운다.
   function arrange() {
     placePending(visibleNodes().filter(({ kind, el: element }) => kind !== "step" && element));
     scheduleDraw();
@@ -687,7 +645,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     try {
       await request("workflows/presets/defaults", {}, { scope: "personal" });
       await refresh();
-      say("기본 모델·하네스·루프·프로필을 개인 범위에 추가했습니다.", "ok");
+      say("기본 모델·하네스·루프를 개인 범위에 추가했습니다.", "ok");
       notifyChanged?.();
     } catch (error) {
       say(error.message, "error");
@@ -703,7 +661,6 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     get layout() { return layout; }, set layout(value) { layout = value; },
     get link() { return link; }, set link(value) { link = value; },
     get mode() { return mode; }, set mode(value) { mode = value; },
-    get profiles() { return profiles; }, set profiles(value) { profiles = value; },
     get project() { return project; }, set project(value) { project = value; },
     get selected() { return selected; }, set selected(value) { selected = value; },
     get selectedEdge() { return selectedEdge; }, set selectedEdge(value) { selectedEdge = value; },
@@ -715,7 +672,6 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     connectEnds,
     createLibrary,
     createStep,
-    desktop,
     el,
     fillWorkflowPicker,
     fingerprint,
@@ -741,7 +697,6 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     ownerOf,
     pinned,
     place,
-    profilesChanged,
     reinspect,
     get remember() { return remember; },
     removeLink,
@@ -763,10 +718,10 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     workflowDirty,
     workflowName,
   };
-  const { applySpots, clearEdgeSelection, collapsedByDefault, inspectHandoff, linkedProfile, placeGrid, placePending, remember, saveLayout, select, spots, toggleCollapse } = bindStudioLayout(S);
+  const { applySpots, clearEdgeSelection, collapsedByDefault, inspectHandoff, placePending, remember, saveLayout, select, spots, toggleCollapse } = bindStudioLayout(S);
   const { cancelLink, finishLink, startLink, startMove } = bindStudioDrag(S);
   const { closeMenu, menuItems, nodeMenu, openMenu, paintMenu, pick, workflowMenu } = bindStudioMenu(S);
-  const { payloadOf, profileRequest, rekey, removeNode, revert, saveAll, saveNode, saveWorkflow } = bindStudioPersist(S);
+  const { payloadOf, rekey, removeNode, revert, saveAll, saveNode, saveWorkflow } = bindStudioPersist(S);
   // 되돌리기 이력. openDocument·updateToolbar 가 먼저 불릴 수 있어 var 로 선언 전 접근을 허용한다(그때는 undefined).
   var editHistory = bindStudioHistory(S);
 
@@ -813,7 +768,7 @@ export function bindStudio({ find, request, report, currentProject, changed: not
     openWorkflow(wf.record.id);
   });
   el("defaults").addEventListener("click", () => void addDefaults());
-  el("defaults").hidden = !desktop();
+  el("defaults").hidden = false;
   // Workflow ⋯ : 기본 Workflow 8종 추가, JSON 내보내기·가져오기(예전 Workflow 폼 화면의 기능).
   async function openSaved(id) {
     await loadWorkflows();

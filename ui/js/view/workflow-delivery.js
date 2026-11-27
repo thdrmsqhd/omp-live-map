@@ -1,6 +1,7 @@
 /* 관제 Workflow 상세 패널의 실행 제어와 결과 전달. 예전 Engineering 'Workflow' 폼 화면에만 있던 기능이다.
    - 실행 제어: 일시정지·재개·취소(workflow-runs/action)
-   - 결과 전달(성공한 실행에 작업 공간이 있을 때): 변경 승인(브랜치) → GitHub PR → CI 확인 → 릴리스 후보 승인 → 테스트·스테이징 배포 */
+   - 결과 전달(성공한 실행, 원격이 있는 Git 작업 폴더): 변경 승인(브랜치) → GitHub PR → CI 확인 → 릴리스 후보 승인 → 테스트·스테이징 배포
+   실행은 고른 작업 폴더에서 바로 하므로 결과는 이미 그 폴더에 있다(따로 반영하는 단계가 없다). */
 let wfRunControlsSignature;
 // 요청이 끝난 뒤 패널이 다시 그려져도 성공 문구가 남도록 다음 status 초기값으로 쓴다.
 let wfRunControlsNotice = "";
@@ -43,14 +44,11 @@ function paintWorkflowRunControls() {
       ["queued", "running", "paused", "waiting_approval", "interrupted"].includes(run.status), "이 실행을 취소할까요? 진행 중인 단계도 멈춥니다."));
   const parts = [controls];
   if (run.status === "succeeded" && run.workspace) {
-    parts.push(
-      act("폴더에 반영", "workflow-delivery/apply", () => ({}), true,
-        "실행에서 바뀐 파일을 작업 폴더에 그대로 씁니다. 실행 뒤 폴더에서 따로 고친 파일이 있으면 아무것도 쓰지 않고 알려 드립니다. 진행할까요?",
-        (result) => result.files.length ? `${result.files.length}개 파일을 작업 폴더에 반영했습니다.` : "반영할 변경이 없습니다."),
-      wfText("p", "GitHub 없이 작업 폴더에 바로 반영합니다. 폴더에 .git 을 만들지 않습니다."));
+    parts.push(wfText("p", "실행 결과는 이미 작업 폴더(" + run.workspace + ")에 있습니다."));
     const box = document.createElement("details");
     box.open = Boolean(delivery);
-    box.append(wfText("summary", "결과 전달 · GitHub PR·CI·배포"));
+    box.append(wfText("summary", "결과 전달 · GitHub PR·CI·배포"),
+      wfText("p", "원격(origin)이 있는 Git 폴더에서만 씁니다. 작업 폴더에서 변경을 커밋하고 브랜치를 푸시한 뒤 승인합니다."));
     if (!delivery || delivery.state === "approved") {
       const branch = document.createElement("input");
       branch.value = delivery?.head ?? "";

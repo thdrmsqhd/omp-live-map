@@ -5,32 +5,19 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const { createAnthropicBroker } = require("../server/engineering/anthropic");
-const { permitted } = require("../server/infrastructure/docker");
+const { permitted } = require("../server/infrastructure/host-process");
 const { openDatabase } = require("../server/infrastructure/sqlite");
 const { catalog } = require("../server/engineering/catalog");
 const { buildPreset, addPresetDefinitions } = require("../server/engineering/workflow-presets");
 const { HARNESSES, LOOPS, MODELS, PRESET_LOOPS } = require("../server/engineering/default-definitions");
 
-// 컨텍스트 20K 토큰, 에이전트가 max_tokens 32000 을 요청하는(8192 로 잘리는) 모델 호출을 예산이 몇 번 받아 주는지 센다.
-async function affordableCalls(budgetCents, model) {
-  const broker = createAnthropicBroker({ model, key: "fixture", budgetCents, upstream: async (url) =>
-    url.endsWith("count_tokens") ? Response.json({ input_tokens: 20000 }) : Response.json({ type: "message" }) });
-  const body = JSON.stringify({ model, messages: [{ role: "user", content: "x" }], max_tokens: 32000 });
-  let calls = 0;
-  for (; calls < 500; calls++) {
-    try { await broker.request({ path: "/v1/messages", method: "POST", body }); } catch { break; }
-  }
-  return calls;
-}
-
-test("기본 루프는 컨테이너가 허용하는 검증 명령만 쓰고 스키마 한도 안에 있다", () => {
+test("기본 루프는 실행기가 허용하는 검증 명령만 쓰고 스키마 한도 안에 있다", () => {
   const allowed = new Set(permitted.map(({ command, args }) => [command, ...args].join(" ")));
   for (const loop of Object.values(LOOPS)) {
     assert.ok(HARNESSES[loop.harness], `${loop.name} must reference a default harness`);
     assert.ok(loop.checks.length >= 1 && loop.checks.length <= 10);
     for (const { command, args, code } of loop.checks) {
-      assert.ok(allowed.has([command, ...args].join(" ")), `${loop.name}: ${command} ${args.join(" ")} is not permitted in the container`);
+      assert.ok(allowed.has([command, ...args].join(" ")), `${loop.name}: ${command} ${args.join(" ")} is not permitted by the host allowlist`);
       assert.equal(code, 0);
     }
     assert.ok(loop.attempts >= 1 && loop.attempts <= 8);
@@ -51,16 +38,6 @@ test("루프마다 전용 하네스가 붙는다(같은 하네스를 두 루프�
   }
   assert.equal(HARNESSES[LOOPS.bugfix.harness].model, "opus");
   assert.ok(LOOPS.bugfix.attempts > LOOPS.feature.attempts && LOOPS.bugfix.budgetCents > LOOPS.feature.budgetCents);
-});
-
-test("루프 예산은 실제 에이전트 호출을 충분히 받아 준다(보수적 예약 방식 기준)", async () => {
-  const model = (key) => MODELS[HARNESSES[LOOPS[key].harness].model].model;
-  // 이전 기본값(100센트)은 호출을 한 번도 받지 못했다.
-  assert.equal(await affordableCalls(100, model("feature")), 0);
-  for (const [key, minimum] of [["feature", 20], ["featureNpm", 20], ["featurePython", 20], ["tests", 20], ["refactor", 30], ["bugfix", 50]]) {
-    const calls = await affordableCalls(LOOPS[key].budgetCents, model(key));
-    assert.ok(calls >= minimum, `${LOOPS[key].name}: ${calls} calls < ${minimum}`);
-  }
 });
 
 test("기본 제공 Workflow 템플릿마다 맞는 루프를 처음 고른다", () => {

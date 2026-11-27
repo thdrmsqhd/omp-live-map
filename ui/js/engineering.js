@@ -1,164 +1,153 @@
-// Engineering 설정 페이지: 프로젝트·팀·실행 환경 설정, 개발 Task, Loop 실행.
-// 정의·Workflow 편집(노드 캔버스)과 Workflow 실행·승인·결과·배포는 모두 관제 화면(/)에서 한다(설계 모드와 Live Map).
-import { harnessProvenance } from "./harness-provenance.js";
-import { bindRuntimeControls } from "./engineering-runtime.js";
+// 관제 화면의 'Task' 탭: 작업 프로젝트 · 요약 한 줄(실행·예산) · 개발 Task 칸반 · 승인 대기함. 폼은 없다.
+// 프로젝트는 따로 등록하지 않는다. 관제가 이미 묶어 둔 세션 폴더(프로젝트 탭과 같은 묶음)에서 고르면 그 자리에서
+// 프로젝트가 되고(projects/ensure: 이름 = 폴더 이름, 브랜치 = 지금 브랜치), 새 폴더는 '＋ 새 폴더…'로 고른다
+// (데스크톱: 폴더 대화상자, 웹: 경로 한 칸). 이름 바꾸기·보관은 프로젝트 탭 카드의 ⋯ 메뉴에서 한다.
+// 주소: /?mode=tasks[&project=<프로젝트>]
+import { bindRuntimeDot } from "./engineering-runtime.js";
 import { bindSdlc } from "./sdlc.js";
 
 const find = (id) => document.getElementById(id);
-const status = find("status");
-const project = find("project");
-const loop = find("loop");
-const runs = find("runs");
-let projects = [];
-let projectRequest = 0;
-let currentRunRequest = null;
-let sdlc;
+const status = find("eng-status"), picker = find("eng-project"), pathInput = find("eng-folder-path");
+const PROJECT_KEY = "omp-tasks-project";
+let projects = [], entering = null, lastValue = "";
 
 async function request(endpoint, params, payload) {
-  if (!window.engineeringDesktop) throw new Error("데스크톱 앱에서 Engineering을 열어 주세요.");
-  const result = await window.engineeringDesktop.request(endpoint, params, payload);
-  if (!result.ok) throw new Error(result.error);
+  const result = await window.engineeringApi.request(endpoint, params ?? {}, payload);
+  if (!result.ok) throw new Error(result.error || "요청에 실패했습니다.");
   return result.value;
 }
-
 function report(work) {
   return async (event) => {
-    event?.preventDefault();
+    event?.preventDefault?.();
     status.textContent = "";
     try { await work(event); } catch (error) { status.textContent = error.message; }
   };
 }
 
-function options(control, values, first, chosen = control.value) {
-  control.replaceChildren(new Option(first, ""));
-  for (const entry of values) control.add(new Option(entry.name, entry.id));
-  if ([...control.options].some((option) => option.value === chosen)) control.value = chosen;
+const folderName = (folder) => String(folder).replace(/[\\/]+$/, "").split(/[\\/]/).pop() || folder;
+// 프로젝트 탭과 같은 묶음(model/monitor.js monitorGroupSessions): 등록 프로젝트 밖의 세션 폴더만 남긴다.
+function sessionFolders() {
+  const groups = typeof monitorGroupSessions === "function" ? monitorGroupSessions(DATA.sessions || [], projects) : [];
+  return groups.filter((group) => !group.project && /^([a-zA-Z]:[\\/]|\/)/.test(group.folder || "")).map((group) => group.folder);
 }
-
-function formValues(event) {
-  return Object.fromEntries(new FormData(event.currentTarget));
+function fill(chosen) {
+  const active = projects.filter(({ archived }) => !archived), folders = sessionFolders();
+  const group = (label, items) => {
+    const element = document.createElement("optgroup");
+    element.label = label;
+    element.append(...items);
+    return element;
+  };
+  picker.replaceChildren();
+  if (!active.length) picker.append(new Option("작업 폴더를 고르세요", ""));
+  if (active.length) picker.append(group("프로젝트", active.map(({ id, name }) => new Option(name, id))));
+  if (folders.length) picker.append(group("세션 폴더 · 고르면 프로젝트가 됩니다", folders.map((folder) => new Option(folderName(folder) + " · " + folder, "folder:" + folder))));
+  picker.append(new Option(window.engineeringDesktop?.pickFolder ? "＋ 새 폴더…" : "＋ 새 폴더 (경로 붙여 넣기)…", "pick:"));
+  const values = [...picker.options].map(({ value }) => value);
+  picker.value = values.includes(chosen) ? chosen : active[0]?.id ?? "";
+  lastValue = picker.value;
 }
-
-// 관제 화면으로 넘긴다. 실행을 열거나(run), 새 실행 대화상자(launch), 설계 모드(mode=design, workflow)를 연다.
-function openLiveMap(params) {
-  location.href = "/?" + new URLSearchParams(params);
+async function refreshProjects(chosen) {
+  projects = await request("projects");
+  fill(chosen ?? picker.value);
+  writeJSON(PROJECT_KEY, picker.value);
+  await sdlc.selectProject(projects.some(({ id }) => id === picker.value) ? picker.value : "");
 }
-
-async function showAvailable(projectId) {
-  const records = projectId ? await request("definitions", { project: projectId }) : [];
-  if (projectId !== project.value) return;
-  options(loop, records.filter((entry) => entry.kind === "loop")
-    .map((entry) => ({ id: entry.id, name: engineeringDefinitionLabel(entry) })), "루프 선택");
+// 폴더를 프로젝트로 만든다(이미 있으면 그 프로젝트). 그 프로젝트를 골라 둔다.
+async function ensure(root) {
+  const saved = await request("projects/ensure", {}, { root });
+  await refreshProjects(saved.id);
+  status.textContent = `'${saved.name}' 폴더를 프로젝트로 씁니다.`;
+  return saved.id;
 }
-
-async function refreshProjects(chosen, editSelected = false) {
-  const revision = ++projectRequest;
-  const [records, teams] = await Promise.all([request("projects"), request("teams")]);
-  if (revision !== projectRequest) return;
-  projects = records;
-  options(project, projects.map((entry) => ({ id: entry.id, name: entry.name + (entry.archived ? " (보관됨)" : "") })), "프로젝트 선택", chosen);
-  const selected = projects.find((entry) => entry.id === project.value);
-  find("known-teams").replaceChildren(...teams.map((name) => new Option(name, name)));
-  if (editSelected) {
-    const form = find("project-form");
-    form.elements.name.value = selected?.name ?? "";
-    form.elements.root.value = selected?.root ?? "";
-    form.elements.branch.value = selected?.branch ?? "";
-    form.elements.team.value = selected?.team ?? "";
-    form.dataset.project = selected?.id ?? "";
+// 쓰기 전에 부른다: 지금 고른 것이 아직 프로젝트가 아닌 세션 폴더면 여기서 프로젝트로 만든다.
+async function need() {
+  if (projects.some(({ id }) => id === picker.value)) return picker.value;
+  if (picker.value.startsWith("folder:")) return ensure(picker.value.slice(7));
+  throw new Error("작업 폴더를 먼저 고르세요. 위 목록의 세션 폴더나 '＋ 새 폴더'를 쓰면 됩니다.");
+}
+function askPath() {
+  pathInput.hidden = false;
+  pathInput.value = "";
+  pathInput.focus();
+}
+picker.addEventListener("change", report(async () => {
+  const value = picker.value;
+  if (value === "pick:") {
+    picker.value = lastValue;
+    if (!window.engineeringDesktop?.pickFolder) return askPath();
+    const picked = await window.engineeringApi.pickFolder();
+    if (picked.ok) await ensure(picked.value);
+    return;
   }
-  find("archive").disabled = !selected || selected.archived;
-  await Promise.all([
-    showAvailable(selected?.id ?? ""),
-    sdlc?.selectProject(selected?.id ?? ""),
-    refreshRuns(),
-  ]);
-}
-
-async function refreshRuns(chosen) {
-  const id = project.value;
-  const records = id ? await request("runs", { project: id }) : [];
-  if (id !== project.value) return;
-  options(runs, records.map((run) => ({ id: run.id, name: `${run.title} · ${run.status}` })), "실행 선택", chosen);
-  const selected = runs.value;
-  const detail = selected ? await request("run", { id: selected }) : null;
-  if (selected !== runs.value) return;
-  find("run-summary").textContent = detail ? `${detail.run.status} · ${detail.blockedReason ?? detail.run.workspace ?? "작업 공간 없음"}` : "";
-  find("attempts").replaceChildren(...(detail?.attempts ?? []).map((attempt) => {
-    const line = document.createElement("li");
-    const output = document.createElement("pre");
-    output.textContent = JSON.stringify(attempt.outcome, null, 2);
-    line.append(`시도 ${attempt.number} · ${attempt.status}`);
-    const source = harnessProvenance(attempt.outcome?.definitions, attempt.outcome ? [attempt.outcome] : []);
-    if (source) line.append(source);
-    line.append(output);
-    return line;
-  }));
-}
-
-find("project-form").addEventListener("input", (event) => {
-  if (event.target.name === "root") event.currentTarget.dataset.project = "";
+  pathInput.hidden = true;
+  if (value.startsWith("folder:")) { await ensure(value.slice(7)); return; }
+  lastValue = value;
+  writeJSON(PROJECT_KEY, value);
+  await sdlc.selectProject(value);
+}));
+pathInput.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") { event.preventDefault(); pathInput.hidden = true; picker.focus(); return; }
+  if (event.key !== "Enter" || event.isComposing) return;
+  event.preventDefault();
+  const root = pathInput.value.trim().replace(/^"(.*)"$/, "$1");
+  if (!root) return;
+  void report(async () => { await ensure(root); pathInput.hidden = true; })();
 });
-find("project-form").addEventListener("submit", report(async (event) => {
-  const saved = await request("projects", {}, { ...formValues(event), id: event.currentTarget.dataset.project || undefined });
-  await refreshProjects(saved.id, true);
-}));
-project.addEventListener("change", report(async () => refreshProjects(project.value, true)));
-find("archive").addEventListener("click", report(async () => {
-  await request("projects/archive", {}, { id: project.value });
-  await refreshProjects(project.value, true);
-}));
-find("team-form").addEventListener("submit", report(async (event) => {
-  const form = event.currentTarget;
-  const team = await request("teams", {}, formValues(event));
-  find("known-teams").replaceChildren(...(await request("teams")).map((name) => new Option(name, name)));
-  form.reset();
-  find("team-settings").open = false;
-  status.textContent = `팀 '${team}'을(를) 등록했습니다. 프로젝트 설정의 팀 이름에 넣으면 그 프로젝트에서 팀 범위 정의를 씁니다.`;
-}));
-find("run-form").addEventListener("submit", report(async (event) => {
-  const values = { ...formValues(event), project: project.value };
-  const input = JSON.stringify(values);
-  if (currentRunRequest?.input !== input) currentRunRequest = { input, key: crypto.randomUUID() };
-  // Loop 하나를 Start → Loop → End Workflow 로 감싸 실행한다. 진행·승인·재시도는 관제 맵에서 본다.
-  const run = await request("workflows/launch-loop", {}, { ...values, key: currentRunRequest.key });
-  currentRunRequest = null;
-  openLiveMap({ run: run.id });
-}));
-runs.addEventListener("change", report(async () => refreshRuns()));
-find("actions").addEventListener("click", report(async (event) => {
-  if (event.target.dataset.operation && runs.value) {
-    await request("runs/action", {}, { id: runs.value, operation: event.target.dataset.operation });
-    await refreshRuns();
-  }
-}));
 
-const views = ["sdlc", "execution"];
-function showView(view) {
-  for (const name of views) {
-    find(name).hidden = view !== name;
-    find(name + "-nav").setAttribute("aria-pressed", String(view === name));
-  }
+// 같은 화면의 맵 탭에서 실행을 연다(진행·승인·재시도·결과).
+async function showRun(id) {
+  setMapMode("map");
+  if (typeof openMapWorkflow === "function") await openMapWorkflow(id);
 }
-for (const view of views) find(view + "-nav").onclick = () => showView(view);
 
-// 예전 주소: 실행(run)은 관제로, 노드 캔버스·폼 화면(view=studio·design·loop·session-harnesses·setup·workflow)은 관제의 설계 모드로 보낸다.
-const params = new URLSearchParams(location.search);
-const requested = params.get("view") ?? "sdlc";
-if (params.get("run")) openLiveMap({ run: params.get("run") });
-else if (!views.includes(requested) || params.get("workflow")) {
-  openLiveMap({ mode: "design", ...(params.get("project") ? { project: params.get("project") } : {}), ...(params.get("workflow") ? { workflow: params.get("workflow") } : {}) });
+const sdlc = bindSdlc({ find, request, report, showRun, need });
+bindRuntimeDot({ request });
+
+// 탭을 처음 열 때 데이터를 불러온다. 끝나면 #engineering[data-ready="1"] 로 알린다(검증 스크립트가 기다린다).
+function enter(chosen) {
+  if (!entering) entering = report(async () => refreshProjects(chosen || readJSON(PROJECT_KEY, "") || undefined))();
+  else if (chosen && chosen !== picker.value) entering = entering.then(report(async () => refreshProjects(chosen)));
+  find("engineering").dataset.ready = "";
+  const current = entering;
+  void current.finally(() => { if (current === entering) find("engineering").dataset.ready = "1"; });
+  return entering;
 }
-showView(views.includes(requested) ? requested : "sdlc");
+document.addEventListener("omp-mode", (event) => { if (event.detail === "tasks") void enter(); });
 
-if (window.engineeringDesktop) {
-  sdlc = bindSdlc({ find, request, report, showRun: async (id) => openLiveMap({ run: id }) });
-  const runtimeStatus = bindRuntimeControls({ find, request, report, status, formValues });
-  report(async () => {
-    await Promise.all([refreshProjects(params.get("project") || undefined, true), runtimeStatus()]);
-  })();
-  setInterval(() => {
-    if (!find("execution").hidden && project.value) void refreshRuns().catch(() => {});
-    void runtimeStatus().catch(() => {});
-  }, 1800);
-} else status.textContent = "데스크톱 앱에서 Engineering을 열어 주세요.";
+// 다른 탭에서 부른다. open: Task 탭 열기. quick: Backlog ＋ 줄을 그 Workflow 로 연다(run 이면 Enter = 만들고 실행).
+window.ompTasks = {
+  async open({ project: chosen } = {}) {
+    setMapMode("tasks");
+    await enter(chosen);
+  },
+  async quick({ project: chosen, folder, workflow, run } = {}) {
+    setMapMode("tasks");
+    await enter(chosen || undefined);
+    // 세션 카드 메뉴 '이 폴더에서 Task 만들기': 그 폴더를 프로젝트로 쓰고(처음이면 여기서 생김) ＋ 줄을 연다.
+    if (folder) await report(async () => ensure(folder))();
+    sdlc.openQuick({ workflow, run });
+  },
+};
+const newRun = find("workflow-new-run");
+if (newRun) {
+  newRun.hidden = false;
+  newRun.title = "Task 탭 Backlog에 한 줄로 만들고 바로 실행";
+  newRun.onclick = () => void window.ompTasks.quick({ project: picker.value && !picker.value.includes(":") ? picker.value : undefined, run: true });
+}
+
+const fromAddress = (search) => ({ project: new URLSearchParams(search).get("project") || undefined });
+// 같은 화면 안의 Task 탭 링크(/?mode=tasks…)는 새로 고치지 않고 탭을 연다. 대화상자 안 링크면 대화상자를 닫는다.
+document.addEventListener("click", (event) => {
+  const link = event.target.closest?.('a[href^="/?mode=tasks"]');
+  if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault();
+  link.closest("dialog")?.close();
+  void window.ompTasks.open(fromAddress(new URL(link.href).search));
+});
+
+if (new URLSearchParams(location.search).get("mode") === "tasks") {
+  const wanted = fromAddress(location.search);
+  history.replaceState(null, "", location.pathname);
+  void window.ompTasks.open(wanted);
+} else if (mapMode === "tasks") void enter();

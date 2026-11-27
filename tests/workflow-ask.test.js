@@ -1,17 +1,8 @@
 "use strict";
 
-// Pinned image: server/engineering/docker/Dockerfile ARG OMP_VERSION=18.8.9
-// (@oh-my-pi/pi-coding-agent). Tag v18.8.9
-// packages/coding-agent/src/tools/builtin-names.ts lists "ask" in BUILTIN_TOOL_NAMES,
-// and docs/rpc.md at that tag says --mode rpc-ui keeps the ask tool UI enabled.
-// --tools therefore accepts the native name ask. bridge.cjs adds it only when
-// process.env.OMP_WORKFLOW_ASK === "1"; the default list stays read,edit,write.
-// The workflow executor needs to set OMP_WORKFLOW_ASK=1 in the container environment
-// before bridge.cjs starts. docker-runner.js does not forward that variable today
-// (container env is an explicit --env list), so setting it only on the host process
-// does not advertise the tool until that launch path passes it through.
-// Host protocol path does not depend on the tool list: an extension_ui_request is
-// answered even if the model was not given the ask tool.
+// Engineering 실행은 이 PC 에 설치된 omp 를 그대로 띄우므로, 도구 목록은 사용자의 omp 설정을 따른다(ask 포함).
+// 실행기는 워크플로가 질문을 켠 경우에만 extension_ui_request 를 질문 카드로 받고, 그 밖에는 거절한다.
+// 이 동작은 도구 목록과 무관하게 RPC 프레임만으로 정해진다.
 
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
@@ -182,11 +173,4 @@ test("workflow ask registers a question and keeps input and non-workflow runs re
   );
   assert.equal(blockedProgress.some((patch) => patch.askSession), false);
   assert.equal(allAsks().some((item) => JSON.stringify(item).toLowerCase().includes("password")), false);
-});
-
-test("bridge adds ask only when OMP_WORKFLOW_ASK is 1", async () => {
-  const source = await fs.readFile(path.join(__dirname, "../server/engineering/docker/bridge.cjs"), "utf8");
-  assert.match(source, /process\.env\.OMP_WORKFLOW_ASK === "1" \? "read,edit,write,ask" : "read,edit,write"/);
-  assert.match(source, /"--no-extensions", "--no-skills", "--no-lsp", "--no-pty"/);
-  assert.doesNotMatch(source, /read,edit,write,ask,/);
 });

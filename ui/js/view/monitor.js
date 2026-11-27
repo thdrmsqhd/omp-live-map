@@ -8,7 +8,7 @@ const OVERVIEW_SELECTED = new Set();
 let renderWorkflowQueueMode;
 
 function setMapMode(mode, render = true) {
-  if (!["map","overview","workspace","design"].includes(mode) || (mode==="design" && !window.engineeringDesktop)) return;
+  if (!["map","overview","workspace","design","tasks"].includes(mode)) return;
   stopMomentum();
   mapMode = mode;
   writeJSON("omp-map-view-mode-v2", mode);
@@ -21,6 +21,7 @@ function paintMode() {
   if (mapMode === "workspace" && !openIds.has(activeCardId)) activeCardId = [...openIds].at(-1) || null;
   $("app").dataset.view = mapMode;
   if ($("design")) $("design").hidden = mapMode !== "design";
+  if ($("engineering")) $("engineering").hidden = mapMode !== "tasks";
   if (paintMode.last !== mapMode) { paintMode.last = mapMode; document.dispatchEvent(new CustomEvent("omp-mode", { detail: mapMode })); }
   $("overview").hidden = mapMode !== "overview";
   $("workspace-empty").hidden = mapMode !== "workspace" || openIds.has(activeCardId);

@@ -43,16 +43,16 @@ $("mon-clear").onclick=()=>{OVERVIEW_SELECTED.clear();paintOverview(filteredSess
 let MON_PROJECTS = [];
 const MON_DETAILS = new Map();
 let monitorLoading = false;
-let monitorSource = window.engineeringDesktop ? "Engineering 데이터 조회 대기" : "일반 브라우저: Engineering 데이터는 데스크톱에서 조회할 수 있습니다.";
+let monitorSource = "Engineering 데이터 조회 대기";
 let lastOverviewHTML = "", lastAttentionHTML = "";
 
 async function monitorRequest(endpoint, params) {
-  const r = await window.engineeringDesktop.request(endpoint, params || {});
+  const r = await window.engineeringApi.request(endpoint, params || {});
   if (!r.ok) throw new Error(r.error || endpoint+" 조회 실패");
   return r.value;
 }
 async function refreshMonitorProjects() {
-  if (!window.engineeringDesktop || monitorLoading || mapMode !== "overview") return;
+  if (monitorLoading || mapMode !== "overview") return;
   monitorLoading = true;
   try {
     MON_PROJECTS = await monitorRequest("projects");
@@ -68,9 +68,9 @@ async function refreshMonitorProjects() {
   finally { monitorLoading=false; if(mapMode==="overview")paintOverview(filteredSessions()); }
 }
 const monStatus = {live:"실행 중",idle:"유휴",done:"완료",running:"실행 중",waiting_approval:"승인 대기",blocked:"차단",failed:"실패",interrupted:"확인 필요",completed:"완료",backlog:"백로그",ready:"준비"};
-// 실행은 관제(Live Map)에서 열고, 정의·Workflow 는 노드 캔버스에서 고친다(폼 화면은 없다).
+// 실행은 맵 탭에서 열고, 정의·Workflow 는 설계 탭(노드 캔버스), 개발 Task 는 Task 탭에서 다룬다(모두 같은 화면).
 const monEngLink = (project,view,run) => view==="workflow"&&run ? "/?"+new URLSearchParams({run}).toString()
-  : ["sdlc","execution"].includes(view) ? "/engineering.html?"+new URLSearchParams({project:project.id,view}).toString() : "/?"+new URLSearchParams({mode:"design",project:project.id}).toString();
+  : view==="sdlc" ? "/?"+new URLSearchParams({mode:"tasks",project:project.id}).toString() : "/?"+new URLSearchParams({mode:"design",project:project.id}).toString();
 function monitorTaskHTML(g) {
   if (!g.project) return '<p class="mon-muted">등록 프로젝트와 연결되지 않음 · SDLC 진행률 미수집</p>';
   const detail=MON_DETAILS.get(g.project.id);
@@ -86,7 +86,7 @@ function monitorTaskHTML(g) {
     ${current?`<p class="mon-task">${esc(monStatus[current.status]||current.status)} · ${esc(current.title)} ${current.latest_run?`<a href="${esc(monEngLink(g.project,"workflow",current.latest_run))}">실행 그래프</a>`:""}</p>`:""}
     ${runList.length ? `<div class="mon-workflow-runs" aria-label="최근 Workflow 실행">${runList.map(run =>
       `<button type="button" data-map-workflow="${esc(run.id)}">${esc(run.title)} · ${esc(monStatus[run.status] || run.status)}</button>`).join("")}</div>` : ""}
-    <div class="mon-links"><a href="${esc(monEngLink(g.project,"sdlc"))}">개발 Task</a><a href="${esc(monEngLink(g.project,"workflow",latestRun?.id))}">Workflow / 실행 이력</a><a href="${esc(monEngLink(g.project,"design"))}">노드 캔버스</a><a href="${esc(monEngLink(g.project,"execution"))}">실행</a></div>`;
+    <div class="mon-links"><a href="${esc(monEngLink(g.project,"sdlc"))}">개발 Task</a><a href="${esc(monEngLink(g.project,"workflow",latestRun?.id))}">Workflow / 실행 이력</a><a href="${esc(monEngLink(g.project,"design"))}">노드 캔버스</a></div>`;
 }
 function monitorSessionHTML(s) {
   const st=monitorSessionStats(s,overviewMemory), n=st.main;
@@ -117,6 +117,8 @@ function monitorSessionHTML(s) {
 function paintOverview(sessions) {
   const root=$("overview-projects");
   if(!root || mapMode!=="overview")return;
+  // 프로젝트 이름을 제자리에서 고치는 중이면 다시 그리지 않는다(입력 칸이 사라지지 않게).
+  if(root.querySelector("input.inline-edit"))return;
   const score=(s)=>{const st=monitorSessionStats(s,overviewMemory);return (askPending(st.main?.id)?100:0)+(st.resourceWarning?20:0)+(ATTN.has(st.main?.id)?5:0);};
   const cmp=(a,b)=>overviewSort==="memory"?(monitorSessionStats(b,overviewMemory).ram??-1)-(monitorSessionStats(a,overviewMemory).ram??-1):
     overviewSort==="stable"?(monitorStableRank(a)-monitorStableRank(b)):overviewSort==="name"?String(a.title).localeCompare(String(b.title)):overviewSort==="recent"?(b.lastTs||0)-(a.lastTs||0):score(b)-score(a)||(b.lastTs||0)-(a.lastTs||0);
@@ -124,7 +126,7 @@ function paintOverview(sessions) {
   const visible=monitorVisibleSessions(sessions);
   const groups=monitorGroupSessions(visible,MON_PROJECTS).filter(g=>g.sessions.length||(!MON_QUERY&&MON_FILTER==="all"));
   groups.sort((a,b)=>(overviewSort==="attention"?Math.max(0,...b.sessions.map(score))-Math.max(0,...a.sessions.map(score)):0)||a.title.localeCompare(b.title));
-  const html=groups.map((g)=>`<section class="mon-group" data-mon-group="${esc(g.key)}"><header><h2><button data-mon-fold="${esc(g.key)}" aria-expanded="${!MON_FOLDED.has(g.key)}">${MON_FOLDED.has(g.key)?"▸":"▾"} ${esc(g.title)}</button></h2><span>${g.sessions.length} 세션 ${g.project?"· 기준 브랜치 "+esc(g.project.branch):""}</span></header><div ${MON_FOLDED.has(g.key)?"hidden":""}><p class="mon-path" title="${esc(g.folder)}">${esc(g.folder)}</p>${monitorTaskHTML(g)}<div class="mon-grid">${g.sessions.slice().sort(cmp).map(monitorSessionHTML).join("")||'<p class="mon-muted">표시할 세션 없음</p>'}</div></div></section>`).join("")||'<p class="mon-muted">표시할 프로젝트 또는 세션이 없습니다.</p>';
+  const html=groups.map((g)=>`<section class="mon-group" data-mon-group="${esc(g.key)}"><header><h2><button data-mon-fold="${esc(g.key)}" aria-expanded="${!MON_FOLDED.has(g.key)}">${MON_FOLDED.has(g.key)?"▸":"▾"} ${esc(g.title)}</button></h2><span>${g.sessions.length} 세션 ${g.project?"· 기준 브랜치 "+esc(g.project.branch||"없음"):"· 첫 Task 를 만들면 프로젝트가 됩니다"}</span>${g.project?`<button class="mon-project-menu" data-mon-project="${esc(g.project.id)}" aria-label="${esc(g.title)} 프로젝트 메뉴" title="이름 바꾸기 · 보관">⋯</button>`:""}</header><div ${MON_FOLDED.has(g.key)?"hidden":""}><p class="mon-path" title="${esc(g.folder)}">${esc(g.folder)}</p>${monitorTaskHTML(g)}<div class="mon-grid">${g.sessions.slice().sort(cmp).map(monitorSessionHTML).join("")||'<p class="mon-muted">표시할 세션 없음</p>'}</div></div></section>`).join("")||'<p class="mon-muted">표시할 프로젝트 또는 세션이 없습니다.</p>';
   root.dataset.density=overviewDensity;
   if(html!==lastOverviewHTML){lastOverviewHTML=html;patchMonitorGroups(root,html); }
   const alerts=[];
@@ -155,11 +157,22 @@ $("overview").addEventListener("click",(e)=>{
   else if(d.monAck){attnClear(d.monAck);paintOverview(filteredSessions());}
   else if(d.monPin){const key=sessionKeyOfNode(d.monPin);if(!key)return;if(PINNED.has(key))PINNED.delete(key);else{PINNED.add(key);HIDDEN.delete(key);}savePinned();saveHidden();renderMap(false,true);}
   else if(d.monMenu){const r=b.getBoundingClientRect();openCardMenu(r.left,r.bottom,d.monMenu);}
+  else if(d.monProject)monitorProjectMenu(b,d.monProject);
 });
 $("overview").addEventListener("change",(e)=>{
   const id=e.target.dataset.monSelect;if(!id)return;
   if(e.target.checked)OVERVIEW_SELECTED.add(id);else OVERVIEW_SELECTED.delete(id);
   paintOverview(filteredSessions());
 });
+// 프로젝트 카드 ⋯: 이름은 그 자리에서 고치고(Enter·포커스 이동 = 저장, Esc = 취소), 보관하면 목록에서 빠진다.
+function monitorProjectMenu(anchor,id){
+  const project=MON_PROJECTS.find((p)=>p.id===id);if(!project)return;
+  const title=anchor.closest("header")?.querySelector("[data-mon-fold]");
+  const call=async(endpoint,payload)=>{const r=await window.engineeringApi.request(endpoint,{},payload);if(!r.ok)throw new Error(r.error||"요청 실패");await refreshMonitorProjects();};
+  inlineMenu(anchor,[
+    {label:"이름 바꾸기",run:()=>inlineEdit(title,{value:project.name,label:"프로젝트 이름",onSave:(name)=>name&&call("projects/rename",{id,name})})},
+    {label:"보관",title:"세션 폴더로 돌아갑니다. Task 탭에서 다시 고르면 되살아납니다.",run:()=>void call("projects/archive",{id}).catch((e)=>inlineFlash(anchor,e.message))},
+  ]);
+}
 setInterval(()=>{if(mapMode==="overview")void refreshMonitorProjects();},8000);
 if(mapMode==="overview")void refreshMonitorProjects();

@@ -4,7 +4,7 @@ const { once } = require("node:events");
 const { performance } = require("node:perf_hooks");
 const { problem, redact } = require("./state");
 
-// Program names and exact argument vectors are supplied by trusted host configuration.
+// 프로그램 이름과 정확한 인자 목록은 호스트 설정(host-process.js 의 permitted)이 준다. 명령은 작업 폴더에서 실행한다.
 function commandRunner(backend, allowlist) {
   const allowed = new Set(allowlist.map(({ command, args }) => JSON.stringify([command, args])));
   const allows = ({ command, args }) => allowed.has(JSON.stringify([command, args]));

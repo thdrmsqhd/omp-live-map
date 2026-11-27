@@ -10,7 +10,7 @@ const { catalog } = require("../server/engineering/catalog");
 const { workflowCatalog } = require("../server/engineering/workflow-catalog");
 const { workflowRuns } = require("../server/engineering/workflow-runs");
 const { workflowEngine } = require("../server/engineering/workflow-engine");
-const { sdlcTasks } = require("../server/engineering/sdlc-tasks");
+const { sdlcTasks, runInstruction } = require("../server/engineering/sdlc-tasks");
 
 test("Task runs pin workflow and instructions and move the board through approval to completion", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-sdlc-task-"));
@@ -39,7 +39,8 @@ test("Task runs pin workflow and instructions and move the board through approva
     const run = engine.start(input, "ready");
     assert.equal(run.version, 1);
     assert.equal(run.status, "waiting_approval");
-    assert.equal(runs.taskInstruction(run.id), form.instruction);
+    assert.equal(runs.taskInstruction(run.id), runInstruction(form.instruction));
+    assert.match(runs.taskInstruction(run.id), /완료 조건\n작업 목표를 끝내고/);
     assert.equal(tasks.get(task.id).status, "waiting_approval");
     assert.equal(tasks.list("one")[0].latest_run, run.id);
     assert.equal(engine.start(input, "ready").id, run.id);
@@ -65,15 +66,14 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
     const definitions = catalog(db), workflows = workflowCatalog(db, definitions);
     const workflow = workflows.save({ project: "one", payload: { name: "fixture",
       nodes: [{ id: "s", type: "start", label: "Start" }, { id: "e", type: "end", label: "End" }], edges: [{ from: "s", to: "e" }] } });
-    const stages = sdlcStages(db, definitions, workflows);
-    stages.save({ project: "one", status: "ready", label: "구현 준비", position: 0, workflow: workflow.id, version: 1 });
-    assert.equal(stages.list("one").find(({ status }) => status === "ready").workflow_version, 1);
+    const stages = sdlcStages(db, definitions);
+    stages.rename({ project: "one", status: "ready", label: "구현 준비" });
+    assert.equal(stages.list("one").find(({ status }) => status === "ready").label, "구현 준비");
     const runs = workflowRuns(db, definitions, workflows);
     const run = runs.create({ project: "one", workflow: workflow.id, version: 1, title: "Fixture", timeoutMs: 30000,
       budgetCents: 0 }, "delivery-test").run;
-    const workspace = path.join(directory, run.id);
-    fs.mkdirSync(workspace);
-    runs.workspace(run.id, workspace);
+    // 실행은 작업 폴더(project.root)에서 바로 하므로 기록된 실행 폴더도 그 폴더다.
+    runs.workspace(run.id, directory);
     runs.change(run.id, ["queued"], "running");
     runs.change(run.id, ["running"], "succeeded");
     const commit = "1".repeat(40), repo = "example/fixture";
@@ -108,7 +108,7 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
       if (args[0] === "remote") return "git@github.com:example/fixture.git";
       return "";
     };
-    const delivery = workflowDelivery(db, runs, definitions, directory, gh, gitCall);
+    const delivery = workflowDelivery(db, runs, definitions, gh, gitCall);
     const staging = workflowStaging(db, delivery, gh);
     await assert.rejects(delivery.createPR(run.id), /Approve/);
     await delivery.approve(run.id, "feature/workflow");
@@ -124,7 +124,7 @@ test("stage settings and delivery reconcile an uncertain PR and gate the release
     assert.equal((await staging.dispatch(run.id, "staging")).state, "dispatched");
     assert.equal((await staging.dispatch(run.id, "staging")).workflow_run, 765);
     assert.equal(dispatches, 1);
-    const observation = workflowObservability(db, runs, directory);
+    const observation = workflowObservability(db, runs, definitions);
     assert.ok(observation.timeline(run.id).some(({ kind }) => kind === "workflow.release.approved"));
     assert.deepEqual(observation.dashboard("one").states.map(({ status, count }) => ({ status, count })),
       [{ status: "succeeded", count: 1 }]);
@@ -165,6 +165,76 @@ test("the project cap reserves budget across both V2 Loop and V3 Workflow launch
     legacyRuns.create(v2, "loop");
     assert.equal(quota.get("one").committed, 70);
     assert.throws(() => runs.create(v3, "too-much"), /budget/);
+  } finally {
+    db.close();
+    fs.rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("a body line starting with '완료 조건:' overrides the default completion condition", () => {
+  assert.equal(runInstruction("로그인 버튼 고치기"), "작업 목표\n로그인 버튼 고치기\n\n완료 조건\n작업 목표를 끝내고, 기존 기능과 테스트가 깨지지 않는다.");
+  assert.equal(runInstruction("로그인 버튼 고치기\n원인부터 찾기\n완료 조건: 버튼을 누르면 로그인된다\nE2E 통과"),
+    "작업 목표\n로그인 버튼 고치기\n원인부터 찾기\n\n완료 조건\n버튼을 누르면 로그인된다\nE2E 통과");
+  assert.match(runInstruction("완료 조건:   "), /완료 조건\n작업 목표를 끝내고/, "an empty override keeps the default");
+});
+
+test("kanban columns rename, reorder, add and delete in place; tasks follow a deleted column back to Backlog", () => {
+  const { sdlcStages } = require("../server/engineering/sdlc-stages");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-columns-"));
+  const db = openDatabase(path.join(directory, "engineering.sqlite"));
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Board", "main");
+    const definitions = catalog(db), workflows = workflowCatalog(db, definitions), stages = sdlcStages(db, definitions);
+    const tasks = sdlcTasks(db, definitions, workflows, stages);
+    const flow = workflows.save({ project: "one", payload: { name: "Flow",
+      nodes: [{ id: "s", type: "start", label: "Start" }, { id: "e", type: "end", label: "End" }], edges: [{ from: "s", to: "e" }] } });
+    assert.deepEqual(stages.list("one").map(({ status }) => status), ["backlog", "ready", "running", "waiting_approval", "blocked", "completed"]);
+    const added = stages.add({ project: "one", label: "검토 중" });
+    const custom = added.find(({ builtin }) => !builtin);
+    assert.equal(custom.label, "검토 중");
+    assert.match(custom.status, /^col-[0-9a-f]{8}$/);
+    stages.rename({ project: "one", status: custom.status, label: "코드 검토" });
+    const order = [custom.status, ...stages.list("one").filter(({ builtin }) => builtin).map(({ status }) => status)];
+    assert.deepEqual(stages.order({ project: "one", order }).map(({ status }) => status), order);
+    assert.throws(() => stages.order({ project: "one", order: order.slice(1) }), /every column/);
+    const task = tasks.save({ project: "one", text: "칸 이동 확인", workflow: flow.id, version: flow.version });
+    const moved = tasks.move(task.id, custom.status, task.revision);
+    assert.equal(moved.status, custom.status);
+    assert.throws(() => tasks.move(task.id, "completed", moved.revision), /manually/);
+    assert.throws(() => stages.remove({ project: "one", status: "ready" }), /기본 칸/);
+    const after = stages.remove({ project: "one", status: custom.status });
+    assert.equal(after.some(({ status }) => status === custom.status), false);
+    assert.equal(tasks.get(task.id).status, "backlog", "cards of a deleted column return to Backlog");
+  } finally {
+    db.close();
+    fs.rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("inline task fields: limit and budget fall back to defaults and are edited one at a time", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-task-inline-"));
+  const db = openDatabase(path.join(directory, "engineering.sqlite"));
+  try {
+    db.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("one", directory, "Inline", "main");
+    const definitions = catalog(db), workflows = workflowCatalog(db, definitions), tasks = sdlcTasks(db, definitions, workflows);
+    const flow = workflows.save({ project: "one", payload: { name: "Flow",
+      nodes: [{ id: "s", type: "start", label: "Start" }, { id: "e", type: "end", label: "End" }], edges: [{ from: "s", to: "e" }] } });
+    const task = tasks.save({ project: "one", text: "한 줄 Task", workflow: flow.id, version: flow.version });
+    assert.equal(task.title, "한 줄 Task");
+    assert.equal(task.instruction, "한 줄 Task");
+    const listed = () => tasks.list("one")[0];
+    assert.deepEqual([listed().timeoutMs, listed().budgetCents], [20 * 60000, 6000]);
+    let next = tasks.save({ project: "one", id: task.id, revision: task.revision, timeoutMs: 5 * 60000 });
+    next = tasks.save({ project: "one", id: task.id, revision: next.revision, budgetCents: 1500 });
+    next = tasks.save({ project: "one", id: task.id, revision: next.revision, instruction: "본문\n완료 조건: 테스트 통과" });
+    assert.deepEqual([listed().timeoutMs, listed().budgetCents, listed().title], [5 * 60000, 1500, "한 줄 Task"]);
+    next = tasks.save({ project: "one", id: task.id, revision: next.revision, budgetCents: null });
+    assert.equal(listed().budgetCents, 6000, "clearing returns to the default");
+    assert.throws(() => tasks.save({ project: "one", id: task.id, revision: next.revision, timeoutMs: 10 }), /time limit/);
+    assert.throws(() => tasks.save({ project: "one", id: task.id, revision: 1, title: "x" }), /changed/);
+    const run = tasks.prepareRun(task.id);
+    assert.deepEqual(run, { task: task.id, timeoutMs: 5 * 60000, budgetCents: 6000 });
+    assert.equal(tasks.get(task.id).status, "ready", "▶ lifts the card to Ready before starting");
   } finally {
     db.close();
     fs.rmSync(directory, { force: true, recursive: true });

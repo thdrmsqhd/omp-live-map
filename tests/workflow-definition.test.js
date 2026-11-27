@@ -46,7 +46,7 @@ test("workflow planning is deterministic and rejects missing ports, cycles and i
   assert.throws(() => compileGraph(wrongSource), /compatible predecessor/);
 });
 
-test("handoff schema is optional and rejects unbounded, nonliteral and profile edge values", () => {
+test("handoff schema is optional and rejects unbounded, nonliteral and unknown port values", () => {
   assert.deepEqual(compileGraph(graph()).document.edges[0], { from: "s", to: "p", port: "next" });
   for (const schema of [null, 1, [], { id: "report" }, "", "Report", " report", "report\n", "x/y", "x".repeat(49)]) {
     const payload = graph();
@@ -56,8 +56,9 @@ test("handoff schema is optional and rejects unbounded, nonliteral and profile e
   const payload = graph();
   payload.edges[0].schema = "x".repeat(48);
   assert.equal(compileGraph(payload).document.edges[0].schema.length, 48);
+  // 프로필 연결(port "profile")은 하네스로 합쳐져 없다. 알 수 없는 포트로 거절한다.
   payload.edges[0].port = "profile";
-  assert.throws(() => compileGraph(payload), /Profile connections cannot declare a handoff schema/);
+  assert.throws(() => compileGraph(payload), /Invalid graph connection or output port/);
 });
 
 test("workflow handoffs validate the exact pinned result file, direct binding, and definition scope", (t) => {

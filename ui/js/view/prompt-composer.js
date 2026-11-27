@@ -45,8 +45,7 @@ function mountPromptComposer(box,n,s){
       }catch{if(gen===generation)show([],"파일 조회 실패");}return;
     }
     if(kind==="tasks"){
-      if(!window.engineeringDesktop){show([],"Task 참조는 Engineering 데스크톱에서 지원합니다");return;}
-      try{const r=await window.engineeringDesktop.request("projects",{});if(!r.ok)throw Error(r.error);const p=monitorProjectFor(n.cwd,r.value||[]);if(!p){show([],"연결된 프로젝트 없음");return;}const t=await window.engineeringDesktop.request("tasks",{project:p.id});if(!t.ok)throw Error(t.error);if(gen!==generation)return;show((t.value||[]).filter(x=>String(x.title+" "+x.id).toLowerCase().includes(query)).map(x=>({label:x.title,text:"#Task "+x.id+" ("+x.title+") "})));}catch{if(gen===generation)show([],"Task 조회 실패");}
+      try{const r=await window.engineeringApi.request("projects",{});if(!r.ok)throw Error(r.error);const p=monitorProjectFor(n.cwd,r.value||[]);if(!p){show([],"연결된 프로젝트 없음");return;}const t=await window.engineeringApi.request("tasks",{project:p.id});if(!t.ok)throw Error(t.error);if(gen!==generation)return;show((t.value||[]).filter(x=>String(x.title+" "+x.id).toLowerCase().includes(query)).map(x=>({label:x.title,text:"#Task "+x.id+" ("+x.title+") "})));}catch{if(gen===generation)show([],"Task 조회 실패");}
     }
   }
   ta.addEventListener("input",()=>{s.draft=ta.value;persistPromptDraft(id,s);fitChatInput(ta);paintPromptComposer(box,n,s);const m=ta.value.slice(0,ta.selectionStart).match(/(?:^|\s)([@/#])([^\s@/#]*)$/);if(m){tokenStart=ta.selectionStart-m[1].length-m[2].length;clearTimeout(timer);generation++;timer=setTimeout(()=>void choices({"@":"refs","/":"commands","#":"tasks"}[m[1]],m[2]),180);}else close();});

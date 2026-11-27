@@ -13,22 +13,22 @@ const { addClient, removeClient, replay } = require("./sse");
 const localfs = require("./routes-localfs");
 const images = require("./routes-images");
 const { prefix, createEngineeringRoutes } = require("./edge/engineering-routes");
-const { injectOpsToken } = require("./edge/ops-token");
+const { injectOpsToken, opsAllowed } = require("./edge/ops-token");
 const { runtime } = require("./engineering/runtime");
-const engineeringRuntime = process.env.OMP_MAP_ENGINEERING_DATA
-  ? runtime(process.env.OMP_MAP_ENGINEERING_DATA, process.env.ANTHROPIC_API_KEY) : undefined;
-if (process.connected && engineeringRuntime) {
+const { ROOT } = require("./config");
+// Engineering 실행은 이 PC 에 설치된 omp·claude CLI 를 고른 작업 폴더에서 바로 띄운다.
+// 웹(브라우저)과 데스크톱 앱이 같은 HTTP API 를 쓴다. 데이터는 데스크톱이면 앱 데이터 폴더, 아니면 상태 폴더 아래 engineering/ 이다.
+const engineeringRuntime = runtime();
+if (process.connected) {
   process.on("message", (message) => {
-    if (message?.type === "desktop-runtime-key") engineeringRuntime.setKey(message.key);
     if (message?.type === "desktop-shutdown") engineeringRuntime.shutdown();
   });
 }
 const engineering = createEngineeringRoutes({
-  token: process.env.OMP_MAP_ENGINEERING_TOKEN,
-  directory: process.env.OMP_MAP_ENGINEERING_DATA,
+  authorize: opsAllowed,
+  directory: process.env.OMP_MAP_ENGINEERING_DATA || path.join(process.env.OMP_MAP_STATE || path.join(ROOT, "data"), "engineering"),
   runner: engineeringRuntime,
 });
-delete process.env.OMP_MAP_ENGINEERING_TOKEN;
 
 const ROUTES = {
   ...require("./routes-ops"),
@@ -73,7 +73,7 @@ const ROUTES = {
   },
 };
 
-const SHELLS = { workflow: "workflow.html", "session-map": "session-map.html", settings: "settings.html" };
+const SHELLS = { workflow: "workflow.html", tasks: "tasks.html", "session-map": "session-map.html", settings: "settings.html" };
 const SHARED_SCRIPTS = {
   "js/harness-kinds.js": path.join(__dirname, "engineering", "harness-kinds.js"),
 };
@@ -111,6 +111,20 @@ function serveStatic(res, pathname) {
   });
 }
 
+// 예전 Engineering 페이지 주소는 하나로 합친 관제 화면으로 보낸다(실행은 맵, 설계는 설계 모드, 나머지는 Task 탭).
+function redirectEngineering(res, url) {
+  const from = url.searchParams, to = new URLSearchParams();
+  const view = from.get("view");
+  if (from.get("run")) to.set("run", from.get("run"));
+  else if (from.get("workflow") || ["studio", "design", "loop", "session-harnesses", "setup", "workflow"].includes(view)) to.set("mode", "design");
+  else to.set("mode", "tasks");
+  if (!from.get("run") && from.get("project")) to.set("project", from.get("project"));
+  if (to.get("mode") === "design" && from.get("workflow")) to.set("workflow", from.get("workflow"));
+  if (to.get("mode") === "tasks" && view === "execution") to.set("view", "execution");
+  res.writeHead(302, { Location: "/?" + to, "Cache-Control": "no-store" });
+  res.end();
+}
+
 async function handle(req, res) {
   const denied = guardStatus(req);
   if (denied) return fail(res, denied, denied === 415 ? "unsupported media type" : "forbidden");
@@ -120,8 +134,9 @@ async function handle(req, res) {
   if (route) return route(req, res, url);
   if (url.pathname.startsWith(localfs.PREFIX)) return localfs.serveLocal(req, res, url);
   if (url.pathname.startsWith(images.PREFIX)) return images.serve(req, res, url);
+  if (req.method === "GET" && url.pathname === "/engineering.html") return redirectEngineering(res, url);
   if (req.method === "GET" && !url.pathname.startsWith("/api/")) return serveStatic(res, url.pathname);
   fail(res, 404, "not found");
 }
 
-module.exports = { handle };
+module.exports = { handle, closeEngineering: () => engineering.close() };

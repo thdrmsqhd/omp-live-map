@@ -1,17 +1,17 @@
 "use strict";
 
-// 아무 폴더나 실행 때 바로 프로젝트가 된다. git 이 아닌 폴더는 앱 데이터의 별도 git 디렉터리로 worktree 를 만들고 사용자 폴더에는 .git 을 만들지 않는다.
+// 아무 폴더나 실행 때 바로 프로젝트가 된다. 실행은 그 폴더에서 바로 한다. git 이 아닌 폴더는 앱 데이터의 별도 git 디렉터리에
+// 실행 전 스냅숏을 남겨 변경을 검토할 수 있게 하고, 사용자 폴더에는 .git 을 만들지 않는다.
 const assert = require("node:assert/strict");
 const { execFileSync } = require("node:child_process");
-const { randomBytes, randomUUID } = require("node:crypto");
 const fs = require("node:fs/promises");
 const { existsSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
 const { openDatabase } = require("../server/infrastructure/sqlite");
-const { catalog } = require("../server/engineering/catalog");
-const { worktrees } = require("../server/engineering/worktree");
+const { catalog, git } = require("../server/engineering/catalog");
+const { workFolders } = require("../server/engineering/work-folder");
 const shadow = require("../server/engineering/shadow-repo");
 const { withLegacyHttp } = require("./helpers/legacy-http");
 
@@ -23,7 +23,7 @@ async function setup(t) {
   return { directory, definitions: catalog(db) };
 }
 
-test("a plain folder becomes a project without a form and runs from a snapshot of its current files", async (t) => {
+test("a plain folder becomes a project without a form and runs directly in that folder", async (t) => {
   const { directory, definitions } = await setup(t);
   const root = path.join(directory, "plain-site");
   await fs.mkdir(path.join(root, "node_modules", "dep"), { recursive: true });
@@ -39,13 +39,17 @@ test("a plain folder becomes a project without a form and runs from a snapshot o
   assert.equal(existsSync(path.join(root, ".git")), false, "the user folder stays without .git");
   assert.equal((await definitions.ensureProject({ root })).id, project.id, "the same folder maps to the same project");
 
-  // 등록 뒤에 바뀐 내용도 실행 worktree 에 들어간다.
+  // 실행 폴더는 고른 폴더 그 자체다. 실행 전 상태를 스냅숏해 실행이 바꾼 파일만 변경으로 보인다.
   await fs.writeFile(path.join(root, "a.txt"), "two");
-  const workspace = await worktrees(path.join(directory, "worktrees")).create(project, { id: randomUUID() });
-  assert.equal(await fs.readFile(path.join(workspace, "a.txt"), "utf8"), "two");
-  assert.equal(existsSync(path.join(workspace, "node_modules")), false, "dependency folders are not copied");
-  assert.equal(existsSync(path.join(workspace, "build", "plugin.ts")), true, "source folders named build are kept");
+  const workspace = await workFolders().create(project);
+  assert.equal(workspace, await fs.realpath(root));
+  assert.equal(await git(workspace, ["status", "--porcelain"]), "", "the folder state before the run is recorded");
+  await fs.writeFile(path.join(workspace, "a.txt"), "three");
+  assert.match(await git(workspace, ["status", "--porcelain"]), /a\.txt/);
+  assert.doesNotMatch(await git(workspace, ["ls-files"]), /node_modules/, "dependency folders are not snapshotted");
+  assert.match(await git(workspace, ["ls-files"]), /build\/plugin\.ts/, "source folders named build are kept");
   assert.equal(existsSync(path.join(root, ".git")), false);
+  await assert.rejects(workFolders().create({ root: path.join(directory, "missing") }), /작업 폴더/);
 });
 
 test("a git repository keeps its own branch and a missing branch is named in the error", async (t) => {
@@ -67,12 +71,10 @@ test("the ensure endpoint registers a folder on demand", async (t) => {
   const root = path.join(directory, "folder");
   await fs.mkdir(root);
   await fs.writeFile(path.join(root, "readme.md"), "hello");
-  const token = randomBytes(32).toString("hex");
-  process.env.OMP_MAP_ENGINEERING_TOKEN = token;
   process.env.OMP_MAP_ENGINEERING_DATA = path.join(directory, "data");
   try {
     await withLegacyHttp(t, async ({ request }) => {
-      const headers = { "x-omp-engineering-token": token, "content-type": "application/json" };
+      const headers = { "content-type": "application/json" };
       const first = await request("/api/engineering/projects/ensure", { method: "POST", headers, body: JSON.stringify({ root }) });
       assert.equal(first.status, 200, first.text);
       const project = JSON.parse(first.text);

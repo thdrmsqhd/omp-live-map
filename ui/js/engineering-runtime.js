@@ -1,50 +1,26 @@
-export function bindRuntimeControls({ find, request, report, status, formValues }) {
-  const login = find("console-login");
-  let signingIn = false;
-  let loginRequest = false;
+// 위쪽 막대의 실행 환경 점: '● omp · claude'. 이 PC 에서 CLI 를 못 찾으면 빨간 점과 함께 빠진 이름을 지운 줄로 보여 준다.
+// 누르면 다시 확인한다. 키·로그인은 앱이 받지 않는다(각 CLI 설정을 쓴다).
+const NAMES = [["omp", "omp"], ["claude", "claude"]];
 
+export function bindRuntimeDot({ request }) {
+  const dot = document.getElementById("runtime-dot");
+  if (!dot) return async () => {};
+  let timer = 0;
   function render(current) {
-    const busy = ["checking", "building"].includes(current.status);
-    signingIn = current.signingIn;
-    find("runtime-status").textContent = current.detail + engineeringLoginExpiry(current);
-    find("runtime-status").dataset.tone = current.status === "login-expired" || engineeringLoginWarning(current, 30 * 60000) ? "warn" : "";
-    engineeringApplyBudgetWording(current);
-    find("prepare-runtime").disabled = busy || current.status === "ready";
-    find("check-runtime").disabled = busy;
-    find("console-login-status").textContent = current.loginStatus;
-    login.disabled = !current.canLogin || loginRequest;
-    login.textContent = signingIn ? "로그인 취소" : "Claude Console 로그인";
+    const missing = NAMES.filter(([id]) => current.status === "ready" ? !current[id] : current.status === "unavailable");
+    dot.replaceChildren(Object.assign(document.createElement("i"), { textContent: "●" }),
+      ...NAMES.flatMap(([id, label], index) => [index ? " · " : " ", Object.assign(document.createElement(missing.some(([name]) => name === id) ? "s" : "span"), { textContent: label })]));
+    dot.dataset.tone = current.status === "checking" || current.status === "unchecked" ? "wait" : missing.length ? "bad" : "ok";
+    dot.title = (current.detail || "") + " · 눌러서 다시 확인";
+    clearTimeout(timer);
+    if (current.status === "checking" || current.status === "unchecked") timer = setTimeout(() => void status(), 1500);
   }
-
-  async function runtimeStatus() {
-    render(await request("runtime"));
+  async function status(recheck = false) {
+    try { render(await request("runtime", {}, recheck ? {} : undefined)); }
+    catch (error) { render({ status: "unavailable", detail: error.message }); }
   }
-
-  for (const [id, build] of [["prepare-runtime", true], ["check-runtime", false]]) {
-    find(id).addEventListener("click", report(async () => {
-      render(await request("runtime", {}, { build }));
-    }));
-  }
-  login.addEventListener("click", report(async () => {
-    loginRequest = true;
-    login.disabled = true;
-    try {
-      await request("runtime/login", {}, { cancel: signingIn });
-    } finally {
-      loginRequest = false;
-      await runtimeStatus();
-    }
-  }));
-  find("provider-key").addEventListener("submit", report(async (event) => {
-    const { value } = formValues(event);
-    event.currentTarget.reset();
-    await request("runtime/key", {}, { value });
-    status.textContent = "Windows 사용자 비밀 저장소에 키를 저장했습니다.";
-  }));
-  find("remove-key").addEventListener("click", report(async () => {
-    await request("runtime/key", {}, { remove: true });
-    status.textContent = "저장된 키를 삭제했습니다.";
-  }));
-
-  return runtimeStatus;
+  dot.addEventListener("click", () => void status(true));
+  setInterval(() => { if (!document.hidden) void status(); }, 60000);
+  void status();
+  return status;
 }

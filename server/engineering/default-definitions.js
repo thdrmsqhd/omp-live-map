@@ -1,6 +1,6 @@
 "use strict";
 
-// 기본 프로필·하네스·루프가 쓰는 모델과 정의. 모델 ID 는 Anthropic 모델 개요(2026-11-26 확인) 기준이다.
+// 기본 하네스·루프가 쓰는 모델과 정의. 모델 ID 는 Anthropic 모델 개요(2026-11-26 확인) 기준이다.
 // Mythos 5.2 는 검증된 조직 전용이라 넣지 않는다. 새 모델이 나오면 anthropic.js 의 허용 목록과 이 파일을 함께 고친다.
 const MODELS = Object.freeze({
   fable: { name: "기본 · Claude Fable 5.2", provider: "anthropic", model: "claude-fable-5-2" },
@@ -54,9 +54,10 @@ const SKILLS = Object.freeze({
     "5. 지적마다 심각도(차단·중요·사소), 파일·줄, 근거, 제안을 적는다."].join("\n") },
 });
 
-const NO_NETWORK = "실행 환경에는 네트워크가 없다. 패키지 설치나 외부 다운로드를 시도하지 않는다.";
+// 실행은 사용자 PC 의 작업 폴더에서 바로 하므로 환경을 바꾸는 설치·다운로드는 하지 않게 한다.
+const NO_INSTALL = "이 작업은 사용자 PC 의 작업 폴더에서 바로 실행된다. 패키지 설치나 외부 다운로드, 작업 폴더 밖의 변경은 하지 않는다.";
 
-// key: 프리셋·루프가 참조하는 이름. 같은 정의에서 프로필(MODELS 와 같은 모델)과 하네스를 함께 만든다.
+// key: 프리셋·루프가 참조하는 이름. 관제의 새 대화형 세션(＋ 세션)도 이 하네스의 역할·지시를 그대로 쓴다.
 // 설계(author)와 리뷰(reviewer)는 서로 다른 하네스여야 하므로 모델도 다르게 둔다. 루프마다 전용 하네스를 둔다.
 const HARNESSES = Object.freeze({
   author: {
@@ -99,7 +100,7 @@ const HARNESSES = Object.freeze({
       "외부 패키지보다 Node 내장 모듈을 우선한다.",
       "서버·타이머·소켓을 연 테스트는 반드시 닫고 `unref`해 테스트가 끝나지 않는 일이 없게 한다.",
       "경로는 `path`로 조립하고 Windows 경로 구분자를 가정하지 않는다.",
-      NO_NETWORK),
+      NO_INSTALL),
     skills: ["tdd"],
   },
   devNpm: {
@@ -114,7 +115,7 @@ const HARNESSES = Object.freeze({
       "`package.json`의 `scripts`와 `dependencies`, 잠금 파일은 수정하지 않는다.",
       "테스트 파일 위치와 이름 규칙은 기존 테스트를 따른다.",
       "`npm install`, `npx` 같은 설치·다운로드 명령은 쓰지 않는다.",
-      NO_NETWORK),
+      NO_INSTALL),
     skills: ["tdd"],
   },
   devPython: {
@@ -129,7 +130,7 @@ const HARNESSES = Object.freeze({
       "테스트는 `unittest`로 쓰고 파일 이름은 `test_*.py`로 한다. pytest 전용 기능은 쓰지 않는다.",
       "테스트 디렉터리에는 `discover`가 찾을 수 있도록 `__init__.py`나 기존 구조를 유지한다.",
       "가상환경 만들기, `pip install` 같은 설치 명령은 쓰지 않는다.",
-      NO_NETWORK),
+      NO_INSTALL),
     skills: ["tdd"],
   },
   debug: {
@@ -143,7 +144,7 @@ const HARNESSES = Object.freeze({
     agents: rules("디버깅 작업 규칙",
       "재현 명령과 실패 출력을 결과 문서에 그대로 남긴다.",
       "원인이 여러 모듈에 걸치면 가장 아래(근원) 모듈에서 고친다.",
-      NO_NETWORK),
+      NO_INSTALL),
     skills: ["rootCause", "tdd"],
   },
   refactor: {
@@ -157,7 +158,7 @@ const HARNESSES = Object.freeze({
     agents: rules("리팩토링 작업 규칙",
       "한 번에 한 가지 종류의 변경만 한다(이동, 이름, 추출, 삭제).",
       "테스트를 고쳐야 통과하는 변경은 동작 변경이므로 멈추고 이유를 보고한다.",
-      NO_NETWORK),
+      NO_INSTALL),
     skills: ["safeRefactor"],
   },
   tests: {
@@ -171,12 +172,12 @@ const HARNESSES = Object.freeze({
     agents: rules("테스트 작성 규칙",
       "기존 테스트의 이름 규칙과 도우미를 재사용한다.",
       "테스트 하나는 한 가지 동작만 확인한다.",
-      NO_NETWORK),
+      NO_INSTALL),
     skills: ["testDesign"],
   },
 });
 
-// 루프 = 하네스 + 시도 횟수 + 시간·예산 한도 + 검증 명령. 검증 명령은 컨테이너가 허용하는 3가지뿐이다(docker-runner 의 permitted).
+// 루프 = 하네스 + 시도 횟수 + 시간·예산 한도 + 검증 명령. 검증 명령은 실행기가 허용하는 것뿐이다(infrastructure/host-process.js 의 permitted).
 // 루프마다 전용 하네스를 하나씩 둔다. 예산(센트)은 모델 호출 전에 토큰 수와 출력 한도로 계산해 보수적으로 "예약"하는 상한이라
 // 실제 비용보다 훨씬 크게 잡아야 한다. 컨텍스트 20K 토큰 호출 1회가 약 228센트를 예약하므로 6000센트면 시도당 약 26회를 호출할 수 있다.
 const node = { command: "node", args: ["--test"], code: 0 };
@@ -194,13 +195,8 @@ const LOOPS = Object.freeze({
 // 기본 제공 Workflow 가 처음 고르는 루프. 사용자는 템플릿 생성 화면에서 다른 루프로 바꿀 수 있다.
 const PRESET_LOOPS = Object.freeze({ feature: "feature", bugfix: "bugfix", refactor: "refactor", tests: "tests" });
 
-// 에이전트 프로필: 관제의 새 세션과 Workflow 프로필 노드가 쓰는 정의. 하네스와 이름·역할·지시·모델이 갈라지지 않도록
-// HARNESSES 에서 그대로 만든다. 그래서 같은 역할을 대화형 세션과 자동 실행(하네스·루프) 양쪽에서 똑같이 쓴다.
-const PROFILES = Object.freeze(Object.fromEntries(Object.entries(HARNESSES).map(([key, spec]) => [key,
-  { name: spec.name, adapter: "claude", model: MODELS[spec.model].model, provider: "", role: spec.role, instructions: spec.instructions }])));
-
 // 하네스 정의에 들어가는 assets(AGENTS.md 규칙과 스킬).
 const assetsOf = (spec) => (spec.agents || spec.skills
   ? { agents: spec.agents ?? "", skills: (spec.skills ?? []).map((key) => SKILLS[key]) } : undefined);
 
-module.exports = { MODELS, SKILLS, HARNESSES, PROFILES, LOOPS, PRESET_LOOPS, assetsOf };
+module.exports = { MODELS, SKILLS, HARNESSES, LOOPS, PRESET_LOOPS, assetsOf };

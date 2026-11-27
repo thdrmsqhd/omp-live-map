@@ -199,10 +199,6 @@ async function captureEngineering() {
   fs.mkdirSync(userData, { recursive: true });
   // HOME 을 데모 폴더로 바꾸므로 실행 중 화면을 찍을 때는 Claude Code 로그인 위치만 실제 사용자 폴더로 알려 준다(파일은 읽기만 한다).
   const claudeConfig = LIVE ? { CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || path.join(require("node:os").homedir(), ".claude") } : {};
-  // Docker CLI 는 HOME 의 .docker/contexts 에서 desktop-linux 컨텍스트를 찾는다(런타임은 DOCKER_* 환경 변수를 지운다).
-  // 인증 정보가 있는 config.json 은 두고 컨텍스트 메타데이터만 데모 HOME 에 복사한다.
-  const contexts = path.join(require("node:os").homedir(), ".docker", "contexts");
-  if (LIVE && fs.existsSync(contexts)) fs.cpSync(contexts, path.join(HOME, ".docker", "contexts"), { recursive: true });
   const app = spawn(electron, [path.join(ROOT, "desktop"), "--remote-debugging-port=0", "--user-data-dir=" + userData, "--skip-v2-import"], {
     env: { ...process.env, HOME, USERPROFILE: HOME, OMP_MAP_STATE: path.join(DEMO, "state"), OMP_MAP_CWD: path.join(DEMO, "work"), ...claudeConfig },
     stdio: ["ignore", "pipe", "pipe"],
@@ -228,7 +224,7 @@ async function captureEngineering() {
     };
     const click = (name, exact = true) => page.getByRole("button", { name, exact }).click();
     const request = async (endpointName, params, payload) => {
-      const reply = await page.evaluate(([e, p, b]) => window.engineeringDesktop.request(e, p, b), [endpointName, params ?? {}, payload]);
+      const reply = await page.evaluate(([e, p, b]) => window.engineeringApi.request(e, p, b), [endpointName, params ?? {}, payload]);
       if (!reply?.ok) throw new Error(endpointName + ": " + JSON.stringify(reply).slice(0, 200));
       return reply.value;
     };
@@ -236,16 +232,16 @@ async function captureEngineering() {
     const optionValue = (selector, text) => page.locator(selector + " option").filter({ hasText: text }).first().getAttribute("value");
     // 확인 창(하네스 새 버전 적용, 곧 만료되는 Claude Code 로그인)은 모두 수락한다.
     page.on("dialog", (dialog) => void dialog.accept());
-    // Engineering 설정 페이지에서 프로젝트를 등록하고, 기본 구성과 기본 Workflow 8종을 만든다.
-    await page.getByRole("link", { name: "Engineering" }).click({ timeout: 15000 });
-    await page.locator("#sdlc-nav").waitFor();
+    // 관제 화면의 Task 탭에서 프로젝트를 등록하고, 기본 구성과 기본 Workflow 8종을 만든다.
+    await page.getByRole("button", { name: "Task", exact: true }).click({ timeout: 15000 });
+    await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached", timeout: 15000 });
     await page.getByText("프로젝트 설정", { exact: true }).click();
     const form = page.locator("#project-form");
     await form.locator("[name=name]").fill("modbus-gateway");
     await form.locator("[name=root]").fill(PROJECTS.gateway);
     await form.locator("[name=branch]").fill("main");
     await form.getByRole("button", { name: "등록 또는 수정" }).click();
-    await page.locator("#project option").filter({ hasText: "modbus-gateway" }).waitFor({ state: "attached" });
+    await page.locator("#eng-project option").filter({ hasText: "modbus-gateway" }).waitFor({ state: "attached" });
     const project = (await request("projects", {})).find((item) => item.name === "modbus-gateway");
     await request("workflows/presets/defaults", {}, { scope: "personal" });
     const presets = await request("workflows/presets/all", {}, { project: project.id });
@@ -287,7 +283,8 @@ async function captureEngineering() {
       await panel.getByRole("button", { name: "닫기" }).click();
     });
     await step("개발 Task", async () => {
-      await page.goto(origin + "/engineering.html?project=" + project.id);
+      await page.goto(origin + "/?mode=tasks&project=" + project.id);
+      await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached" });
       const task = page.locator("#sdlc-form");
       await task.getByLabel("업무 제목").fill("Modbus 재접속 오류 수정");
       await task.getByLabel("요구사항").fill("PLC 연결이 끊긴 뒤 5초 안에 자동으로 다시 접속한다. 재현 테스트를 포함한다.");

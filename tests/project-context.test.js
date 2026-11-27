@@ -2,7 +2,6 @@
 
 const assert = require("node:assert/strict");
 const { execFileSync } = require("node:child_process");
-const { randomBytes } = require("node:crypto");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -68,17 +67,15 @@ test("project context rejects linked directory paths, hardlinked files, and syml
   for (const name of ["docs/README.md", "STATUS.txt", "README.md"]) await assert.rejects(projectContext(project, name), { status: 404 });
 });
 
-test("document scope remains behind the existing desktop projects GET and does not change ordinary listing", async (t) => {
+test("document scope remains behind the token-guarded projects GET and does not change ordinary listing", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-context-api-"));
-  const token = randomBytes(32).toString("hex");
-  process.env.OMP_MAP_ENGINEERING_TOKEN = token;
   process.env.OMP_MAP_ENGINEERING_DATA = directory;
   try {
     await withLegacyHttp(t, async ({ request, directory: work }) => {
       const endpoint = "/api/engineering/projects";
       const context = endpoint + "?context=1&project=";
-      const headers = { "x-omp-engineering-token": token };
-      assert.equal((await request(context + "unknown")).status, 403);
+      const headers = {};
+      assert.equal((await request(context + "unknown", { opsToken: false })).status, 403);
       assert.equal((await request(context + "unknown", { headers: { ...headers, origin: "https://example.invalid" } })).status, 403);
       assert.equal((await request(context + "unknown", { headers })).status, 404);
       assert.equal((await request(endpoint + "?context=1", { headers })).status, 400);
@@ -102,7 +99,6 @@ test("document scope remains behind the existing desktop projects GET and does n
       assert.match(JSON.parse(source.text).text, /project Two/);
     });
   } finally {
-    delete process.env.OMP_MAP_ENGINEERING_TOKEN;
     delete process.env.OMP_MAP_ENGINEERING_DATA;
     // The route owns the SQLite handle until this isolated test process exits.
     if (process.platform !== "win32") await fs.rm(directory, { force: true, recursive: true });
@@ -132,7 +128,7 @@ test("sidebar ignores stale projects, links readable source, refreshes on a visi
   const window = {
     setInterval(fn, delay) { assert.equal(delay, 5000); tick = fn; return 7; },
     clearInterval(id) { assert.equal(id, 7); tick = undefined; },
-    engineeringDesktop: { request: (endpoint, params) => new Promise((resolve) => calls.push({ endpoint, params, resolve })) },
+    engineeringApi: { request: (endpoint, params) => new Promise((resolve) => calls.push({ endpoint, params, resolve })) },
   };
   const settle = () => new Promise(setImmediate);
   const resolve = (index, value) => calls[index].resolve({ ok: true, value });
@@ -170,8 +166,8 @@ test("sidebar ignores stale projects, links readable source, refreshes on a visi
   hide();
   assert.equal(root.hidden, true);
   assert.equal(tick, undefined);
-  delete window.engineeringDesktop;
+  // 웹과 데스크톱이 같은 API 를 쓰므로 다시 열면 그대로 다시 읽는다.
   show("second");
-  assert.match(root.textContent, /데스크톱 앱/);
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 6);
+  assert.equal(calls[5].params.project, "second");
 });

@@ -2,11 +2,11 @@
 
 const { problem, redact } = require("./state");
 
-// Trust belongs to the host integration. A profile or an HTTP caller cannot grant it.
+// 실행기와 검증 명령 허용 목록은 호스트 조립(runtime.js)이 정한다. 프로필이나 HTTP 요청이 늘릴 수 없다.
 function secureRunner(adapters = new Map(), commands) {
   function requireAdapter(harness, model, checks) {
     const agent = adapters.get(harness.adapter);
-    if (!agent?.enforced || !commands?.enforced) throw problem(409, "No verified isolation backend for this harness");
+    if (!agent?.enforced || !commands?.enforced) throw problem(409, "이 하네스를 실행할 실행기(omp·claude CLI)를 이 PC에서 찾지 못했습니다");
     if (!agent.supports(model, harness)) throw problem(409, "Model, reasoning or harness settings are unsupported");
     if (!checks.every((check) => commands.allows(check))) throw problem(409, "A verification command is outside the host allowlist");
     return agent;

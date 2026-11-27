@@ -1,20 +1,12 @@
 "use strict";
 
-const fs = require("node:fs/promises");
-const path = require("node:path");
 const { artifactText } = require("./workflow-artifact");
 const { git } = require("./catalog");
 const { problem, redact } = require("./state");
+const { runFolder } = require("./work-folder");
 
-function workflowObservability(db, runs, workspaceRoot) {
-  async function ownedWorkspace(run) {
-    const root = await fs.realpath(workspaceRoot);
-    const workspace = await fs.realpath(run.workspace);
-    if (path.dirname(workspace) !== root || path.basename(workspace) !== run.id) {
-      throw problem(409, "Worktree does not belong to the workflow run");
-    }
-    return workspace;
-  }
+function workflowObservability(db, runs, catalog) {
+  const ownedWorkspace = (run) => runFolder(catalog, run);
   async function artifact(id, node, file) {
     const run = runs.get(id);
     const outcome = runs.nodes(id).find((item) => item.node === node)?.outcome;
@@ -40,7 +32,7 @@ function workflowObservability(db, runs, workspaceRoot) {
       ]);
       return { status: redact(status), diff: redact(diff), truncated: status.length > 8000 || diff.length > 8000 };
     } catch {
-      throw problem(409, "Worktree changes could not be read within the review limit");
+      throw problem(409, "Work folder changes could not be read within the review limit");
     }
   }
   function timeline(id) {

@@ -88,7 +88,7 @@ test("v13 project workflows migrate to scope='project' and runs gain their proje
     db.close();
     db = openDatabase(file);
     try {
-      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 14);
+      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 15);
       assert.ok(fs.existsSync(file + ".v13.bak"));
       assert.deepEqual({ ...db.prepare("SELECT scope,project,team FROM workflow WHERE id=?").get(saved.id) },
         { scope: "project", project: "a", team: null });

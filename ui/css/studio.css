@@ -1,9 +1,8 @@
-/* 노드 캔버스(ComfyUI 형): 소켓·연결선 색은 종류마다 같다. 모델 초록, 하네스 보라, 루프 주황, 프로필 분홍, 실행 순서 하늘색. */
+/* 노드 캔버스(ComfyUI 형): 소켓·연결선 색은 종류마다 같다. 모델 초록, 하네스 보라, 루프 주황, 실행 순서 하늘색. */
 .studio {
   --c-model: #7bd88f;
   --c-harness: #b79cff;
   --c-loop: #f5b06b;
-  --c-profile: #ff8fc7;
   --c-flow: #9fc3ff;
   --c-warn: #ffcf5c;
   max-width: none;
@@ -50,10 +49,8 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 #studio-lines g[data-type="model"] { --wire: var(--c-model); }
 #studio-lines g[data-type="harness"] { --wire: var(--c-harness); }
 #studio-lines g[data-type="loop"] { --wire: var(--c-loop); }
-#studio-lines g[data-type="profile"] { --wire: var(--c-profile); }
 #studio-lines g[data-type="preview"] { --wire: var(--accent); }
 .studio-edge { fill: none; stroke: var(--wire); stroke-width: 3; opacity: .9; }
-#studio-lines g[data-type="profile"] .studio-edge { stroke-dasharray: 7 5; }
 #studio-lines g[data-type="preview"] .studio-edge { stroke-dasharray: 6 5; }
 .studio-edge-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
 #studio-lines g:hover .studio-edge { stroke-width: 4.5; opacity: 1; }
@@ -66,11 +63,10 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-lane { position: absolute; top: -64px; white-space: nowrap; color: #6f7690; font-size: 15px; font-weight: 700; letter-spacing: .02em; }
 .studio-lane small { display: block; font-weight: 400; font-size: 13px; color: #9aa1b5; }
 .studio-lane-line { position: absolute; top: -70px; height: 9000px; border-left: 1px dashed #2f3442; }
-/* 종류별 열 제목. left 는 studio-shared.js 의 COLUMN(모델 0·하네스 400·루프 800)과 GRID_LIBRARY[0](1200, 정의만 볼 때 프로필 격자)과 같아야 한다. */
+/* 종류별 열 제목. left 는 studio-shared.js 의 COLUMN(모델 0·하네스 400·루프 800)과 같아야 한다. */
 .studio-lane[data-type="model"] { left: 0; color: var(--c-model); }
 .studio-lane[data-type="harness"] { left: 400px; color: var(--c-harness); }
 .studio-lane[data-type="loop"] { left: 800px; color: var(--c-loop); }
-.studio-lane[data-type="profile"] { left: 1200px; color: var(--c-profile); }
 .studio-lane-external, .studio-lane-external-line { pointer-events: none; }
 .studio-lane-external { color: #d7c8ff; z-index: 2; }
 .studio-lane-external small { color: #a898d0; }
@@ -104,7 +100,6 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-contract-list dd { margin: 0; color: #e7e4f2; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .studio-contract-list code { font: 600 11px/1.4 ui-monospace, Consolas, monospace; color: #f3e8ff; }
 .studio-node[data-kind="loop"] { --kind: var(--c-loop); }
-.studio-node[data-kind="profile"] { --kind: var(--c-profile); }
 .studio-node[data-kind="step"] { width: 240px; }
 .studio-node[data-type="start"], .studio-node[data-type="end"] { --kind: #83c9b4; width: 190px; }
 .studio-node[data-kind="step"][data-type="agent"] { --kind: #a7b8ff; }
@@ -151,7 +146,6 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-socket[data-type="model"] { --sock: var(--c-model); }
 .studio-socket[data-type="harness"] { --sock: var(--c-harness); }
 .studio-socket[data-type="loop"] { --sock: var(--c-loop); }
-.studio-socket[data-type="profile"] { --sock: var(--c-profile); }
 .studio-in .studio-socket { left: 0; transform: translate(-50%, -50%); }
 .studio-out .studio-socket { right: 0; transform: translate(50%, -50%); }
 .studio-socket:hover { background: var(--sock); transform: translate(var(--sx, -50%), -50%) scale(1.25); }
@@ -165,7 +159,6 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-viewport[data-linking="model"] .studio-socket[data-type="model"],
 .studio-viewport[data-linking="harness"] .studio-socket[data-type="harness"],
 .studio-viewport[data-linking="loop"] .studio-socket[data-type="loop"],
-.studio-viewport[data-linking="profile"] .studio-socket[data-type="profile"],
 .studio-viewport[data-linking="flow"] .studio-socket[data-type="flow"] {
   background: var(--sock); box-shadow: 0 0 0 5px color-mix(in srgb, var(--sock) 30%, transparent);
 }
@@ -215,7 +208,6 @@ main:has(> #studio:not([hidden])) { max-width: none; padding-bottom: .6rem; }
 .studio-legend i[data-type="model"] { --sock: var(--c-model); }
 .studio-legend i[data-type="harness"] { --sock: var(--c-harness); }
 .studio-legend i[data-type="loop"] { --sock: var(--c-loop); }
-.studio-legend i[data-type="profile"] { --sock: var(--c-profile); }
 
 .studio-empty {
   position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: .6rem;

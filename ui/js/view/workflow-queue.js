@@ -1,7 +1,7 @@
 /* Live Map 의 '개입 필요' 함. 사람이 답해야 하는 일을 한곳에 모아 그 자리에서 처리한다.
    - 에이전트 질문: 세션(OMP·Claude Code)이 묻는 ask·select·confirm·input·editor 를 카드를 열지 않고 답한다
      (질문 카드 마크업·답 보내기는 chat-ask.js 와 같은 것을 쓴다).
-   - Workflow: 승인 대기는 승인 안내를 보고 바로 승인·반려하고, 실패·확인 필요는 실행을 연다(데스크톱 앱에서만).
+   - Workflow: 승인 대기는 승인 안내를 보고 바로 승인·반려하고, 실패·확인 필요는 실행을 연다.
    단축키 Alt+I 로 열고 닫는다. */
 const wfQueueButton = $("workflow-queue-toggle");
 const wfQueuePanel = $("workflow-queue");
@@ -160,7 +160,7 @@ function paintWorkflowQueue({ total, attention, recent }) {
 }
 
 async function refreshWorkflowQueue() {
-  if (!window.engineeringDesktop || !["map", "design"].includes(mapMode) || document.hidden) return;
+  if (!["map", "design"].includes(mapMode) || document.hidden) return;
   if (wfQueueLoading) { wfQueueAgain = true; return; }
   wfQueueLoading = true;
   if (!wfQueueSignature) wfQueueStatus.textContent = "실행 목록을 불러오는 중입니다.";
@@ -178,7 +178,6 @@ async function refreshWorkflowQueue() {
 renderWorkflowQueueMode = paintWorkflowQueueMode;
 paintWorkflowQueueMode();
 paintInboxButton();
-$("workflow-queue-workflows").hidden = !window.engineeringDesktop;
 wfQueueButton.onclick = () => {
   setWorkflowQueueOpen(wfQueuePanel.hidden);
   if (!wfQueuePanel.hidden) void refreshWorkflowQueue();
@@ -199,12 +198,10 @@ document.addEventListener("keydown", (event) => {
     if (!wfQueuePanel.hidden) wfQueuePanel.querySelector("textarea, input, button")?.focus({ preventScroll: true });
     return;
   }
-  if (event.key !== "Escape" || wfQueuePanel.hidden || $("workflow-launch").open) return;
+  if (event.key !== "Escape" || wfQueuePanel.hidden) return;
   setWorkflowQueueOpen(false);
   wfQueueButton.focus();
 });
-if (window.engineeringDesktop) {
-  document.addEventListener("visibilitychange", refreshWorkflowQueue);
-  setInterval(refreshWorkflowQueue, 5000);
-  void refreshWorkflowQueue();
-}
+document.addEventListener("visibilitychange", refreshWorkflowQueue);
+setInterval(refreshWorkflowQueue, 5000);
+void refreshWorkflowQueue();

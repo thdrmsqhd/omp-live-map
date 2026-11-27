@@ -8,8 +8,8 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 test("each kind's column title sits over the column its nodes are placed in", async () => {
-  const { COLUMN, GRID_LIBRARY } = await import(pathToFileURL(path.join(__dirname, "../ui/js/studio-shared.js")).href);
+  const { COLUMN } = await import(pathToFileURL(path.join(__dirname, "../ui/js/studio-shared.js")).href);
   const css = fs.readFileSync(path.join(__dirname, "../ui/css/studio.css"), "utf8");
   const left = (type) => Number(css.match(new RegExp(`\\.studio-lane\\[data-type="${type}"\\] \\{ left: (\\d+)`))?.[1]);
-  assert.deepEqual(["model", "harness", "loop", "profile"].map(left), [COLUMN.model, COLUMN.harness, COLUMN.loop, GRID_LIBRARY[0]]);
+  assert.deepEqual(["model", "harness", "loop"].map(left), [COLUMN.model, COLUMN.harness, COLUMN.loop]);
 });

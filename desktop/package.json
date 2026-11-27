@@ -20,7 +20,6 @@
     "files": [
       "main.cjs",
       "preload.cjs",
-      "credentials.cjs",
       "icons/omp-live-map.png",
       "package.json"
     ],

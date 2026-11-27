@@ -68,8 +68,8 @@ function harnessAssets(value) {
 
 function promptAssets(assets) {
   if (!assets) return "";
-  return [assets.agents ? "Profile AGENTS.md:\n" + assets.agents : "",
-    ...assets.skills.map(({ name, markdown }) => "Profile skill " + name + ":\n" + markdown)].filter(Boolean).join("\n\n");
+  return [assets.agents ? "Harness AGENTS.md:\n" + assets.agents : "",
+    ...assets.skills.map(({ name, markdown }) => "Harness skill " + name + ":\n" + markdown)].filter(Boolean).join("\n\n");
 }
 
 module.exports = { harnessAssets, promptAssets };

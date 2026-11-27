@@ -3,7 +3,7 @@
 import { h, KIND_LABELS, STEP_TYPES, STEP_HINTS, HARNESS_TEMPLATES, HARNESS_CATALOG, harnessTypeOf, isEvaluationHarness, EXTERNAL_LANE_X } from "./studio-nodes.js";
 import { TYPE_LABELS } from "./studio-shared.js";
 export function bindStudioMenu(S) {
-  const { canvas, desktop, el, guard, inspect, isDirty, libraryNodes, menu, menuList, menuSearch, nameOf, nodes, ownerOf, pinned, say, steps, viewport } = S;
+  const { canvas, el, guard, inspect, isDirty, libraryNodes, menu, menuList, menuSearch, nameOf, nodes, ownerOf, pinned, say, steps, viewport } = S;
   const addDefaults = (...args) => S.addDefaults(...args);
   const connectEnds = (...args) => S.connectEnds(...args);
   const createLibrary = (...args) => S.createLibrary(...args);
@@ -35,8 +35,6 @@ export function bindStudioMenu(S) {
       create: (at) => createLibrary("harness", at, { owner: libraryOwner() }) });
     items.push({ group: "정의", label: "새 루프", hint: "재시도·검증 명령·예산", out: "loop", in: ["harness"],
       create: (at) => createLibrary("loop", at, { owner: libraryOwner() }) });
-    items.push({ group: "정의", label: "새 에이전트 프로필", hint: "실행기·모델·역할", out: "profile", in: [],
-      create: (at) => createLibrary("profile", at, { owner: ownerFor("personal") }) });
     for (const family of HARNESS_CATALOG.families) {
       for (const type of HARNESS_CATALOG.types.filter((type) => type.family === family.id)) {
         items.push({ group: family.label, label: type.label, hint: type.output, search: `새 하네스 ${type.id} ${type.outputSchema}`,
@@ -48,7 +46,7 @@ export function bindStudioMenu(S) {
       for (const type of ["agent", "loop", "command", "condition", "approval", "parallel", "join", "subgraph", "end"]) {
         if (type === "end" && steps().some(({ data }) => data.type === "end")) continue;
         items.push({ group: "Workflow 단계", label: STEP_TYPES[type], hint: STEP_HINTS[type] ?? "", out: type === "end" ? null : "flow",
-          in: ["flow", ...(type === "agent" ? ["harness", "profile"] : type === "loop" ? ["loop"] : [])], create: (at) => createStep(type, at) });
+          in: ["flow", ...(type === "agent" ? ["harness"] : type === "loop" ? ["loop"] : [])], create: (at) => createStep(type, at) });
       }
     }
     const shown = new Set(visibleNodes().map(({ key }) => key));
@@ -67,7 +65,7 @@ export function bindStudioMenu(S) {
         } });
     }
     if (!origin) {
-      if (desktop()) items.push({ group: "빠른 시작", label: "기본 구성 추가", hint: "기본 모델·하네스·루프·프로필을 개인 범위에 추가", out: null, in: [],
+      items.push({ group: "빠른 시작", label: "기본 구성 추가", hint: "기본 모델·하네스·루프를 개인 범위에 추가", out: null, in: [],
         create: () => { void addDefaults(); return null; } });
       return items;
     }
@@ -146,7 +144,6 @@ export function bindStudioMenu(S) {
           Object.assign(copy.data, structuredClone({ ...node.data, id: copy.data.id, label: node.data.label + " 복제" }));
           copy.ref = { ...node.ref };
           copy.version = node.version;
-          copy.profileVersion = node.profileVersion;
           return copy;
         }], ["단계 삭제", () => removeNode(node)]);
       }
@@ -161,7 +158,7 @@ export function bindStudioMenu(S) {
       items.push([node.kind === "harness" ? "상세 · 버전 기록 · 실제 적용값 · 비교 실행" : "상세 · 버전 기록", () => { select(node.key); inspect.open(node); }]);
       if (isDirty(node) && !node.isNew) items.push(["되돌리기", () => revert(node)]);
       if (S.wf && S.mode !== "all" && pinned.has(node.key)) items.push(["캔버스에서 숨기기", () => { pinned.delete(node.key); render(); }]);
-      items.push([node.isNew ? "삭제(저장 안 함)" : node.kind === "profile" ? "프로필 삭제" : "정의 삭제", () => removeNode(node)]);
+      items.push([node.isNew ? "삭제(저장 안 함)" : "정의 삭제", () => removeNode(node)]);
     }
     const bounds = el("graph").getBoundingClientRect();
     menuState = { at: { x: node.x, y: node.y }, items: [] };

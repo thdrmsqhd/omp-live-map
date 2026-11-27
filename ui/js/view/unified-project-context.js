@@ -23,7 +23,7 @@
   async function request(project, source) {
     const params = { context: "1", project };
     if (source !== undefined) params.source = source;
-    const result = await window.engineeringDesktop.request("projects", params);
+    const result = await window.engineeringApi.request("projects", params);
     if (!result?.ok) throw new Error("Project context request failed");
     return result.value;
   }
@@ -101,7 +101,7 @@
     } finally { source.pending = false; }
   }
   async function refresh(view) {
-    if (!visible(view) || !view.project || !window.engineeringDesktop?.request || view.loading) return;
+    if (!visible(view) || !view.project || view.loading) return;
     view.loading = true;
     try {
       const data = await request(view.project);
@@ -175,7 +175,6 @@
     root.replaceChildren(header, view.status, view.body, view.preview);
     root.hidden = false;
     if (!project) status(view.status, "프로젝트를 선택하면 문서를 볼 수 있습니다.");
-    else if (!window.engineeringDesktop?.request) status(view.status, "프로젝트 문서는 데스크톱 앱에서 볼 수 있습니다.");
     else {
       status(view.status, "프로젝트 문서를 읽는 중…");
       view.timer = window.setInterval(() => void refresh(view), refreshMs);

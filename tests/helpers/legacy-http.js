@@ -35,8 +35,9 @@ async function withLegacyHttp(t, run) {
       server.closeAllConnections();
       await closed;
     }
-    // 기본 정의 생성처럼 프로필 저장소(SQLite)를 연 테스트가 있으면 Windows 에서 폴더를 지우기 전에 닫아야 한다.
-    require("../../server/harness/session-profiles").close();
+    // 세션 하네스 배정 저장소(SQLite)를 연 테스트가 있으면 Windows 에서 폴더를 지우기 전에 닫아야 한다.
+    require("../../server/harness/session-harness").close();
+    require("../../server/routes").closeEngineering?.();
     await fs.rm(directory, { recursive: true, force: true });
   }
 }

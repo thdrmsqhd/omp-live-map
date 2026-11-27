@@ -43,9 +43,7 @@
     if (value !== undefined && entries.some((entry) => entry.value === value)) select.value = value;
   }
   async function request(name, params, payload) {
-    const bridge = window.engineeringDesktop;
-    if (!bridge?.request) throw new Error("독립 평가는 데스크톱 앱에서 사용할 수 있습니다.");
-    const reply = await bridge.request(name, params, payload);
+    const reply = await window.engineeringApi.request(name, params, payload);
     if (!reply?.ok) throw new Error(reply?.error || "평가 요청에 실패했습니다.");
     return reply.value;
   }

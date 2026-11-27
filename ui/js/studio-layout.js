@@ -1,7 +1,7 @@
 // 노드 캔버스(studio.js)에서 나눈 모듈: 자동 배치·접힘·선택(노드 위치는 localStorage).
 // studio.js 의 상태·함수는 S 로 받는다. let 상태(wf·project 등)는 S 의 getter·setter 로 읽고 쓴다.
 import { h, isEvaluationHarness, EXTERNAL_LANE_X } from "./studio-nodes.js";
-import { COLUMN, GAP, GRID_LIBRARY, GRID_WORKFLOW, KIND_ORDER, LAYOUT_KEY } from "./studio-shared.js";
+import { COLUMN, GAP, KIND_ORDER, LAYOUT_KEY } from "./studio-shared.js";
 export function bindStudioLayout(S) {
   const { el, inspect, layer, libraryNodes, nameOf, nodes, say, stepById, steps } = S;
   const closure = (...args) => S.closure(...args);
@@ -19,9 +19,8 @@ export function bindStudioLayout(S) {
       return users.length ? Math.min(...users.map(({ y }) => y)) : Infinity;
     };
     const external = list.filter((node) => isEvaluationHarness(node));
-    const grid = list.filter((node) => node.kind === "profile" && !linkedProfile(node));
-    for (const kinds of [["loop", "profile"], ["harness"], ["model"]]) {
-      const column = list.filter((node) => kinds.includes(node.kind) && !grid.includes(node) && !external.includes(node));
+    for (const kinds of [["loop"], ["harness"], ["model"]]) {
+      const column = list.filter((node) => kinds.includes(node.kind) && !external.includes(node));
       if (!column.length) continue;
       for (const node of column) node.anchor = anchor(node);
       column.sort((a, b) => a.anchor - b.anchor || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || nameOf(a).localeCompare(nameOf(b), "ko"));
@@ -62,22 +61,7 @@ export function bindStudioLayout(S) {
         remember(node);
       }
     }
-    placeGrid(grid.sort((a, b) => nameOf(a).localeCompare(nameOf(b), "ko")));
     saveLayout();
-  }
-  // 연결되지 않은 프로필을 이미 놓인 정의 노드 아래에 여러 열로 놓는다(한 열로 길게 쌓여 화면이 작아지지 않게).
-  function placeGrid(list) {
-    if (!list.length) return;
-    const pending = new Set(list);
-    const placed = [...nodes.values()].filter((other) => other.el && other.kind !== "step" && !pending.has(other) && other.x !== undefined);
-    let top = !placed.length ? 0 : S.wf ? Math.max(...placed.map((other) => other.y + other.el.offsetHeight)) + GAP * 2
-      : Math.min(...placed.map((other) => other.y));
-    const columns = S.wf ? GRID_WORKFLOW : GRID_LIBRARY;
-    for (let start = 0; start < list.length; start += columns.length) {
-      const row = list.slice(start, start + columns.length);
-      row.forEach((node, index) => { node.x = columns[index]; node.y = top; place(node); remember(node); });
-      top += Math.max(...row.map((node) => node.el.offsetHeight)) + GAP;
-    }
   }
   // 정의 노드 위치는 보는 맥락(Workflow별, 또는 Workflow 없이 정의만)마다 따로 기억한다.
   function spots() {
@@ -98,7 +82,6 @@ export function bindStudioLayout(S) {
     if (node.isNew) return false;
     return !linked || !linked.has(node.key);
   }
-  function linkedProfile(node) { return steps().some((step) => step.ref.profile === node.key); }
   function remember(node) {
     if (node.kind === "step") {
       S.layout.steps ??= {};
@@ -156,5 +139,5 @@ export function bindStudioLayout(S) {
     root.hidden = false;
   }
 
-  return { applySpots, clearEdgeSelection, collapsedByDefault, inspectHandoff, linkedProfile, placeGrid, placePending, remember, saveLayout, select, spots, toggleCollapse };
+  return { applySpots, clearEdgeSelection, collapsedByDefault, inspectHandoff, placePending, remember, saveLayout, select, spots, toggleCollapse };
 }

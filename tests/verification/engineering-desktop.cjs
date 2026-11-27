@@ -57,9 +57,9 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
     // 확인 창(하네스 새 버전 적용, Claude Code 로그인이 곧 만료되는 PC 의 실행 시작 확인)은 모두 수락한다.
     page.on("dialog", (dialog) => void dialog.accept());
-    // Engineering 설정 페이지: 이전 데이터 가져오기, 실행 환경, 키 저장소, 프로젝트 등록.
-    await page.getByRole("link", { name: "Engineering" }).click({ timeout: 15000 });
-    await page.locator("#sdlc-nav").waitFor();
+    // 관제 화면의 Task 탭: 이전 데이터 가져오기, 실행 환경, 프로젝트 등록. 별도 Engineering 페이지는 없다.
+    await page.getByRole("button", { name: "Task", exact: true }).click({ timeout: 15000 });
+    await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached", timeout: 15000 });
     const origin = new URL(page.url()).origin;
     assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.notEqual(origin, "http://127.0.0.1:7800");
@@ -75,21 +75,11 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
       assert.equal(await page.locator(removed).count(), 0, removed);
     }
     await page.getByText("실행 환경", { exact: true }).click();
-    await page.locator("#prepare-runtime").waitFor({ timeout: 8000 });
+    await page.locator("#check-runtime").waitFor({ timeout: 8000 });
     await page.waitForFunction(() => Boolean(document.querySelector("#runtime-status")?.textContent));
-    await page.locator("#project option").filter({ hasText: "CI V2 project" }).waitFor({ state: "attached" });
-    const login = page.getByRole("button", { name: "Claude Console 로그인" });
-    assert.equal(await login.isVisible(), true);
-    if (installed) assert.equal(await login.isEnabled(), true);
-    const testKey = "sk-ant-v2-fixture-12345678901234567890";
-    await page.locator("#provider-key input").fill(testKey);
-    await page.getByRole("button", { name: "키 저장" }).click();
-    await page.getByText("Windows 사용자 비밀 저장소에 키를 저장했습니다.").waitFor();
-    const storedKey = path.join(directory, "anthropic-key.dpapi");
-    assert.equal((await fs.readFile(storedKey)).includes(Buffer.from(testKey)), false);
-    await page.getByRole("button", { name: "키 삭제" }).click();
-    await page.getByText("저장된 키를 삭제했습니다.").waitFor();
-    await assert.rejects(fs.stat(storedKey), { code: "ENOENT" });
+    await page.locator("#eng-project option").filter({ hasText: "CI V2 project" }).waitFor({ state: "attached" });
+    // 실행은 이 PC 에 설치된 omp·claude CLI 로 한다. 앱이 키·로그인을 받지 않는다.
+    assert.equal(await page.locator("#provider-key, #console-login").count(), 0);
     const repository = path.join(directory, "fixture-repo");
     await fs.mkdir(repository);
     for (const command of [["init", "-b", "main"], ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
@@ -103,21 +93,18 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     await form.locator("[name=root]").fill(repository);
     await form.locator("[name=branch]").fill("main");
     await form.getByRole("button", { name: "등록 또는 수정" }).click();
-    await page.locator("#project option").filter({ hasText: "desktop fixture" }).waitFor({ state: "attached", timeout: 8000 });
+    await page.locator("#eng-project option").filter({ hasText: "desktop fixture" }).waitFor({ state: "attached", timeout: 8000 });
     const request = async (endpoint, params, payload) => {
-      const result = await page.evaluate(([name, query, body]) => window.engineeringDesktop.request(name, query, body), [endpoint, params ?? {}, payload]);
+      const result = await page.evaluate(([name, query, body]) => window.engineeringApi.request(name, query, body), [endpoint, params ?? {}, payload]);
       assert.equal(result.ok, true, endpoint + ": " + result.error);
       return result.value;
     };
     const project = (await request("projects")).find(({ name }) => name === "desktop fixture").id;
-    // 관제 화면의 설계 모드에서는 프로젝트 등록 같은 설정 쓰기를 막는다.
     await page.goto(origin + "/?mode=design&project=" + project);
     await page.locator('#design[data-ready="1"]').waitFor({ state: "attached", timeout: 30000 });
 
     // 설계 모드(관제 화면 안 노드 캔버스): 기본 구성 → 노드와 연결선.
     await page.locator("#design").waitFor();
-    const denied = await page.evaluate(() => window.engineeringDesktop.request("projects", {}, { name: "x", root: "C:\\x" }));
-    assert.equal(denied.ok, false);
     // 빈 캔버스 안내의 버튼은 프로필이 이미 있으면 보이지 않으므로 + 노드 메뉴의 빠른 시작을 쓴다.
     await page.locator("#studio-add").click();
     await page.getByRole("menuitem", { name: /기본 구성 추가/ }).click({ timeout: 15000 }).catch(async (error) => {
@@ -177,8 +164,9 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     await verifyHarnessDetail(page, request, project, testModel);
     await verifyLiveMap(page, origin, project);
 
-    // 개발 Task 는 Engineering 페이지에서 만들고 실행하면 관제에서 그 실행을 연다.
-    await page.goto(origin + "/engineering.html?project=" + project);
+    // 개발 Task 는 같은 화면의 Task 탭에서 만들고, 실행하면 맵 탭에서 그 실행을 연다.
+    await page.goto(origin + "/?mode=tasks&project=" + project);
+    await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached", timeout: 15000 });
     await page.locator("#sdlc-nav").click();
     const task = page.locator("#sdlc-form");
     await task.getByLabel("업무 제목").fill("CI development task");
@@ -190,11 +178,12 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     await card.getByRole("button", { name: "Workflow 실행", exact: true }).click();
     await page.locator("#wf-map-title").filter({ hasText: "CI development task" }).waitFor({ timeout: 15000 });
     await page.locator("#wf-map-status").filter({ hasText: /^완료$/ }).waitFor();
-    await page.goto(origin + "/engineering.html?view=execution");
-    assert.equal(await page.getByRole("heading", { name: "Loop 실행" }).isVisible(), true);
-    // 예전 폼 화면 주소는 관제의 설계 모드로 간다.
-    await page.goto(origin + "/engineering.html?view=design");
-    await page.locator("#design").waitFor();
+    await page.goto(origin + "/?mode=tasks&view=execution");
+    await page.getByRole("heading", { name: "Loop 실행" }).waitFor();
+    // 예전 Engineering 페이지 주소는 합친 화면으로 넘긴다.
+    const redirected = await fetch(origin + "/engineering.html?view=design", { redirect: "manual" });
+    assert.equal(redirected.status, 302);
+    assert.equal(redirected.headers.get("location"), "/?mode=design");
     const unauthenticated = await fetch(origin + "/api/engineering/projects");
     assert.equal(unauthenticated.status, 403);
     const foreignOrigin = await fetch(origin + "/api/graph", { headers: { origin: "http://127.0.0.1:7800" } });

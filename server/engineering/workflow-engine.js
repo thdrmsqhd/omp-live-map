@@ -5,13 +5,13 @@ const { instructionFor, manualHold } = require("./workflow-gates");
 const { retryPlan } = require("./workflow-retry-plan");
 const { nodeExecutor, nodeDefinitions } = require("./workflow-node-executor");
 const { validateArtifacts, verifyInputs, collectOutputs } = require("./workflow-artifact");
-const { runParallel } = require("./workflow-parallel");
 const live = require("./workflow-live");
 const { problem, redact } = require("./state");
 
 const external = ({ type }) => ["agent", "loop", "command"].includes(type);
 
-function workflowEngine(store, workflows, catalog, runner, worktrees) {
+// 실행은 고른 작업 폴더 하나에서 한다. 병렬(parallel) 갈래도 복사본을 만들지 않고 같은 폴더에서 차례로 실행한다.
+function workflowEngine(store, workflows, catalog, runner, folders) {
   const active = new Map(), queue = new Set();
 
   async function execute(id) {
@@ -27,7 +27,7 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
     let signal;
     async function ensureWorkspace() {
       if (!workspace) {
-        workspace = await worktrees.create(catalog.project(run.project), run);
+        workspace = await folders.create(catalog.project(run.project), run);
         store.workspace(id, workspace);
       }
       signal.throwIfAborted();
@@ -91,60 +91,33 @@ function workflowEngine(store, workflows, catalog, runner, worktrees) {
           store.change(id, ["running"], scheduler.outcome(results) ?? "failed");
           return;
         }
-        const batch = external(node) ? ready.filter(external).slice(0, 2) : [];
-        let outcomes;
-        if (batch.length > 1) {
-          const blocked = batch.find((item) => pendingHold(item));
-          if (blocked) {
-            const gate = pendingHold(blocked);
-            store.hold(id, blocked.id, gate.text, gate.gate);
-            return;
-          }
+        const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
+        signal.throwIfAborted();
+        if (node.type === "approval") {
+          const instruction = instructionFor(node.gate);
+          store.ask(id, node.id, instruction ? node.prompt + "\n\n" + instruction : node.prompt, artifacts, node.gate);
+          return;
+        }
+        const gate = pendingHold(node);
+        if (gate) { store.hold(id, node.id, gate.text, gate.gate); return; }
+        begin(node);
+        let result = { status: "succeeded" };
+        if (node.type === "condition") result.port = scheduler.conditionPort(node, results);
+        if (external(node)) {
           await ensureWorkspace();
-          const references = new Map();
-          for (const branch of batch) references.set(branch.id, await verifyInputs(workspace, branch, results, signal));
-          for (const branch of batch) begin(branch);
-          const agents = batch.filter(({ type }) => type !== "command").length;
-          const share = Math.floor(Math.max(0, remaining) / Math.max(1, agents));
-          outcomes = await runParallel({ project: catalog.project(run.project), workspace, worktrees, nodes: batch, signal,
-            priorArtifacts: [...results.values()].flatMap(({ artifacts }) => artifacts?.map(({ path }) => path) ?? []),
-            execute: (item, location) => executeExternal(item, location, item.type === "command" ? 0 : share, references.get(item.id)) });
-        } else {
-          const artifacts = node.inputs.length ? await verifyInputs(workspace, node, results, signal) : [];
-          signal.throwIfAborted();
-          if (node.type === "approval") {
-            const instruction = instructionFor(node.gate);
-            store.ask(id, node.id, instruction ? node.prompt + "\n\n" + instruction : node.prompt, artifacts, node.gate);
-            return;
-          }
-          const gate = pendingHold(node);
-          if (gate) { store.hold(id, node.id, gate.text, gate.gate); return; }
-          begin(node);
-          let result = { status: "succeeded" };
-          if (node.type === "condition") result.port = scheduler.conditionPort(node, results);
-          if (external(node)) {
-            await ensureWorkspace();
-            result = await executeExternal(node, workspace, remaining, artifacts);
-          }
-          outcomes = [{ node, result }];
+          result = await executeExternal(node, workspace, remaining, artifacts);
         }
-        for (const { node, result } of outcomes) {
-          remaining -= result.costCents ?? 0;
-          finish(node.id, signal.aborted ? "cancelled" : result.status, result);
-          results.set(node.id, result);
-        }
+        remaining -= result.costCents ?? 0;
+        finish(node.id, signal.aborted ? "cancelled" : result.status, result);
+        results.set(node.id, result);
         signal.throwIfAborted();
         if (remaining < 0) { store.change(id, ["running"], "limit_exceeded"); return; }
-        const incomplete = outcomes.find(({ result }) => result.interrupted);
-        if (incomplete) { store.change(id, ["running"], "failed", incomplete.result.error); return; }
+        if (result.interrupted) { store.change(id, ["running"], "failed", result.error); return; }
       }
     } catch (error) {
       const status = stop.signal.aborted ? "cancelled" : signal?.aborted ? "limit_exceeded" : "failed";
-      const uncertainBatch = operating.size > 1;
-      for (const node of operating) finish(node, signal?.aborted ? "cancelled" : uncertainBatch ? "interrupted" : "failed",
-        { error: redact(error.message) });
-      store.change(id, ["running", "queued", "paused", "interrupted"],
-        uncertainBatch && !signal?.aborted ? "interrupted" : status, error.message);
+      for (const node of operating) finish(node, signal?.aborted ? "cancelled" : "failed", { error: redact(error.message) });
+      store.change(id, ["running", "queued", "paused", "interrupted"], status, error.message);
     } finally {
       active.delete(id);
     }

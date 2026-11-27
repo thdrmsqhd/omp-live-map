@@ -9,20 +9,19 @@ const wfStatus = { queued: "대기", running: "실행 중", failed: "실패", in
   waiting_approval: "승인 대기", succeeded: "완료", skipped: "건너뜀", paused: "일시 중지",
   cancelled: "취소", limit_exceeded: "실행 한도 초과" };
 const wfTypeNames = { start: "Start", end: "End", agent: "Agent", loop: "Loop 단계", command: "Command", condition: "Condition",
-  parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph", profile: "에이전트 프로필" };
+  parallel: "Parallel", join: "Join", approval: "Approval", subgraph: "Subgraph" };
 const wfPhases = { preparing: "준비 중", sources: "자료 읽는 중", prompting: "프롬프트 전달", responding: "응답 생성 중",
   thinking: "생각 중", writing: "파일 작성 중",
   tool: "도구 사용 중", verifying: "검증 명령 실행 중", command: "명령 실행 중" };
-const wfPortNames = { next: "다음", true: "통과", false: "조건 불충족", approved: "승인", rejected: "반려", profile: "프로필" };
+const wfPortNames = { next: "다음", true: "통과", false: "조건 불충족", approved: "승인", rejected: "반려" };
 const wfPositionKey = (run) => run.workflow + ":" + run.version;
 const wfLabel = (status) => wfStatus[status] ?? status ?? "대기";
 const wfNodes = () => wfMap.edit?.payload.nodes ?? wfMap.run?.graph.nodes ?? [];
 const wfEdges = () => wfMap.edit?.payload.edges ?? wfMap.run?.graph.edges ?? [];
 const wfWidth = (node) => ["start", "end"].includes(node.type) ? 190 : wfSize.w;
-const wfOutputs = (node) => node.type === "end" ? [] : node.type === "profile" ? ["profile"]
+const wfOutputs = (node) => node.type === "end" ? []
   : node.type === "condition" ? ["true", "false"] : node.type === "approval" ? ["approved", "rejected"] : ["next"];
-const wfHasProfile = (node) => node.type === "agent" && wfEdges().some(({ to, port }) => to === node.id && port === "profile");
-const wfInputs = (node) => ["start", "profile"].includes(node.type) ? [] : wfHasProfile(node) ? ["flow", "profile"] : ["flow"];
+const wfInputs = (node) => node.type === "start" ? [] : ["flow"];
 const wfSocketY = (index) => WF_HEAD + WF_IO_TOP + WF_ROW / 2 + index * WF_ROW;
 
 function wfDefaultPositions(nodes) {
@@ -135,7 +134,6 @@ function wfStopFollow() {
 // ---- 연결선 ------------------------------------------------------------------
 function wfEdgeState(from, to, port, executions) {
   const before = executions.get(from), after = executions.get(to);
-  if (port === "profile") return after?.status === "running" ? "profile-flowing" : "profile";
   const taken = before?.status === "succeeded" && (before.outcome?.port ?? "next") === port;
   if (taken && after?.status === "running") return "flowing";
   if (taken && after?.status === "waiting_approval") return "waiting";
@@ -164,16 +162,15 @@ function wfPaintEdges() {
     if (!source || !target) return [];
     const start = wfPoint(source), end = wfPoint(target);
     const outIndex = Math.max(0, wfOutputs(source).indexOf(port));
-    const inIndex = Math.max(0, wfInputs(target).indexOf(port === "profile" ? "profile" : "flow"));
+    const inIndex = Math.max(0, wfInputs(target).indexOf("flow"));
     const x = start.x + wfWidth(source), y = start.y + wfSocketY(outIndex);
     const tx = end.x, ty = end.y + wfSocketY(inIndex), bend = Math.max(60, Math.abs(tx - x) * .45);
     const curve = `M${x},${y} C${x + bend},${y} ${tx - bend},${ty} ${tx},${ty}`;
     const state = states[index];
     const group = el("g", { "data-state": state, "data-port": port });
-    if (port === "profile") group.setAttribute("data-profile", "");
     if (state === "done" || state === "flowing" || state === "waiting") group.setAttribute("data-active", "");
     group.append(el("path", { d: curve, class: "wf-wire" }));
-    if (state === "flowing" || state === "profile-flowing") {
+    if (state === "flowing") {
       // 프롬프트가 다음 단계로 흘러 들어가는 느낌: 선을 따라 움직이는 점 두 개
       for (const begin of ["0s", "-0.7s"]) {
         const packet = el("circle", { r: "5", class: "wf-packet" });
@@ -181,7 +178,7 @@ function wfPaintEdges() {
         group.append(packet);
       }
     }
-    const branch = ["next", "profile"].includes(port) ? null : wfPortNames[port] ?? port;
+    const branch = port === "next" ? null : wfPortNames[port] ?? port;
     if (schema || branch) {
       const label = el("text", { x: String((x + tx) / 2), y: String((y + ty) / 2 - 9), "text-anchor": "middle" });
       label.textContent = [branch, schema].filter(Boolean).join(" · ");
@@ -330,17 +327,10 @@ function wfChip(type, text, title) {
 
 function wfDefinition(id) { return id ? wfMap.defs.get(id) : null; }
 
-// 단계에 붙은 정의 사슬: 프로필 또는 하네스 → 모델, 루프 → 하네스 → 모델. 실행이 끝났으면 실제로 쓴 정의를 우선한다.
+// 단계에 붙은 정의 사슬: 하네스 → 모델, 루프 → 하네스 → 모델. 실행이 끝났으면 실제로 쓴 정의를 우선한다.
 function wfChainOf(node, execution) {
   const chips = [];
   const used = execution?.outcome?.definitions;
-  if (node.type === "agent" && wfHasProfile(node)) {
-    const edge = wfEdges().find(({ to, port }) => to === node.id && port === "profile");
-    const profile = wfNodes().find(({ id }) => id === edge.from);
-    chips.push(wfChip("profile", (profile?.label ?? "프로필") + (profile?.profileVersion ? " v" + profile.profileVersion : ""), "에이전트 프로필"));
-    if (used?.model) chips.push(wfChip("model", used.model.name, "모델"));
-    return chips;
-  }
   if (node.type === "agent" || node.type === "loop") {
     const target = wfDefinition(node.definition);
     let harness = node.type === "agent" ? target : wfDefinition(target?.payload?.harness);
@@ -390,7 +380,7 @@ function wfResultOf(node, execution) {
   if (outcome.checks?.length) parts.push("검증 " + outcome.checks.filter(({ passed }) => passed).length + "/" + outcome.checks.length + " 통과");
   const tools = [...new Set((outcome.attempts ?? []).flatMap(({ tools }) => tools ?? []))];
   if (tools.length) parts.push("도구 " + tools.slice(0, 4).join(", "));
-  // 격리 런타임은 호출 전에 잡은 예약액(reserved)을 남긴다. 청구 금액으로 읽히지 않게 구분한다(구독 로그인은 청구 없음).
+  // 예전 실행 기록에는 호출 전에 잡은 예약액(reserved)이 남아 있을 수 있다. 청구 금액으로 읽히지 않게 구분한다.
   const reserved = (outcome.attempts ?? []).some(({ costBasis }) => costBasis === "reserved");
   if (outcome.costCents) parts.push((reserved ? "호출 예약 " : "") + wfCost(outcome.costCents));
   if (outcome.port && outcome.port !== "next") parts.push(wfPortNames[outcome.port] ?? outcome.port);
@@ -400,12 +390,11 @@ function wfResultOf(node, execution) {
 
 function wfPaintNode(button, node, execution, live) {
   const parts = button.wfParts;
-  const status = node.type === "profile" ? "profile" : execution?.status ?? "queued";
+  const status = execution?.status ?? "queued";
   button.dataset.status = status;
   button.style.width = wfWidth(node) + "px";
   parts["wf-title"].textContent = node.label;
-  parts["wf-badge"].textContent = node.type === "profile" ? "에이전트 프로필 · v" + node.profileVersion
-    : wfMap.edit ? wfEditTypes[node.type] ?? node.type : (wfTypeNames[node.type] ?? node.type) + " · " + wfLabel(execution?.status);
+  parts["wf-badge"].textContent = wfMap.edit ? wfEditTypes[node.type] ?? node.type : (wfTypeNames[node.type] ?? node.type) + " · " + wfLabel(execution?.status);
   // 소켓(입력 왼쪽, 출력 오른쪽). 연결선 끝점과 같은 줄에 그린다.
   const ins = wfInputs(node), outs = wfOutputs(node);
   const io = parts["wf-io"];
@@ -416,10 +405,10 @@ function wfPaintNode(button, node, execution, live) {
     io.replaceChildren(...Array.from({ length: rows }, (_, index) => {
       const row = wfText("span", "", "wf-io-row");
       const input = ins[index], output = outs[index];
-      const left = wfText("span", input ? (input === "profile" ? "프로필" : "입력") : "", "wf-in");
+      const left = wfText("span", input ? "입력" : "", "wf-in");
       if (input) left.dataset.type = input;
       const right = wfText("span", output ? wfPortNames[output] : "", "wf-out");
-      if (output) { right.dataset.type = output === "profile" ? "profile" : "flow"; right.dataset.port = output; }
+      if (output) { right.dataset.type = "flow"; right.dataset.port = output; }
       row.append(left, right);
       return row;
     }));
@@ -602,10 +591,10 @@ $("wf-map-follow").onclick = () => {
   }, true);
 }
 $("wf-map-new").onclick = () => {
-  if (wfMap.run && !wfMap.opening && (!wfMap.edit || wfLeaveEditing())) void openMapWorkflowLaunch(wfMap.run.run.project, wfMap.run.run.workflow);
+  if (wfMap.run && !wfMap.opening && (!wfMap.edit || wfLeaveEditing())) void window.ompTasks?.quick({ project: wfMap.run.run.project, workflow: wfMap.run.run.workflow, run: true });
 };
 setInterval(wfTickClocks, 1000);
-if (window.engineeringDesktop) {
+{
   $("overview").addEventListener("click", (event) => {
     const button = event.target.closest("[data-map-workflow]");
     if (button) void openMapWorkflow(button.dataset.mapWorkflow, button.dataset.mapWorkflowNode);
@@ -616,7 +605,7 @@ if (window.engineeringDesktop) {
     wfPollTick++;
     if (["running", "queued"].includes(wfMap.run?.run.status) || wfPollTick % 2 === 0) void refreshMapWorkflow();
   }, 800);
-  // 다른 화면에서 넘어온 주소: ?run=<실행>(그 실행을 연다), ?launch=<Workflow>&project=<프로젝트>(새 실행 대화상자).
+  // 다른 화면에서 넘어온 주소: ?run=<실행>(그 실행을 연다), ?launch=<Workflow>&project=<프로젝트>(Task 탭 Backlog ＋ 줄).
   const address = new URLSearchParams(location.search);
   if (address.get("run")) writeJSON("omp-workflow-map-run", address.get("run"));
   if (address.has("run") || address.has("launch")) {
@@ -624,7 +613,7 @@ if (window.engineeringDesktop) {
     history.replaceState(null, "", location.pathname);
   }
   if (address.get("launch")) document.addEventListener("DOMContentLoaded", () => {
-    void openMapWorkflowLaunch(address.get("project") || undefined, address.get("launch"));
+    void window.ompTasks?.quick({ project: address.get("project") || undefined, workflow: address.get("launch"), run: true });
   }, { once: true });
   const last = readJSON("omp-workflow-map-run", null);
   // 마지막으로 본 실행을 다시 연다. 주소로 설계 모드를 열었으면(design-mode.js 가 먼저 바꾼다) 모드를 빼앗지 않는다.
@@ -635,7 +624,7 @@ if (window.engineeringDesktop) {
   }, { once: true });
 }
 
-// '설계에서 편집': 같은 화면의 설계 모드에서 이 실행의 Workflow 를 연다(데스크톱 앱).
+// '설계에서 편집': 같은 화면의 설계 모드에서 이 실행의 Workflow 를 연다.
 $("wf-map-engineering").addEventListener("click", (event) => {
   if (!window.ompDesign || !wfMap.run) return;
   event.preventDefault();

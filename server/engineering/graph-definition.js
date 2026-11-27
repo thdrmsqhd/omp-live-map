@@ -4,7 +4,7 @@ const { string, integer, checkCommand } = require("./definitions");
 const { artifactPath } = require("./artifact-path");
 const { problem } = require("./state");
 
-const types = new Set(["start", "end", "agent", "command", "loop", "condition", "parallel", "join", "approval", "subgraph", "profile"]);
+const types = new Set(["start", "end", "agent", "command", "loop", "condition", "parallel", "join", "approval", "subgraph"]);
 const ports = {
   end: [], condition: ["true", "false"], approval: ["approved", "rejected"],
 };
@@ -52,10 +52,6 @@ function settings(type, raw) {
     workflow: string(raw.workflow, "subgraph definition"),
     ...(raw.version === undefined ? {} : { version: integer(raw.version, "subgraph version", 1, Number.MAX_SAFE_INTEGER) }),
   };
-  if (type === "profile") return {
-    profileId: identifier(raw.profileId, "profile id"),
-    profileVersion: integer(raw.profileVersion, "profile version", 1, Number.MAX_SAFE_INTEGER),
-  };
   if (type === "agent" || type === "loop") return {
     ...(type === "loop" || raw.definition ? { definition: string(raw.definition, "node definition") } : {}),
     ...(raw.version === undefined ? {} : { version: integer(raw.version, "node definition version", 1, Number.MAX_SAFE_INTEGER) }),
@@ -94,10 +90,6 @@ function compileGraph(payload, { expanded = false } = {}) {
     ...(edge?.schema === undefined ? {} : { schema: handoffSchema(edge.schema) }),
   }));
   const byId = new Map(nodes.map((item) => [item.id, { ...item, incoming: [], outgoing: [] }]));
-  const configuration = new Map();
-  const configuredProfiles = new Set();
-  const executionNodes = nodes.filter(({ type }) => type !== "profile");
-  const executionEdges = [];
   const starts = nodes.filter((item) => item.type === "start");
   const ends = nodes.filter((item) => item.type === "end");
   if (byId.size !== nodes.length) bad("Duplicate graph node ID");
@@ -105,30 +97,14 @@ function compileGraph(payload, { expanded = false } = {}) {
   for (const edge of edges) {
     const from = byId.get(edge.from), to = byId.get(edge.to);
     if (!from || !to || from === to) bad("Invalid graph connection or output port");
-    if (edge.port === "profile") {
-      if (edge.schema) bad("Profile connections cannot declare a handoff schema");
-      if (from.type !== "profile" || to.type !== "agent" || configuration.has(to.id)) {
-        bad("Connect one profile output to each Agent profile input");
-      }
-      configuration.set(to.id, from);
-      configuredProfiles.add(from.id);
-      continue;
-    }
-    if (from.type === "profile" || to.type === "profile" || !(ports[from.type] ?? ["next"]).includes(edge.port)) {
-      bad("Invalid graph connection or output port");
-    }
-    executionEdges.push(edge);
+    if (!(ports[from.type] ?? ["next"]).includes(edge.port)) bad("Invalid graph connection or output port");
     if (from.outgoing.some(({ to, port }) => to === edge.to && port === edge.port)) bad("Duplicate graph connection");
     from.outgoing.push(edge);
     to.incoming.push(edge);
   }
   for (const item of byId.values()) {
     const { type, incoming, outgoing } = item;
-    if (type === "profile") {
-      if (!configuredProfiles.has(item.id) || item.inputs.length || item.outputs.length) bad("Connect the profile node to an Agent");
-      continue;
-    }
-    if (type === "agent" && !configuration.has(item.id) && !item.definition) bad("Select a harness or connect a profile to " + item.label);
+    if (type === "agent" && !item.definition) bad("Select a harness for " + item.label);
     const minInputs = type === "start" ? 0 : type === "join" ? 2 : 1;
     const maxInputs = ["end", "join", "scope-exit"].includes(type) ? Infinity : minInputs;
     if (incoming.length < minInputs || incoming.length > maxInputs) bad("Invalid incoming connections for " + item.id);
@@ -144,7 +120,7 @@ function compileGraph(payload, { expanded = false } = {}) {
   }
   const order = [];
   const ready = [starts[0].id];
-  const remaining = new Map(executionNodes.map(({ id }) => [id, byId.get(id).incoming.length]));
+  const remaining = new Map(nodes.map(({ id }) => [id, byId.get(id).incoming.length]));
   const ancestors = new Map();
   while (ready.length) {
     const id = ready.shift();
@@ -163,9 +139,9 @@ function compileGraph(payload, { expanded = false } = {}) {
     }
     ready.sort();
   }
-  if (order.length !== executionNodes.length) bad("A graph cannot contain cycles or unreachable nodes");
+  if (order.length !== nodes.length) bad("A graph cannot contain cycles or unreachable nodes");
   const producers = new Set(["agent", "loop", "command"]);
-  for (const item of executionNodes) {
+  for (const item of nodes) {
     const prior = ancestors.get(item.id);
     if (item.outputs.length && !producers.has(item.type)) bad("Only execution nodes declare artifacts");
     if (item.type === "subgraph" && item.inputs.length) bad("Subgraphs use their own input contracts");
@@ -180,7 +156,7 @@ function compileGraph(payload, { expanded = false } = {}) {
   }
   const document = { name, nodes, edges };
   if (!expanded) return { document, order };
-  return { document: { name, nodes: executionNodes, edges: executionEdges }, order, display: document, configuration };
+  return { document, order, display: document };
 }
 
 module.exports = { compileGraph, artifactPath };
