@@ -107,7 +107,9 @@ test("evaluation harnesses stay outside the execution flow while definition sock
 });
 
 test("studio canvas wires the visible contract and external lane without changing other harness sockets", () => {
-  const studio = fs.readFileSync(path.join(root, "ui/js/studio.js"), "utf8");
+  // 노드 캔버스는 studio.js 와 그 모듈(studio-*.js)로 나뉘어 있다.
+  const studio = ["studio.js", "studio-layout.js", "studio-drag.js", "studio-menu.js", "studio-persist.js"]
+    .map((file) => fs.readFileSync(path.join(root, "ui/js", file), "utf8")).join("\n");
   const css = fs.readFileSync(path.join(root, "ui/css/studio.css"), "utf8");
   assert.match(studio, /harnessContractDetails\(node\.draft\.role, \{ visible: true \}\)/);
   assert.match(studio, /EXTERNAL_LANE_LABEL/);
