@@ -5,7 +5,7 @@ const { secureRunner } = require("../engineering/runner");
 const { integer, string } = require("../engineering/definitions");
 const { problem } = require("../engineering/state");
 const { listPresets, buildPreset } = require("../engineering/workflow-presets");
-const { quickLaunch } = require("../engineering/workflow-launch");
+const { quickLaunch, loopLaunch } = require("../engineering/workflow-launch");
 const { previewHarness } = require("../engineering/harness-preview");
 const { projectContext } = require("../engineering/project-context");
 const workflowLive = require("../engineering/workflow-live");
@@ -133,6 +133,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           input.id ? string(input.id, "workflow") : undefined);
         if (endpoint === "workflow-runs") result = flow.start(input, input.key);
         if (endpoint === "workflows/launch") result = quickLaunch(definitions, workflows, flow, runner, input);
+        if (endpoint === "workflows/launch-loop") result = loopLaunch(definitions, workflows, flow, runner, input);
         if (endpoint === "workflow-runs/action") result = flow.action(string(input.id, "run"), input.operation);
         if (endpoint === "workflow-runs/retry") {
           const node = string(input.node, "node");
@@ -158,7 +159,7 @@ function createEngineeringRoutes({ token, directory, runner = secureRunner() }) 
           definitions.remove(string(input.id, "definition"));
           result = { removed: true };
         }
-        if (endpoint === "runs") result = loop.start(input, string(input.key, "idempotency key"));
+        // 새 단독 Loop 실행은 workflows/launch-loop 가 Workflow 로 만든다. 과거 run 이력은 조회·제어만 남긴다.
         if (endpoint === "runs/action") result = loop.action(string(input.id, "run"), input.operation);
       }
       if (result === undefined) return reply(res, 404, { error: "Unknown engineering endpoint" });

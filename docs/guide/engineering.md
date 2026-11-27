@@ -2,7 +2,7 @@
 
 Engineering은 에이전트(OMP·Claude Code)에게 개발 업무를 맡기고, 사람이 승인·개입하는 지점을 Workflow로 정해 두는 기능입니다. **Windows 데스크톱 앱에서만** 데이터를 읽고 씁니다. 웹 모드에서는 화면만 열리고 `/api/engineering/*`가 403입니다.
 
-모든 편집과 실행은 **관제 화면 한 곳**에서 합니다. 위쪽 모드에서 **설계 · 노드 캔버스**(<kbd>Alt</kbd>+<kbd>4</kbd>)로 모델·하네스·루프·프로필·Workflow를 노드로 편집하고, **Live Map · 관제**(<kbd>Alt</kbd>+<kbd>3</kbd>)에서 실행을 보고 개입합니다. 정의를 폼으로 고치는 화면은 없습니다. **Engineering** 링크는 프로젝트·팀·실행 환경 설정과 개발 Task, Loop 실행만 담은 설정 페이지입니다.
+모든 편집과 실행은 **관제 화면 한 곳**에서 합니다. 위쪽 모드에서 **설계 · 노드 캔버스**(<kbd>Alt</kbd>+<kbd>4</kbd>)로 모델·하네스·루프·프로필·Workflow를 노드로 편집하고, **Live Map · 관제**(<kbd>Alt</kbd>+<kbd>3</kbd>)에서 실행을 보고 개입합니다. 정의를 폼으로 고치는 화면은 없습니다. **Engineering** 링크는 프로젝트·팀·실행 환경 설정과 개발 Task, Loop 실행만 담은 설정 페이지입니다. Loop 실행은 Start → Loop → End인 Workflow 사본(`Loop 실행 · <Loop 이름> · <해시>`)으로 시작하고 관제 맵에서 진행·개입합니다. 이전 Loop 실행 이력은 조회·일시정지·재개·취소만 됩니다.
 
 ![설계 모드: 정의 라이브러리(접힌 노드와 프로필 격자)](../media/v8/13-design-library.png)
 

@@ -120,9 +120,10 @@ find("run-form").addEventListener("submit", report(async (event) => {
   const values = { ...formValues(event), project: project.value };
   const input = JSON.stringify(values);
   if (currentRunRequest?.input !== input) currentRunRequest = { input, key: crypto.randomUUID() };
-  const run = await request("runs", {}, { ...values, key: currentRunRequest.key });
+  // Loop 하나를 Start → Loop → End Workflow 로 감싸 실행한다. 진행·승인·재시도는 관제 맵에서 본다.
+  const run = await request("workflows/launch-loop", {}, { ...values, key: currentRunRequest.key });
   currentRunRequest = null;
-  await refreshRuns(run.id);
+  openLiveMap({ run: run.id });
 }));
 runs.addEventListener("change", report(async () => refreshRuns()));
 find("actions").addEventListener("click", report(async (event) => {

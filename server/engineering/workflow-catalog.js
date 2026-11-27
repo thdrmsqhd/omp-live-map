@@ -15,6 +15,7 @@ const { listPresets } = require("./workflow-presets");
 // 템플릿 이름을 돌려준다. 목록에서 사용자가 저장한 Workflow 와 구분해 보여 주려고 쓴다.
 function generatedTemplate(name) {
   const match = /^(.+) · ([0-9a-f]{12})$/.exec(name);
+  if (match?.[1].startsWith("Loop 실행 · ")) return "Loop 실행";   // workflow-launch.js loopLaunch 가 만든 사본
   return match && listPresets().some((preset) => preset.name === match[1]) ? match[1] : null;
 }
 
