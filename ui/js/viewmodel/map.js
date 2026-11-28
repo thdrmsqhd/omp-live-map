@@ -53,7 +53,8 @@ function agentNodes(sessions) {
 }
 
 // 카드에 보이는 이름: 사용자가 붙인 별칭이 우선한다.
-const displayName = (n) => ALIAS.get(n.id) || (n.kind === "main" ? n.sessionTitle || n.title || "main" : n.name);
+// 제목·이름의 Nerd Font 아이콘(PUA) 등 글꼴에 없는 글리프는 뺀다(model/agent-lines.js umapPlain).
+const displayName = (n) => umapPlain(ALIAS.get(n.id) || (n.kind === "main" ? n.sessionTitle || n.title || "main" : n.name)) || (n.kind === "main" ? "main" : "agent");
 
 function buildBlocks() {
   const PAD = 16, HEAD = 62;
@@ -130,11 +131,11 @@ function chatState(id) {
 }
 
 function subtitleOf(n, isLocal) {
-  const main = n.synthetic && !isLocal ? "원본 기록 없음" : (n.title || n.firstUser || (isLocal ? "로컬 작업 카드" : "agent"));
-  const extra = String(n.sessionTitle || "").replace(/^[^\w가-힣]+/, "").trim();
+  const main = n.synthetic && !isLocal ? "원본 기록 없음" : (umapPlain(n.title || n.firstUser) || (isLocal ? "로컬 작업 카드" : "agent"));
+  const extra = umapPlain(n.sessionTitle).replace(/^[^\w가-힣]+/, "").trim();
   const base = String(main).replace(/^[^\w가-힣]+/, "").trim();
   if (!extra || extra === base) return main;
-  return main + " · " + cut(n.sessionTitle, 38);
+  return main + " · " + cut(umapPlain(n.sessionTitle), 38);
 }
 
 function clusterOfCard(id) {

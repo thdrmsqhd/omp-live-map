@@ -89,6 +89,7 @@ async function boot() {
 
   // 세션 그래프는 받는 대로 먼저 그린다. 인프라(WSL·Docker 조회는 몇 초 걸릴 수 있다)와 호스트는 도착하면 다시 그린다.
   let graphBase=await firstGraph();setGraph(graphBase);
+  topbarInitialFilter();
   setConnected(true);
   renderMap(false, true);
   Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(false, true));

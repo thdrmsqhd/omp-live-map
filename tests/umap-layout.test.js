@@ -98,10 +98,13 @@ test("tile layout (narrow wall tile): stages stack under the task card at the ti
     assert.equal(stages[1].h, head + (2 + 3 + 1) * A.ROW, width + ": the work stage carries its main agent's sentences");
     assert.ok(stages[1].y > stages[0].y + stages[0].h && stages[2].y > box("sess:b").y + box("sess:b").h, width + ": the next stage comes after the previous stage's whole agent tree");
     assert.equal(box("sess:m"), undefined, width + ": the main agent is the stage card");
-    assert.equal(box("sess:a").x, stages[1].x + A.INDENT, width + ": a subagent branches one step in from the merged stage card");
+    const step = box("sess:a").x - stages[1].x;
+    assert.ok(step >= 12 && step <= A.INDENT, width + ": a subagent branches one step in from the merged stage card (narrow tiles indent less)");
+    assert.equal(step, width >= 384 ? A.INDENT : step, width + ": a tile with room keeps the full indent");
     assert.equal(box("sess:a").y, stages[1].y + stages[1].h + A.GAP, width + ": right below it");
-    assert.equal(box("sess:a1").x, stages[1].x + 2 * A.INDENT, width + ": nested subagents still indent");
+    assert.equal(box("sess:a1").x, stages[1].x + 2 * step, width + ": nested subagents still indent");
     assert.ok(box("sess:a1").w >= A.MIN_W, width + ": a nested card never gets narrower than the readable minimum");
+    if (width - 2 * U.PAD_NARROW >= A.MIN_W + 24) assert.ok(box("sess:a1").x + box("sess:a1").w <= width - U.PAD_NARROW, width + ": the deepest card stays inside the tile (no sideways scroll)");
     assert.ok(box("add:project:shop").w <= width, width + ": the ＋ Task line fits the tile");
     const cards = Object.values(layout.boxes).filter(({ kind }) => kind !== "folder");
     for (const [i, p] of cards.entries()) for (const q of cards.slice(i + 1)) assert.equal(run("umapOverlap")(p, q), false, width + ": " + p.key + " overlaps " + q.key);
@@ -154,8 +157,15 @@ test("approval stage card reserves room for what is being approved: the instruct
   const { run } = load(["model/agent-lines.js", "model/task-map.js"]);
   const U = run("UMAP"), A = run("UMAP_AGENT"), height = run("umapStageHeight");
   const head = U.STAGE_PAD + U.STAGE_TOP + U.STAGE_TITLE;
-  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: "배포 전 확인", before: { label: "Tester", result: "경계값 테스트 4개 통과" }, sessions: [] }), head + U.APPROVE_H);
-  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: "첫 단계 승인", sessions: [] }), head + U.APPROVE_H - A.ROW, "no previous stage → no result line");
+  const long = "배포 전에 변경 파일 목록과 테스트 결과, 마이그레이션 여부, 롤백 방법을 모두 확인한 뒤 승인해 주세요";
+  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: long, before: { label: "Tester", result: "경계값 테스트 4개 통과" }, sessions: [] }), head + U.APPROVE_H);
+  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: "배포 전 확인", before: { label: "Tester", result: "경계값 테스트 4개 통과" }, sessions: [] }), head + U.APPROVE_H - A.ROW,
+    "a one-line instruction leaves no empty line above the buttons");
+  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: "첫 줄\n둘째 줄", sessions: [] }), head + U.APPROVE_H - A.ROW, "no previous stage → no result line");
+  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: "첫 단계 승인", sessions: [] }), head + U.APPROVE_H - 2 * A.ROW);
+  assert.equal(height({ type: "approval", status: "waiting_approval", waiting: { prompt: long }, sessions: [] }, null, 900), head + U.APPROVE_H - 2 * A.ROW, "a wide card fits the long instruction on one line");
+  const lines = run("umapPromptLines");
+  assert.deepEqual([lines(""), lines("짧은 안내"), lines(long), lines("a\nb"), lines("x".repeat(40)), lines("x".repeat(60))], [1, 1, 2, 2, 1, 2]);
   assert.equal(height({ type: "approval", status: "pending", sessions: [] }), head, "a pending approval is only its head");
   assert.equal(height({ type: "agent", status: "failed", error: "boom", harness: {}, sessions: [] }), head + U.STAGE_CHIPS + A.ROW, "a failed stage without a session shows its error line");
   assert.equal(run("umapStageAgent")({ sessions: [{ id: "a", node: {} }, { id: "b", node: null }] }).id, "a", "a session without a record is never merged");

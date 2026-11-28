@@ -106,14 +106,6 @@ function umapResetLayout(band = "") {
   umapToast(band ? "이 타일의 카드를 자동 배치로 되돌렸습니다." : "카드·타일 순서·타일 크기를 모두 자동 배치로 되돌렸습니다.",
     { label: "되돌리기", run: () => { umapRestoreLayout(before); paintUmap(true); umapToast("손으로 맞춘 배치를 되살렸습니다."); } });
 }
-// 맵 도구 막대 ⋯: 벽 전체를 자동 배치로 되돌리기(되돌리기 토스트) · 단축키.
-function umapWallMenu(anchor) {
-  inlineMenu(anchor, [
-    { label: "자동 배치로 되돌리기", disabled: !umapHasManualLayout(), title: umapHasManualLayout() ? "옮긴 카드·타일 순서·타일 크기를 모두 자동으로(토스트에서 되돌리기)" : "손으로 맞춘 배치가 없습니다",
-      run: () => umapResetLayout() },
-    { label: "단축키와 조작 (?)", run: () => openHelpDrawer() },
-  ]);
-}
 
 // 타일 ⋯: 앞·뒤로 옮기기(끌기와 같은 저장), 전체 화면, 크기 자동으로, 이 타일 카드 되돌리기, 프로젝트 문서·이름·보관.
 function umapBandMenu(anchor, band) {
@@ -151,9 +143,9 @@ function umapPeriodEdit(anchor, project) {
 }
 function umapBudgetEdit(anchor, project) {
   const entry = UM.metrics.get(project);
-  inlineEdit(anchor, { value: entry?.budget ? (entry.budget.cap / 100).toFixed(2) : "", type: "number", min: 0, max: 10000, step: 0.01,
-    label: "프로젝트 예산(달러)", placeholder: "비우면 제한 없음",
-    onSave: (value) => umapSaveBudget(project, value === "" ? null : Math.round(Number(value) * 100), entry?.days ?? 7) });
+  inlineEdit(anchor, { value: entry?.budget ? won(wonOfCents(entry.budget.cap)) : "",
+    label: "프로젝트 예산(원)", placeholder: "예: ₩50,000 · 비우면 제한 없음",
+    onSave: (value) => umapSaveBudget(project, value.trim() === "" ? null : umapCentsOf(1000000, "프로젝트 예산")(value), entry?.days ?? 7) });
 }
 
 function umapTaskMenu(anchor, taskId) {

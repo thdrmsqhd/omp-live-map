@@ -1,81 +1,118 @@
 "use strict";
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs/promises');
-const os = require('node:os');
-const path = require('node:path');
-const { spawn, execFileSync } = require('node:child_process');
-const { once } = require('node:events');
-const { chromium } = require('playwright');
 
-test('Desktop: one canvas with a real workflow saved, launched, approved and recorded', { timeout: 85000 }, async () => {
-  const data = await fs.mkdtemp(path.join(os.tmpdir(), 'unified-desktop-'));
-  const root = path.join(data, 'repo'); await fs.mkdir(root);
-  await fs.writeFile(path.join(root, 'README.md'), '# 통합 관제 검증 프로젝트\n\n## 목적\n실제 실행과 설계를 한 화면에서 검증합니다.\n\n## 현황\n승인 게이트를 확인합니다.\n\n## 주요 결정\n실행 이력을 유지합니다.\n');
-  for (const args of [['init', '-b', 'main'], ['add','.'], ['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','fixture']]) execFileSync('git',args,{cwd:root});
-  const installed = process.env.OMP_MAP_INSTALLED_EXE;
-  const proc = spawn(installed || require('electron'), [...(installed ? [] : [path.resolve(__dirname, '../../desktop')]), '--remote-debugging-port=0', `--user-data-dir=${data}`], { stdio: ['ignore','ignore','pipe'] });
-  const closed = once(proc, 'close'); let browser, output = '';
+// 데스크톱 앱(Electron) 통합 흐름 — 지금 화면 그대로(탭 없음, 관제 벽 + 서랍):
+//   프로젝트 타일 ⋯ > 프로젝트 문서(README 요약이 서랍에) → ＋ Task 한 줄로 Task 만들기(Enter) → ▶ → 승인 카드 → 반려(이유 한 줄)
+//   → 실행 실패 · 개입 필요에 그 단계 → 다시 ▶ → 승인 → 완료(쉬는 타일의 최근 끝난 일 목록에 완료로 보인다).
+// 창은 화면 밖·포커스 불가(tests/verification/desktop-launch.cjs). 필요: playwright(connectOverCDP), electron.
+//   node --test tests/verification/unified-workflow-desktop.cjs
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const { chromium } = require("playwright");
+const { launchDesktop } = require("./desktop-launch.cjs");
+
+test("Desktop: README context, ＋ Task line, approval reject → attention → approve → done on the wall", { timeout: 120000 }, async () => {
+  const data = await fs.mkdtemp(path.join(os.tmpdir(), "unified-desktop-"));
+  const root = path.join(data, "repo");
+  await fs.mkdir(root);
+  await fs.writeFile(path.join(root, "README.md"), "# 통합 관제 검증 프로젝트\n\n## 목적\n실제 실행과 승인을 한 화면에서 검증합니다.\n\n## 현황\n승인 게이트를 확인합니다.\n");
+  for (const args of [["init", "-b", "main"], ["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "fixture"]]) {
+    execFileSync("git", args, { cwd: root, windowsHide: true });
+  }
+  const app = await launchDesktop({ userDataDir: data });
+  let browser;
   try {
-    const endpoint = await Promise.race([new Promise(resolve => proc.stderr.on('data', c => { output = (output + c).slice(-6000); const m = output.match(/DevTools listening on (ws:\/\/\S+)/); if (m) resolve(m[1]); })), closed.then(([code]) => { throw Error(`Desktop exited ${code}: ${output}`); }), new Promise((_, reject) => setTimeout(() => reject(Error(output || 'Desktop startup timeout')), 17000).unref())]);
-    browser = await chromium.connectOverCDP(endpoint);
-    const context = browser.contexts()[0], page = context.pages()[0] || await context.waitForEvent('page');
-    await page.setViewportSize({width:1480,height:1050});
-    page.setDefaultTimeout(12000);
-    const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => void d.accept());
-    await page.getByRole('button', { name: '설계', exact:true }).waitFor();
-    const origin = new URL(page.url()).origin;
+    browser = await chromium.connectOverCDP(app.endpoint);
+    const context = browser.contexts()[0];
+    const page = context.pages().find((item) => item.url().startsWith("http://127.0.0.1")) ?? await context.waitForEvent("page");
+    await page.setViewportSize({ width: 1480, height: 1050 });
+    page.setDefaultTimeout(15000);
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("dialog", (dialog) => void dialog.accept());
+    await page.waitForFunction(() => typeof UM !== "undefined" && UM.loaded);
     const request = async (name, params, body) => {
-      const result = await page.evaluate(([n,p,b]) => window.engineeringApi.request(n,p,b), [name,params??{},body]);
-      assert.equal(result.ok,true,`${name}: ${result.error}`); return result.value;
+      const result = await page.evaluate(([n, p, b]) => window.engineeringApi.request(n, p, b), [name, params ?? {}, body]);
+      assert.equal(result.ok, true, `${name}: ${result.error}`);
+      return result.value;
     };
-    const { id: project } = await request('projects', {}, { name: '통합 관제 검증 프로젝트', root, branch: 'main' });
-    const { id: workflow } = await request('workflows', {}, { project, payload: {name:'검증 결과 승인', nodes:[{id:'start',type:'start',label:'시작',x:0,y:0},{id:'review',type:'approval',label:'결과 검토',prompt:'작업 결과를 확인하고 승인하세요.',x:330,y:0},{id:'end',type:'end',label:'완료',x:680,y:0}],edges:[{from:'start',to:'review',port:'next'},{from:'review',to:'end',port:'approved'}]} });
-    await page.goto(origin + '/?mode=design&project=' + project + '&workflow=' + workflow);
-    const review = page.locator('#studio-nodes article[data-key="step:review"]');
-    await review.waitFor();
-    await page.locator('#unified-project-context').getByText('실제 실행과 설계를 한 화면에서 검증합니다.', { exact:false }).first().waitFor();
-    await page.locator('#studio-add').click();
-    await page.getByRole('menu').getByText('평가 하네스', { exact: false }).first().waitFor();
-    await page.keyboard.press('Escape');
-    await page.locator('#studio-run').click();
-    await page.evaluate(() => { document.getElementById('workflow-launch-settings').open = true; });
-    await page.locator('#workflow-launch [name=title]').fill('실제 승인 경로 검증');
-    await page.locator('#workflow-launch [name=goal]').fill('임시 프로젝트의 승인 상태를 확인합니다.');
-    await page.locator('#workflow-launch [name=acceptance]').fill('검토 후 승인하면 완료 상태를 기록합니다.');
-    await page.locator('#workflow-launch button[type=submit]').click();
-    await page.locator('#workflow-launch').waitFor({state:'hidden'}).catch(async error => {throw Error(`${error.message}; launch=${await page.locator('#workflow-launch-status').textContent()}`);});
-    const approve = review.locator('.wf-node-actions [data-decision=approved]');
-    await approve.waitFor({ timeout:20000 });
-    assert.equal(await page.locator('#unified-run-snapshot').isHidden(),true);
-    assert.equal(await page.locator('#unified-inspector-host #wf-map-title').textContent(),'실제 승인 경로 검증');
-    await page.locator('#unified-inspector-host #wf-map-details').getByText('작업 결과를 확인하고 승인하세요.', {exact:true}).waitFor();
-    if (process.env.OMP_UNIFIED_SHOT) await page.screenshot({path:process.env.OMP_UNIFIED_SHOT});
-    await approve.click();
-    await page.locator('#wf-map-status').getByText('완료',{exact:true}).waitFor();
-    assert.equal(await page.locator('#app').getAttribute('data-view'),'design');
-    const original = await request('workflow', {project,id:workflow});
-    const v2 = await request('workflows', {}, {project,id:workflow,version:original.version,payload:{ ...original.payload, nodes:original.payload.nodes.map(n=>n.id==='review'?{...n,gate:'uac'}:n) }});
-    assert.equal(v2.payload.nodes.find(n=>n.id==='review').gate,'uac');
-    await page.goto(origin + '/?mode=design&project=' + project + '&workflow=' + workflow);
-    await review.getByLabel('개입 유형').waitFor();
-    assert.equal(await review.getByLabel('개입 유형').inputValue(),'uac');
-    await page.locator('#studio-run').click();
-    await page.evaluate(() => { document.getElementById('workflow-launch-settings').open = true; });
-    await page.locator('#workflow-launch [name=title]').fill('수동 UAC 중단점 검증');
-    await page.locator('#workflow-launch [name=goal]').fill('후속 단계가 수동 확인 전에 시작하지 않음을 확인합니다.');
-    await page.locator('#workflow-launch [name=acceptance]').fill('수동 반려를 기록하되 권한을 요청하지 않습니다.');
-    await page.locator('#workflow-launch button[type=submit]').click();
-    const manual = review.locator('.wf-node-actions');
-    await manual.getByRole('button', {name:'진행하지 않음',exact:true}).waitFor();
-    assert.equal(await manual.locator('textarea').count(), 0);
-    assert.equal(await page.locator('#studio-nodes article[data-key="step:end"]').getAttribute('data-runtime-status'), 'queued');
-    if (process.env.OMP_UNIFIED_SHOT) await page.screenshot({path:process.env.OMP_UNIFIED_SHOT});
-    await manual.getByRole('button', {name:'진행하지 않음',exact:true}).click();
-    await page.locator('#wf-map-status').getByText('실패',{exact:true}).waitFor();
-    assert.equal(await page.locator('#studio-nodes article[data-key="step:end"]').getAttribute('data-runtime-status'), 'skipped');
+    const project = (await request("projects/ensure", {}, { root })).id;
+    const flow = await request("workflows", {}, { project, payload: { name: "검증 결과 승인", nodes: [
+      { id: "start", type: "start", label: "시작", x: 0, y: 0 },
+      { id: "review", type: "approval", label: "결과 검토", prompt: "작업 결과를 확인하고 승인하세요.", x: 330, y: 0 },
+      { id: "end", type: "end", label: "완료", x: 680, y: 0 }],
+    edges: [{ from: "start", to: "review", port: "next" }, { from: "review", to: "end", port: "approved" }] } });
+    const key = "project:" + project;
+    // 이미 도는 가벼운 갱신(SSE)이 있으면 umapRefresh(true) 가 그것을 돌려주므로 한 번 더 받아 새 Workflow 까지 싣는다.
+    await page.evaluate(async () => { await umapRefresh(true); await umapRefresh(true); paintUmap(true); });
+    const tile = page.locator(`.um-tile[data-band="${key}"]`);
+    await tile.waitFor();
+
+    // 프로젝트 문서: 타일 ⋯ > 프로젝트 문서 → README 요약이 서랍에.
+    await tile.locator('[data-um="band-menu"]').click();
+    await page.locator(".inline-menu button", { hasText: "프로젝트 문서" }).click();
+    await page.locator("#unified-project-context").getByText("실제 실행과 승인을 한 화면에서 검증합니다.", { exact: false }).first().waitFor();
+    await page.keyboard.press("Escape");
+
+    // ＋ Task 한 줄: 글 + Workflow 칩(저장된 Workflow 선택) → Enter.
+    await tile.locator('[data-um="add-task"]').click();
+    const line = page.locator(".um-add-text");
+    await line.waitFor();
+    await page.locator(".um-add-line select").selectOption("flow:" + flow.id);
+    await line.fill("실제 승인 경로 검증");
+    await line.press("Enter");
+    let task;
+    for (const deadline = Date.now() + 15000; !task; await new Promise((r) => setTimeout(r, 300))) {
+      task = (await request("task-map", { project })).tasks.find(({ title }) => title === "실제 승인 경로 검증");
+      assert.ok(task || Date.now() < deadline, "the ＋ Task line creates the task");
+    }
+    assert.deepEqual(task.stages.map(({ label }) => label), ["결과 검토"], "the Task uses the chosen Workflow: " + task.workflow?.name);
+    await page.evaluate((k) => umapRefresh(true).then(() => { paintUmap(true); umapEnterFocus(k); }), key);
+    const runTask = () => page.locator(`.um-task[data-task="${task.id}"] [data-um="run"]`).click();
+    const waitStatus = async (status) => {
+      for (const deadline = Date.now() + 30000; ;) {
+        const run = (await request("task-map", { project })).tasks.find(({ id }) => id === task.id).run;
+        if (run?.status === status) return run;
+        assert.ok(Date.now() < deadline, "run reaches " + status + " (now " + run?.status + ")");
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    };
+    const approval = page.locator(`.um-stage.s-waiting_approval[data-task="${task.id}"]`);
+
+    // ▶ → 승인 카드 → 반려(이유) → 실패 · 개입 필요.
+    await runTask();
+    await approval.waitFor({ timeout: 30000 });
+    assert.equal((await approval.locator(".um-approve-prompt").innerText()).trim(), "작업 결과를 확인하고 승인하세요.");
+    await approval.locator('[data-um="reject"]').click();
+    const reason = page.locator(".inline-edit");
+    await reason.fill("테스트 결과가 빠졌습니다");
+    await reason.press("Enter");
+    await waitStatus("failed");
+    await page.evaluate(() => umapRefresh(true).then(() => paintUmap(true)));
+    await page.locator("#umap-attention", { hasText: /개입 필요 [1-9]/ }).waitFor();
+
+    // 다시 ▶ → 승인 → 완료.
+    await page.evaluate(() => umapRefresh(true).then(() => paintUmap(true)));
+    await runTask();
+    await approval.waitFor({ timeout: 30000 });
+    await approval.locator('[data-um="approve"]').click();
+    await waitStatus("succeeded");
+
+    // 벽으로 돌아오면 쉬는 타일의 최근 끝난 일 목록에 완료로 보인다(펼침 단추 없음).
+    await page.evaluate(() => { umapLeaveFocus(); return umapRefresh(true).then(() => paintUmap(true)); });
+    const done = tile.locator(".um-done li", { hasText: "실제 승인 경로 검증" });
+    await done.waitFor();
+    assert.match(await done.innerText(), /완료/);
+    assert.equal(await tile.locator("button", { hasText: /펼치기|접기|더 보기/ }).count(), 0);
     assert.deepEqual(errors, []);
+  } catch (error) {
+    throw new Error(`${error.message}\nElectron output:\n${app.output()}`, { cause: error });
   } finally {
-    await browser?.close().catch(()=>{}); if (proc.exitCode === null) proc.kill(); await closed.catch(()=>{}); await fs.rm(data,{recursive:true,force:true,maxRetries:8,retryDelay:300});
+    if (browser) await browser.close().catch(() => {});
+    await app.stop();
+    await fs.rm(data, { recursive: true, force: true, maxRetries: 8, retryDelay: 300 });
   }
 });

@@ -183,6 +183,24 @@ function umapBands(sessions) {
   return list;
 }
 
+// 쉬는 타일에 보일 최근 끝난 일(최근 것부터 n개): 끝난 Task 실행과 Task 에 묶이지 않은 세션.
+// { kind: 'task'|'session', title, status, done, total, result, legacy, at } — 문구(상태 이름·언제)는 화면이 붙인다.
+function umapRecentDone(band, n = 3) {
+  const linked = new Set(band.tasks.flatMap((task) => task.stages.flatMap((stage) => stage.sessions.map((item) => item.node?.id).filter(Boolean))));
+  const tasks = band.tasks.filter((task) => task.run && !["running", "queued"].includes(task.run.status)).map((task) => ({
+    kind: "task", title: umapPlain(task.title), status: task.run.status, done: task.stages.filter(({ status }) => status === "succeeded").length,
+    total: task.stages.length, result: task.run.legacy ? "" : umapClip(task.run.error || "", 120), legacy: Boolean(task.run.legacy), at: task.run.updated || task.updated || 0 }));
+  const sessions = [];
+  for (const session of band.sessions) {
+    const main = (session.nodes || []).find((node) => node.kind === "main");
+    if (!main || linked.has(main.id)) continue;
+    const lines = umapLinesOf({ ...main, sessionTitle: session.title });
+    const summary = umapClip(main.act?.resultSummary || "", 120);
+    sessions.push({ kind: "session", title: lines.title, status: lines.state, result: summary || lines.result || (lines.goal ? "지시 · " + lines.goal : ""), at: session.lastTs || 0 });
+  }
+  return [...tasks, ...sessions].sort((a, b) => b.at - a.at).slice(0, n);
+}
+
 // 승인 단계는 무엇을 승인하는지 카드에서 바로 보이게 앞 단계의 결과 한 줄을 싣는다: { label, status, result }.
 // 결과 = 앞 단계 최근 세션의 결과 요약 → 그 단계 오류 → (없으면 화면이 상태 이름을 쓴다).
 function umapLinkBefore(stages) {

@@ -14,7 +14,10 @@ V4 시점의 기록은 [Windows CI #34](https://github.com/thdrmsqhd/omp-live-ma
 node --test
 node tests/verification/browser.cjs # Playwright 및 Monaco 테스트 의존성 설치 필요
 node tests/verification/engineering-desktop.cjs # Electron·Playwright 필요(CI 설치 방법은 워크플로의 "Prepare Electron and Chromium" 단계)
+node --test tests/verification/unified-workflow-desktop.cjs
 ```
+
+데스크톱 검증(`engineering-desktop`·`unified-workflow-desktop`·`readme-screenshots`)은 `tests/verification/desktop-launch.cjs`로 앱을 띄웁니다. 창은 화면 밖(-32000,-32000)·포커스 불가·작업 표시줄 없음(`tests/verification/offscreen/launch.cjs`가 `desktop/main.cjs`를 고치지 않고 감쌈)이라 검증 중에도 마우스·키보드·창 포커스를 빼앗지 않고, 세션 기록·상태는 임시 사용자 데이터 폴더 아래만 씁니다. 같은 모양의 다른 런처는 `OMP_VERIFY_LAUNCHER`, Electron 경로는 `OMP_ELECTRON`으로 줍니다. 끝낼 때는 자기가 띄운 프로세스 트리만 끝냅니다. Playwright 는 `connectOverCDP`만 쓰므로 브라우저 내려받기가 필요 없습니다(`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`).
 
 추가 구문 검사:
 
@@ -31,13 +34,11 @@ node server.js --port 7806      # 운영 포트와 다른 포트로 띄워 화�
 README와 문서의 화면은 실제 앱을 데모 데이터로 실행해 캡처합니다. 개인 경로가 화면에 남지 않도록 데모 세션·프로젝트는 `C:\omp-demo` 아래에 만들고 끝나면 지웁니다.
 
 ```bash
-npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12 monaco-editor@0.52.2
-node tests/verification/readme-screenshots.cjs all   # main | engineering | all
+npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
+node tests/verification/readme-screenshots.cjs
 ```
 
-- `main`: 가짜 omp·Claude Code 세션 기록을 둔 HOME 으로 서버를 띄워 관제·워크스페이스·Live Map(`docs/media/v8/01~03`)을 찍습니다.
-- `engineering`: 같은 HOME 으로 데스크톱 앱(Electron)을 띄워 Task 탭(개발 Task), 노드 캔버스(버그 수정 Workflow, 1920×1080), 승인 대기 실행(`11~18`)을 찍습니다. 사용자 데이터 폴더도 데모용으로 따로 둡니다.
-- `OMP_README_LIVE=1`: 실행 중 화면(`19-live-map-running.png`)을 찍려고 코드 리뷰 Workflow 를 실제로 한 번 돌립니다(모델 호출 비용·구독 한도 사용). Claude Code 로그인은 `CLAUDE_CONFIG_DIR`(기본 `~/.claude`)에서 읽습니다. 리뷰가 최종 승인 대기에 이르면 멈춥니다.
+가짜 omp·Claude Code 세션 기록을 둔 HOME 으로 데스크톱 앱을 화면 밖에 띄우고, 두 폴더를 프로젝트로 만든 뒤 승인 단계만 있는 Task 를 하나 돌려(모델 호출 없음) `docs/media/v9/01~06`(관제 벽 · 프로젝트 전체 화면 · 승인 카드 · Task 서랍 · ⋯ 메뉴 · 768px)을 찍습니다.
 - 캡처 대상 화면의 요소 이름이 바뀌면 스크립트의 선택자를 고치세요. 실패한 단계는 `[skip]`으로 표시하고 나머지를 계속 찍습니다.
 - CI에서는 실행하지 않습니다. 자원 수치(CPU·RAM)는 캡처한 PC의 값입니다.
 

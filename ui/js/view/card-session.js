@@ -5,8 +5,8 @@
 
 // 부제 원문 전체(subtitleOf 는 세션 제목을 자른다).
 function subtitleFull(n, isLocal) {
-  const main = n.synthetic && !isLocal ? "원본 기록 없음" : (n.title || n.firstUser || subtitleOf(n, isLocal));
-  const extra = String(n.sessionTitle || "").trim();
+  const main = n.synthetic && !isLocal ? "원본 기록 없음" : umapPlain(n.title || n.firstUser || subtitleOf(n, isLocal));
+  const extra = umapPlain(n.sessionTitle);
   return extra && !String(main).includes(extra) ? main + " · " + extra : main;
 }
 

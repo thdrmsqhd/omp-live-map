@@ -44,11 +44,15 @@ const umapSessionKey = (nodeId) => "sess:" + nodeId;
 // (합친 단계 카드에서 나오는 가지: from 에서 'sub' 선). 돌려주는 값: { boxes, links, w, h }
 function umapTree(item, maxW = Infinity, from = "", depth = 0) {
   const A = UMAP_AGENT, boxes = [], links = [];
+  // 좁은 타일(200% 확대·768px)에서 가장 깊은 가지도 타일 안에 들게 이 나무의 들여쓰기 한 칸을 줄인다(최소 12px, 카드 폭은 MIN_W 유지).
+  const deepest = (node, d) => Math.max(d, ...(node.children || []).map((child) => deepest(child, d + 1)));
+  const levels = deepest(item, depth);
+  const step = Number.isFinite(maxW) && levels ? Math.max(12, Math.min(A.INDENT, Math.floor((maxW - A.MIN_W) / levels))) : A.INDENT;
   const walk = (node, y, parent, depth) => {
     // 카운터 줄은 카운터나 서브에이전트 수가 있을 때 그린다(view/umap-agent.js umapAgentRows).
     const kidsRow = node.lines && !node.lines.counters && node.children?.length ? A.ROW : 0;
     const key = umapSessionKey(node.id), h = node.node ? umapAgentHeight(node.lines) + kidsRow : A.MISSING_H;
-    const x = depth * A.INDENT, w = Math.max(A.MIN_W, Math.min(A.W, maxW - x));
+    const x = depth * step, w = Math.max(A.MIN_W, Math.min(A.W, maxW - x));
     boxes.push({ key, kind: "session", x, y, w, h, depth });
     links.push({ from: parent, to: key, kind: depth ? "sub" : "session" });
     let bottom = y + h, right = x + w;
@@ -65,8 +69,18 @@ function umapTree(item, maxW = Infinity, from = "", depth = 0) {
 // 단계 카드에 합칠 세션: 기록이 있는 가장 최근 시도(서버 목록은 재시도 → 시도 → 지금 도는 세션 순서).
 const umapStageAgent = (stage) => [...(stage?.sessions || [])].reverse().find((item) => item && item.node) || null;
 const umapStageHasChips = (stage) => Boolean(stage?.harness || stage?.loop || (stage?.type === "command" && stage.check));
+// 승인 안내가 카드 폭(px)에서 몇 줄(1~2, CSS .um-approve-prompt 는 13px · 두 줄까지)인지 어림한다. 한글·전각은 13px, 그 밖은 7.4px.
+function umapPromptLines(text, width = UMAP.STAGE_W) {
+  const s = String(text || "").trim();
+  if (!s) return 1;
+  if (/\n/.test(s)) return 2;
+  let px = 0;
+  for (const ch of s) px += /[\u1100-\u11FF\u2E80-\uA4CF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]/.test(ch) ? 13 : 7.4;
+  return px <= Math.max(120, width - 2 * UMAP.STAGE_PAD) ? 1 : 2;
+}
 // 단계 카드 높이: 머리(종류·이름·칩) + 합친 에이전트 문장(목표 · 지금/결과 · 최근 한 일 · 카운터) 또는 승인 칸 또는 진행/오류 한 줄.
-function umapStageHeight(stage, lead = umapStageAgent(stage)) {
+// 승인 칸은 안내 줄 수(1~2)와 앞 단계 결과 줄 유무만큼만 — 한 줄 안내 아래 빈 줄을 남기지 않는다.
+function umapStageHeight(stage, lead = umapStageAgent(stage), width = UMAP.STAGE_W) {
   const U = UMAP, A = UMAP_AGENT;
   const head = U.STAGE_PAD + U.STAGE_TOP + U.STAGE_TITLE + (umapStageHasChips(stage) ? U.STAGE_CHIPS : 0);
   if (lead) {
@@ -74,7 +88,10 @@ function umapStageHeight(stage, lead = umapStageAgent(stage)) {
     const counters = !lines || lines.counters || lead.children?.length ? 1 : 0;
     return head + (2 + (lines ? lines.recent.length : A.RECENT) + counters) * A.ROW;
   }
-  if (stage?.status === "waiting_approval") return head + U.APPROVE_H - (stage.before ? 0 : A.ROW);
+  if (stage?.status === "waiting_approval") {
+    const lines = umapPromptLines(stage.waiting?.prompt || stage.prompt || "", width);
+    return head + U.APPROVE_H - (stage.before ? 0 : A.ROW) - (2 - lines) * A.ROW;
+  }
   return head + (stage?.live || stage?.error ? A.ROW : 0);
 }
 
@@ -106,7 +123,7 @@ function umapTileLayout(band, { manual = {}, width = UMAP.MIN_W } = {}) {
       // 단계 칸은 그 아래 에이전트 나무 폭만큼 넓어진다(다음 단계와 겹치지 않는다). 좁은 타일에서는 타일 폭 전체.
       const colW = wide ? Math.max(U.STAGE_W, ...subs.map((tree) => tree.w), ...rest.map((tree) => tree.w)) : inner;
       if (x > left && x + colW > right) { x = left; top = bottom + gap; }
-      const h = umapStageHeight(stage, lead);
+      const h = umapStageHeight(stage, lead, colW);
       const box = put(key, "stage", x, top, colW, h);
       if (lead) { box.merged = umapSessionKey(lead.id); alias[box.merged] = key; }
       links.push({ from: previous, to: key, kind: index ? "flow" : "start" });

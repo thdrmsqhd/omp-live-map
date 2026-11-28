@@ -39,8 +39,9 @@ async function probe() {
   });
   if (!result.ready) return result;
 
+  // 검증 창은 보이지 않고(화면 밖·포커스 불가·작업 표시줄 없음) 사용자의 포커스를 건드리지 않는다.
   window = new BrowserWindow({
-    show: false,
+    show: false, x: -32000, y: -32000, focusable: false, skipTaskbar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));

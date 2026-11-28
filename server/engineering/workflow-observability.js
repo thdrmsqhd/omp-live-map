@@ -17,7 +17,8 @@ function workflowObservability(db, runs, catalog) {
       const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
       if (decoded.includes("\0")) throw new Error("Binary artifact");
       return { path: file, text: redact(decoded), truncated: decoded.length > 8000 || decoded.split("\n").length > 100 };
-    } catch {
+    } catch (error) {
+      if (error.legacy) throw error;
       throw problem(409, "The artifact is changed, unavailable or not a previewable text file");
     }
   }

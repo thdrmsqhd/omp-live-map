@@ -7,6 +7,7 @@
 //    화면은 이 sessionId 를 스냅샷 노드의 sid(omp 세션 머리 id · Claude 기록 파일 이름)와 맞춰 실제 세션 카드를 단계 아래에 잇는다.
 const { compileGraph } = require("./graph-definition");
 const { isTaskLocalName } = require("./task-local");
+const { legacyWorkspace } = require("./legacy-worktrees");
 
 const TEXT = 600;
 const clip = (value, size = TEXT) => typeof value === "string" ? value.slice(0, size) : undefined;
@@ -94,6 +95,7 @@ function taskMap({ definitions, workflows, tasks, flowRuns, workflowLive }, proj
       }
       run = { id: detail.id, status: detail.status, created: detail.created, error: clip(detail.error, 600),
         version: detail.version, workflow: detail.workflow, costCents: Math.round(cost * 100) / 100,
+        ...(legacyWorkspace(detail.workspace) ? { legacy: true } : {}),
         updated: Math.max(detail.created, ...nodes.map(({ updated }) => updated)) };
     } else for (const stage of stages) { stage.status = "pending"; stage.sessions = []; }
     return { id: task.id, title: task.title, instruction: task.instruction, status: task.status, revision: task.revision,

@@ -63,6 +63,11 @@ function loopEngine(store, catalog, runner, folders) {
           if (passed) return store.change(id, "succeeded");
           feedback = results;
         } catch (error) {
+          if (error.budgetExceeded) { // 실행 중 예산에 닿아 멈춤: 쓴 금액을 남기고 한도 초과로 끝낸다.
+            store.finishAttempt(id, number, "rejected", { error: error.message, costCents: error.costCents ?? 0, costBasis: "reported",
+              sessionId: error.sessionId ?? null, definitions });
+            return store.change(id, "limit_exceeded");
+          }
           store.finishAttempt(id, number, signal.aborted ? "cancelled" : "error", { error: redact(error.message), definitions });
           if (stop.signal.aborted) return store.change(id, "cancelled");
           return store.change(id, signal.aborted ? "limit_exceeded" : "failed");

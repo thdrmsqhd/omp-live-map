@@ -54,9 +54,12 @@ function umlColumns(tab) {
   const sameOwner = (row) => (item) => item.scope === row.scope && (item.project ?? null) === (row.project ?? null) && (item.team ?? null) === (row.team ?? null);
   const name = ["이름", (row) => row.name, { save: (row, value) => value ? (tab === "workflow" ? umlRenameFlow(row, value) : umlSave(row, { name: value })) : Promise.reject(new Error("이름을 비울 수 없습니다.")) }];
   const number = (key, min, max, unit, scale = 1, digits = 0) => [(row) => (row.payload[key] / scale).toFixed(digits),
-    { type: "number", min, max, show: (v) => (unit === "$" ? "$" + v : v + unit), save: (row, value) => {
+    { type: "number", min, max, show: (v) => v + unit, save: (row, value) => {
       const n = Number(value); if (!(Number.isFinite(n) && n >= min && n <= max)) throw new Error(min + "~" + max + " 사이로 쓰세요.");
       return umlSave(row, { [key]: Math.round(n * scale) }); } }];
+  // 예산은 원화로 보이고 원화로 고친다(저장은 센트).
+  const budget = [(row) => won(wonOfCents(row.payload.budgetCents)), { show: (v) => won(centsOfWon(v) / 100 * FX),
+    save: (row, value) => umlSave(row, { budgetCents: umapCentsOf(100000, "예산")(value) }) }];
   if (tab === "model") return [name, ["모델 ID", (row) => row.payload.model, { save: (row, model) => umlSave(row, { model }) }],
     ["제공자", (row) => row.payload.provider, { save: (row, provider) => umlSave(row, { provider }) }]];
   if (tab === "harness") return [name,
@@ -68,7 +71,7 @@ function umlColumns(tab) {
   if (tab === "loop") return [name,
     ["하네스", (row) => row.payload.harness, { options: () => defs().filter((item) => item.kind === "harness").map((item) => [item.id, item.name]),
       show: (v) => defs().find(({ id }) => id === v)?.name || v, save: (row, harness) => umlSave(row, { harness }) }],
-    ["시도", ...number("attempts", 1, 8, "회")], ["시간", ...number("timeoutMs", 1, 60, "분", 60000)], ["예산", ...number("budgetCents", 0, 1000, "$", 100, 2)],
+    ["시도", ...number("attempts", 1, 8, "회")], ["시간", ...number("timeoutMs", 1, 60, "분", 60000)], ["예산", ...budget],
     ["검증 명령", (row) => row.payload.checks.map(umapCommandText).join("\n"), { multiline: true, save: (row, text) => umlSave(row, { checks: text.split(/\n+/).filter(Boolean).map(umapParseCommand) }) }]];
   return [name, ["단계", (row) => row.stages || "…", { readonly: true }]];
 }

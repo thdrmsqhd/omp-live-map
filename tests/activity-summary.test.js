@@ -125,10 +125,44 @@ test("edit line deltas: replace pairs, multi-edit arrays and apply_patch text", 
 
 test("omp hashline edit input ([file#hash] blocks) counts the file and +/- lines", () => {
   const { editsOf } = require("../server/activity");
-  const input = "[monitor_lamp.py#55B0]\nPUT 7.=10:\n+    print('a')\n+    print('b')\n-    old()\n[README.md#A1]\nPUT 1.=1:\n+line";
+  // PUT N.=M: 은 원래 줄 N..M 을 지우고 + 줄로 바꾼다(hashline 에는 '-' 줄이 없다).
+  const input = "[monitor_lamp.py#55B0]\nPUT 7.=10:\n+    print('a')\n+    print('b')\n[README.md#A1]\nPUT 1.=1:\n+line";
   const got = editsOf({ i: "Adding CSV logging", input });
   assert.deepEqual(got.map(({ file, add, del }) => ({ file, add, del })),
-    [{ file: "monitor_lamp.py", add: 2, del: 1 }, { file: "README.md", add: 1, del: 0 }]);
+    [{ file: "monitor_lamp.py", add: 2, del: 4 }, { file: "README.md", add: 1, del: 1 }]);
   const wrapped = editsOf({ input: "*** Begin Patch\n[C:/x/y.json#9F]\nPUT 2.=2:\n+  \"a\": 1\n*** End Patch" });
-  assert.deepEqual(wrapped.map(({ file, add, del }) => ({ file, add, del })), [{ file: "C:/x/y.json", add: 1, del: 0 }]);
+  assert.deepEqual(wrapped.map(({ file, add, del }) => ({ file, add, del })), [{ file: "C:/x/y.json", add: 1, del: 1 }]);
+});
+
+// 실제 omp 기록에서 '+0 −0' 으로 보이던 모양(익명화).
+test("hashline CUT / insert / block / repeated sections count real line changes", () => {
+  const { editsOf } = require("../server/activity");
+  const pick = (a) => editsOf(a).map(({ file, add, del }) => [file, add, del]);
+  assert.deepEqual(pick({ i: "Removing mistaken lines", input: "[logger.py#6438]\nCUT 70.=71\n" }), [["logger.py", 0, 2]]);
+  assert.deepEqual(pick({ input: "[logger.py#66E7]\nPUT >95:\n+    a = 0\n+    b = 1\nPUT <133:\n+    c()\n" }), [["logger.py", 3, 0]]);
+  assert.deepEqual(pick({ input: "[svc.py#C3D4]\nPUT 1*:\n+def load(k):\n+    return k\nCUT 9*\n" }), [["svc.py", 2, 2]], "block ops count at least their opening line");
+  // 같은 파일 머리가 거듭 나오는 한 호출(실제 config 편집 모양)은 파일 하나로 모은다.
+  const repeated = "*** Begin Patch\n[C:/cfg/app.json#B509]\nCUT 4.=4\n[C:/cfg/app.json#B509]\nCUT 174.=174\n[C:/cfg/app.json#B509]\nPUT 201.=204:\n+    \"mode\": {\n+      \"x\": \"off\"\n+    }\n*** End Patch";
+  assert.deepEqual(pick({ input: repeated }), [["C:/cfg/app.json", 3, 6]]);
+  assert.deepEqual(pick({ input: "[a.py#1]\nCUT 5.=9 @fn\n[b.py#2]\nPUT >40 @fn\n" }), [["a.py", 0, 5], ["b.py", 0, 0]]);
+  assert.deepEqual(pick({ path: "proc://bg_52/kill", content: "" }), [], "process/URI writes are not file edits");
+  assert.deepEqual(pick({ path: "xd://report_issue", content: "x" }), []);
+  assert.deepEqual(pick({ path: "C:/w/new.md", content: "a\nb\n" }), [["C:/w/new.md", 2, 0]], "drive-letter paths stay files");
+});
+
+test("edit result diff (details.diff) corrects the call's +/- counts", () => {
+  const a = require("../server/activity");
+  assert.deepEqual(a.resultDelta(" 29|  x\n-31|  old\n+31|  new\n+32|  more\n 33|  y"), { add: 2, del: 1 });
+  assert.equal(a.resultDelta("no diff here"), null);
+  const act = a.newActivity();
+  a.onCall(act, { id: "c1", name: "edit", args: { input: "[svc.py#C3D4]\nPUT >20 @fn\n" }, ts: 5 });
+  assert.equal(act.recent.at(-1).add + act.recent.at(-1).del, 0);
+  a.onResult(act, { id: "c1", text: "ok", ts: 6, details: { diff: " 20|  a\n+21|def f():\n+22|  pass\n 23|  b" } });
+  const item = act.recent.at(-1);
+  assert.deepEqual([item.add, item.del, item.text], [2, 0, "수정 svc.py +2 −0"]);
+  assert.deepEqual([act.counts.add, act.counts.del], [2, 0]);
+  assert.deepEqual(act.edits.map(({ file, add, del }) => [file, add, del]), [["svc.py", 2, 0]]);
+  a.onCall(act, { id: "c2", name: "edit", args: { input: "[svc.py#AAAA]\nCUT 4*\n" }, ts: 7 });
+  a.onResult(act, { id: "c2", error: true, text: "rejected", ts: 8, details: { diff: "-4|x\n-5|y" } });
+  assert.deepEqual([act.recent.at(-1).add, act.recent.at(-1).del], [0, 1], "failed edits keep the call estimate");
 });

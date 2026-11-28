@@ -9,7 +9,7 @@ function renderSearch() {
     .filter((s) => !q || (s.title + " " + s.folder).toLowerCase().includes(q))
     .slice(0, 14);
   box.innerHTML = hits.length ? hits.map((s) => `<div class="sres" data-key="${esc(encodeURIComponent(s.key))}">
-      <div class="t">${esc(s.title)}</div>
+      <div class="t">${esc(umapPlain(s.title))}</div>
       <div class="m">${esc(s.folder)} · ${s.totals.agents} agent · ${fmt(s.totals.tokens)} tok · ${krw(s.totals.cost)} · ${ago(s.lastTs)}</div>
     </div>`).join("") : `<div class="sres"><div class="m">${q ? "검색 결과 없음" : "지금 필터 밖에 있는 세션이 없습니다"}</div></div>`;
   box.classList.add("open");

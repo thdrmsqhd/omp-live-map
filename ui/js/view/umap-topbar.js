@@ -1,4 +1,4 @@
-/* omp-live-map · view · 위쪽 막대(한 화면): ＋ 새 실행 · ● omp · claude · 개입 필요 N · 자원 한 줄('CPU 45% · RAM 80% · WSL ● · Docker ○') · 맵으로.
+/* omp-live-map · view · 위쪽 막대(한 줄): ＋ Task · ● omp · claude · 개입 필요 N · 자원 한 줄('CPU 45% · RAM 80% · WSL ● · Docker ○') · 맵으로.
    자원 한 줄을 누르면 오른쪽 서랍에 HOST·WSL·Docker 상세와 기존 인프라 조작(부팅·종료·compose up·start/stop/restart)이 열린다. */
 
 function umapResourceLine() {
@@ -58,8 +58,6 @@ function bindUmapTopbar() {
   $("umap-resources").onclick = () => (UMD.kind === "resources" ? closeUmapDrawer() : openResourcesDrawer());
   $("umap-attention").onclick = umapJumpAttention;
   $("workflow-new-run").onclick = () => { if (mapMode !== "map") setMapMode("map"); umapOpenAdd(undefined, { run: true }); };
-  $("umap-library").onclick = () => (UMD.kind === "library" ? closeUmapDrawer() : openLibraryDrawer());
-  $("umap-help").onclick = openHelpDrawer;
   $("back-to-map").onclick = () => setMapMode("map");
   $("umap-drawer-close").onclick = closeUmapDrawer;
   const body = $("umap-drawer-body");

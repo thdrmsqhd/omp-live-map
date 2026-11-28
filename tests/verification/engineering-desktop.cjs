@@ -1,7 +1,15 @@
 "use strict";
 
+// 데스크톱 앱(Electron) 제품 화면 검증 — 지금 화면 그대로: 탭 없음, 관제 벽(프로젝트 타일 격자), 위쪽 막대 한 줄 + ⋯ 메뉴, 오른쪽 서랍.
+//   1) V2 데이터 가져오기 · 7800 포트의 기존 서비스는 건드리지 않음
+//   2) 위쪽 막대 한 줄(1440px), 예전 탭·도구 막대·폼 화면 없음, ⋯ 메뉴 → 라이브러리 서랍
+//   3) 등록한 프로젝트에 승인 단계가 있는 Task 를 만들고 Task 카드의 ▶ → 승인 카드(안내 한 줄이면 빈 줄 없음) → 승인 → 완료
+//   4) 돈은 한 단위(₩), Task 서랍의 예산도 ₩
+//   5) 보호 API(토큰 없는 요청·다른 출처 거부), 예전 주소 넘김, 창을 닫으면 로컬 서버도 끝남
+// 창은 화면 밖·포커스 불가로 띄운다(tests/verification/desktop-launch.cjs). 필요: playwright(connectOverCDP 만 쓴다), electron.
+//   node tests/verification/engineering-desktop.cjs
 const assert = require("node:assert/strict");
-const { spawn, execFileSync } = require("node:child_process");
+const { execFileSync } = require("node:child_process");
 const { once } = require("node:events");
 const { DatabaseSync } = require("node:sqlite");
 const fs = require("node:fs/promises");
@@ -10,9 +18,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
 const { chromium } = require("playwright");
-const executable = require("electron");
+const { launchDesktop } = require("./desktop-launch.cjs");
 
-test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, async () => {
+test("product desktop: one wall, one-row top bar, approval run from a Task card, ₩ money, protected API", { timeout: 180000 }, async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-engineering-desktop-"));
   const legacy = path.join(directory, "v2-fixture");
   await fs.mkdir(legacy);
@@ -23,269 +31,118 @@ test("product desktop opens its isolated Engineering UI", { timeout: 180000 }, a
     previous.prepare("INSERT INTO project VALUES (?,?,?,?,0)").run("imported-v2", legacy, "CI V2 project", "main");
   } finally { previous.close(); }
   const existing = http.createServer((_, res) => res.end("existing service"));
+  existing.on("error", () => {}); // 이 PC 에서 7800 이 이미 쓰이고 있으면 그 서비스를 그대로 둔다
   const existingStarted = once(existing, "listening");
   existing.listen(7800, "127.0.0.1");
-  await existingStarted;
-  const installed = process.env.OMP_MAP_INSTALLED_EXE;
-  const args = installed ? [] : [path.resolve(__dirname, "../../desktop")];
-  const app = spawn(installed || executable, [...args, "--remote-debugging-port=0", "--user-data-dir=" + directory,
-    "--import-v2-data-dir=" + legacy],
-    { stdio: ["ignore", "pipe", "pipe"] });
-  const closed = once(app, "close");
-  closed.catch(() => {});
+  await existingStarted.catch(() => {});
+  const app = await launchDesktop({ userDataDir: directory, args: ["--import-v2-data-dir=" + legacy] });
   let browser;
-  let output = "";
   try {
-    const endpoint = await Promise.race([
-      new Promise((resolve) => {
-        app.stderr.on("data", (chunk) => {
-          output = (output + chunk.toString()).slice(-8000);
-          const match = output.match(/DevTools listening on (ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/[^\s]+)/);
-          if (match) resolve(match[1]);
-        });
-      }),
-      closed.then(([code]) => { throw new Error("Desktop exited: " + code); }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Desktop did not expose its test port")), 15000).unref()),
-    ]);
-    browser = await chromium.connectOverCDP(endpoint);
+    browser = await chromium.connectOverCDP(app.endpoint);
     const context = browser.contexts()[0];
-    const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
-    // 실패했을 때 화면 쪽 원인을 남긴다(Windows CI 에서만 재현되는 실패를 읽기 위해).
+    const page = context.pages().find((item) => item.url().startsWith("http://127.0.0.1")) ?? await context.waitForEvent("page", { timeout: 15000 });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    page.setDefaultTimeout(15000);
     const pageErrors = [];
-    context.on("page", (next) => next.on("pageerror", (error) => pageErrors.push(error.message)));
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
-    // 확인 창(하네스 새 버전 적용, Claude Code 로그인이 곧 만료되는 PC 의 실행 시작 확인)은 모두 수락한다.
+    // 실행 환경 확인 창(이 PC 에 CLI 가 없을 때 '그래도 실행할까요?')은 수락한다. 승인 단계만 있는 Workflow 는 CLI 없이 끝난다.
     page.on("dialog", (dialog) => void dialog.accept());
-    // 관제 화면의 Task 탭: 이전 데이터 가져오기, 실행 환경, 프로젝트 등록. 별도 Engineering 페이지는 없다.
-    await page.getByRole("button", { name: "Task", exact: true }).click({ timeout: 15000 });
-    await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached", timeout: 15000 });
+    await page.waitForFunction(() => typeof UM !== "undefined" && UM.loaded && document.querySelector("#umap-items"));
     const origin = new URL(page.url()).origin;
     assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.notEqual(origin, "http://127.0.0.1:7800");
-    if (installed) {
-      const monaco = await fetch(origin + "/vendor/monaco/vs/loader.js");
-      assert.equal(monaco.status, 200);
-      assert.match(monaco.headers.get("content-type"), /javascript/);
-      const ant = path.join(path.dirname(installed), "resources", "runtime", "vendor", "ant", "ant.exe");
-      assert.match(execFileSync(ant, ["--version"], { encoding: "utf8", timeout: 10000 }), /2\.13\.0/);
+
+    // 2) 탭·설계 캔버스·칸반·폼·맵 도구 막대는 없다. 위쪽 막대는 한 줄이다.
+    for (const removed of ["#viewModes", "#engineering", "#design", "#umap-tools", "#topbar .zoom", "#umap-library", "#setup-nav", "#sdlc-nav", "#workflow-launch-form"]) {
+      assert.equal(await page.locator(removed).count(), 0, removed + " should not exist");
     }
-    // 폼 화면(프로필·하네스·루프·Workflow)은 없다.
-    for (const removed of ["#setup-nav", "#design-nav", "#loop-nav", "#workflow-nav", "#session-harnesses-nav"]) {
-      assert.equal(await page.locator(removed).count(), 0, removed);
-    }
-    await page.getByText("실행 환경", { exact: true }).click();
-    await page.locator("#check-runtime").waitFor({ timeout: 8000 });
-    await page.waitForFunction(() => Boolean(document.querySelector("#runtime-status")?.textContent));
-    await page.locator("#eng-project option").filter({ hasText: "CI V2 project" }).waitFor({ state: "attached" });
-    // 실행은 이 PC 에 설치된 omp·claude CLI 로 한다. 앱이 키·로그인을 받지 않는다.
-    assert.equal(await page.locator("#provider-key, #console-login").count(), 0);
-    const repository = path.join(directory, "fixture-repo");
-    await fs.mkdir(repository);
-    for (const command of [["init", "-b", "main"], ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
-      "commit", "--allow-empty", "-m", "start"]]) execFileSync("git", command, { cwd: repository });
-    await fs.writeFile(path.join(repository, "review-rules.md"), "CI review rules.");
-    execFileSync("git", ["add", "review-rules.md"], { cwd: repository });
-    execFileSync("git", ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-m", "Review fixture"], { cwd: repository });
-    await page.getByText("프로젝트 설정", { exact: true }).click();
-    const form = page.locator("#project-form");
-    await form.locator("[name=name]").fill("desktop fixture");
-    await form.locator("[name=root]").fill(repository);
-    await form.locator("[name=branch]").fill("main");
-    await form.getByRole("button", { name: "등록 또는 수정" }).click();
-    await page.locator("#eng-project option").filter({ hasText: "desktop fixture" }).waitFor({ state: "attached", timeout: 8000 });
+    assert.equal((await page.locator("#workflow-new-run").innerText()).trim(), "＋ Task");
+    const bar = await page.evaluate(() => {
+      const top = document.getElementById("topbar"), shown = [...top.children].filter((el) => el.getBoundingClientRect().width > 0);
+      const rects = shown.map((el) => el.getBoundingClientRect());
+      return { height: top.getBoundingClientRect().height, spread: Math.max(...rects.map((r) => r.top)) - Math.min(...rects.map((r) => r.top)), overflow: top.scrollWidth - top.clientWidth };
+    });
+    assert.ok(bar.height <= 56 && bar.spread < 20 && bar.overflow <= 0, "top bar is one row: " + JSON.stringify(bar));
+    await page.locator("#topbar-more").click();
+    await page.locator(".inline-menu button", { hasText: "라이브러리" }).click();
+    await page.locator("#umap-drawer-title", { hasText: "라이브러리" }).waitFor();
+    await page.keyboard.press("Escape");
+    await page.locator("#umap-drawer").waitFor({ state: "hidden" });
+
     const request = async (endpoint, params, payload) => {
       const result = await page.evaluate(([name, query, body]) => window.engineeringApi.request(name, query, body), [endpoint, params ?? {}, payload]);
       assert.equal(result.ok, true, endpoint + ": " + result.error);
       return result.value;
     };
-    const project = (await request("projects")).find(({ name }) => name === "desktop fixture").id;
-    await page.goto(origin + "/?mode=design&project=" + project);
-    await page.locator('#design[data-ready="1"]').waitFor({ state: "attached", timeout: 30000 });
+    // 1) V2 데이터 가져오기.
+    assert.ok((await request("projects")).some(({ name }) => name === "CI V2 project"), "the V2 project is imported");
 
-    // 설계 모드(관제 화면 안 노드 캔버스): 기본 구성 → 노드와 연결선.
-    await page.locator("#design").waitFor();
-    // 빈 캔버스 안내의 버튼은 프로필이 이미 있으면 보이지 않으므로 + 노드 메뉴의 빠른 시작을 쓴다.
-    await page.locator("#studio-add").click();
-    await page.getByRole("menuitem", { name: /기본 구성 추가/ }).click({ timeout: 15000 }).catch(async (error) => {
-      const menu = await page.locator("#studio-menu").innerText().catch(() => "(no menu)");
-      throw new Error(`기본 구성 추가 메뉴를 찾지 못했습니다. url=${page.url()} menu=${JSON.stringify(menu.slice(0, 600))} errors=${JSON.stringify(pageErrors.slice(-10))}`, { cause: error });
-    });
-    await page.locator('.studio-node[data-kind="harness"]').first().waitFor({ timeout: 15000 });
-    await page.locator('#studio-lines g[data-type="model"]').first().waitFor({ state: "attached" });
-    assert.equal(await page.evaluate(() => mapMode), "design");
-    assert.equal(await page.locator("#stage").isVisible(), false);
-
-    // 정의는 노드에서 만들고 저장한다: 새 모델 노드.
-    await page.locator("#studio-add").click();
-    await page.getByRole("menuitem", { name: /^새 모델/ }).click();
-    const model = page.locator('.studio-node[data-kind="model"].is-selected');
-    await model.locator(".studio-field", { hasText: "이름" }).locator("input").fill("test profile");
-    await model.locator(".studio-field", { hasText: "모델" }).locator("select").selectOption({ label: "claude-sonnet-4-6 · anthropic" });
-    await page.keyboard.press("Control+s");
-    await page.locator("#studio-status").filter({ hasText: "저장됨" }).waitFor();
-    const testModel = (await request("definitions", { scope: "personal" })).find(({ kind, name }) => kind === "model" && name === "test profile");
-    assert.ok(testModel);
-
-    // Workflow: Start → End 를 만들고 캔버스에서 옮긴 위치를 새 버전으로 저장한다.
-    const created = await request("workflows", {}, { project, payload: { name: "CI workflow", nodes: [
-      { id: "start", label: "Start", type: "start", x: 0, y: 40 }, { id: "end", label: "End", type: "end", x: 420, y: 40 }],
-    edges: [{ from: "start", to: "end", port: "next" }] } });
-    await page.goto(origin + "/?mode=design&project=" + project + "&workflow=" + created.id);
-    await page.locator('#design[data-ready="1"]').waitFor({ state: "attached", timeout: 30000 });
-    const start = page.locator('.studio-node[data-key="step:start"]');
-    await start.waitFor({ timeout: 15000 });
-    const handle = start.locator(".studio-head");
-    await handle.scrollIntoViewIfNeeded();
-    const bounds = await handle.boundingBox();
-    const originalX = await start.evaluate((node) => parseFloat(node.style.left));
-    assert.ok(bounds);
-    await page.mouse.move(bounds.x + 30, bounds.y + 10);
-    await page.mouse.down();
-    await page.mouse.move(bounds.x + 90, bounds.y + 40, { steps: 6 });
-    await page.mouse.up();
-    const moved = await start.evaluate((node) => parseFloat(node.style.left));
-    if (!(moved > originalX)) {
-      const at = await page.evaluate(([x, y]) => {
-        const hit = document.elementFromPoint(x, y);
-        const describe = (node) => node ? node.tagName.toLowerCase() + (node.id ? "#" + node.id : "") + (node.className && typeof node.className === "string" ? "." + node.className.trim().split(/\s+/).join(".") : "") : "none";
-        return { hit: describe(hit), parent: describe(hit?.parentElement), viewport: [innerWidth, innerHeight], dpr: devicePixelRatio };
-      }, [bounds.x + 30, bounds.y + 10]);
-      assert.fail(`노드를 끌어도 움직이지 않았습니다. before=${originalX} after=${moved} bounds=${JSON.stringify(bounds)} at=${JSON.stringify(at)} errors=${JSON.stringify(pageErrors.slice(-10))}`);
+    // 3) 승인 단계 Workflow 를 가진 Task 를 만들고 카드의 ▶ 로 실행 → 승인 카드 → 승인.
+    const repository = path.join(directory, "fixture-repo");
+    await fs.mkdir(repository);
+    for (const command of [["init", "-b", "main"], ["-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "--allow-empty", "-m", "start"]]) {
+      execFileSync("git", command, { cwd: repository, windowsHide: true });
     }
-    await page.locator("#studio-check").click();
-    await page.locator("#studio-status").filter({ hasText: "검사 통과" }).waitFor();
-    await page.locator("#studio-save").click();
-    await page.locator("#studio-status").filter({ hasText: "v2 저장" }).waitFor();
-    const savedFlow = await request("workflow", { project, id: created.id });
-    assert.equal(savedFlow.version, 2);
-    assert.ok(savedFlow.payload.nodes.find(({ id }) => id === "start").x > 0);
+    const project = (await request("projects/ensure", {}, { root: repository })).id;
+    const flow = await request("workflows", {}, { project, payload: { name: "CI 승인", nodes: [
+      { id: "start", type: "start", label: "Start", x: 0, y: 0 },
+      { id: "review", type: "approval", label: "결과 검토", prompt: "결과를 보고 승인하세요", x: 300, y: 0 },
+      { id: "end", type: "end", label: "End", x: 600, y: 0 }],
+    edges: [{ from: "start", to: "review", port: "next" }, { from: "review", to: "end", port: "approved" }] } });
+    const task = await request("tasks", {}, { project, text: "CI 승인 경로", workflow: flow.id, version: flow.version });
+    // 쉬는 타일(아직 도는 일이 없는 새 프로젝트)은 머리와 최근 끝난 일만 보이므로 그 프로젝트를 전체 화면으로 열어 Task 카드를 누른다.
+    await page.evaluate((key) => umapRefresh(true).then(() => { paintUmap(true); umapEnterFocus(key); }), "project:" + project);
+    const card = page.locator(`.um-task[data-task="${task.id}"]`);
+    await card.waitFor();
+    await card.locator('[data-um="run"]').click();
+    const approval = page.locator(`.um-stage.s-waiting_approval[data-task="${task.id}"]`);
+    await approval.waitFor({ timeout: 30000 });
+    assert.equal((await approval.locator(".um-approve-prompt").innerText()).trim(), "결과를 보고 승인하세요");
+    const fit = await approval.evaluate((el) => {
+      const box = el.getBoundingClientRect(), buttons = el.querySelector(".um-approve").getBoundingClientRect(), prompt = el.querySelector(".um-approve-prompt").getBoundingClientRect();
+      return { below: box.bottom - buttons.bottom, gap: buttons.top - prompt.bottom, clipped: el.scrollHeight - el.clientHeight };
+    });
+    assert.ok(fit.below <= 20 && fit.gap <= 12 && fit.clipped <= 2, "a one-line approval card has no empty line: " + JSON.stringify(fit));
+    assert.match(await page.locator("#umap-attention").innerText(), /개입 필요 [1-9]/);
+    await approval.locator('[data-um="approve"]').click();
+    for (const deadline = Date.now() + 30000; ;) {
+      const map = await request("task-map", { project });
+      if (map.tasks.find(({ id }) => id === task.id)?.run?.status === "succeeded") break;
+      assert.ok(Date.now() < deadline, "the approved run completes");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
 
-    await verifyHarnessDetail(page, request, project, testModel);
-    await verifyLiveMap(page, origin, project);
+    // 4) 돈은 ₩ 한 단위.
+    await page.evaluate(() => umapRefresh(true).then(() => paintUmap(true)));
+    assert.equal((await page.locator("#umap").innerText()).includes("$"), false, "no dollar amounts on the wall");
+    await page.evaluate((id) => openTaskDrawer(id), task.id);
+    const budget = page.locator("#umap-drawer-body .um-prop", { hasText: "예산" });
+    await budget.waitFor();
+    assert.match(await budget.innerText(), /₩[\d,]+/);
+    await page.keyboard.press("Escape");
+    assert.deepEqual(pageErrors, []);
 
-    // 개발 Task 는 같은 화면의 Task 탭에서 만들고, 실행하면 맵 탭에서 그 실행을 연다.
-    await page.goto(origin + "/?mode=tasks&project=" + project);
-    await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached", timeout: 15000 });
-    await page.locator("#sdlc-nav").click();
-    const task = page.locator("#sdlc-form");
-    await task.getByLabel("업무 제목").fill("CI development task");
-    await task.getByLabel("요구사항").fill("Maintain the baseline");
-    await task.getByLabel("Workflow 버전").selectOption({ label: "CI workflow · v2" });
-    await task.getByRole("button", { name: "Task 저장" }).click();
-    const card = page.locator("#sdlc-board article").filter({ hasText: "CI development task" });
-    await card.getByRole("button", { name: "준비로 이동" }).click();
-    await card.getByRole("button", { name: "Workflow 실행", exact: true }).click();
-    await page.locator("#wf-map-title").filter({ hasText: "CI development task" }).waitFor({ timeout: 15000 });
-    await page.locator("#wf-map-status").filter({ hasText: /^완료$/ }).waitFor();
-    await page.goto(origin + "/?mode=tasks&view=execution");
-    await page.getByRole("heading", { name: "Loop 실행" }).waitFor();
-    // 예전 Engineering 페이지 주소는 합친 화면으로 넘긴다.
-    const redirected = await fetch(origin + "/engineering.html?view=design", { redirect: "manual" });
+    // 5) 보호 API · 예전 주소.
+    const redirected = await fetch(origin + "/engineering.html", { redirect: "manual" });
     assert.equal(redirected.status, 302);
-    assert.equal(redirected.headers.get("location"), "/?mode=design");
-    const unauthenticated = await fetch(origin + "/api/engineering/projects");
-    assert.equal(unauthenticated.status, 403);
-    const foreignOrigin = await fetch(origin + "/api/graph", { headers: { origin: "http://127.0.0.1:7800" } });
-    assert.equal(foreignOrigin.status, 403);
+    assert.equal(redirected.headers.get("location"), "/");
+    assert.equal((await fetch(origin + "/api/engineering/projects")).status, 403);
+    assert.equal((await fetch(origin + "/api/graph", { headers: { origin: "http://127.0.0.1:7800" } })).status, 403);
     await page.close();
-    const [code] = await closed;
+    const [code] = await app.closed;
     assert.equal(code, 0);
     const source = new DatabaseSync(path.join(legacy, "engineering.sqlite"), { readOnly: true });
     try { assert.equal(source.prepare("PRAGMA user_version").get().user_version, 1); } finally { source.close(); }
     await assert.rejects(fetch(origin + "/api/graph"), /fetch failed/);
-    assert.equal(await (await fetch("http://127.0.0.1:7800")).text(), "existing service");
+    if (existing.listening) assert.equal(await (await fetch("http://127.0.0.1:7800")).text(), "existing service");
   } catch (error) {
-    throw new Error(`${error.message}\nElectron stderr:\n${output}`, { cause: error });
+    throw new Error(`${error.message}\nElectron output:\n${app.output()}`, { cause: error });
   } finally {
     existing.close();
     existing.closeAllConnections();
-    if (app.exitCode === null && app.signalCode === null) app.kill();
-    await closed.catch(() => {});
     if (browser) await browser.close().catch(() => {});
-    await fs.rm(directory, { recursive: true, force: true, maxRetries: 3 });
+    await app.stop();
+    await fs.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
   }
 });
-
-// 하네스 노드 상세: 실제 적용값(저장소 자료), 사용 중인 Workflow 에 새 버전 적용.
-async function verifyHarnessDetail(page, request, project, testModel) {
-  // 기본 하네스 하나를 본떠 저장소 자료(review-rules.md)를 읽는 하네스를 만든다.
-  const base = (await request("definitions", { scope: "personal" })).find(({ kind, name }) => kind === "harness" && name === "기본 · 코드 리뷰");
-  const harness = await request("definitions", {}, { scope: "personal", kind: "harness", payload: { ...base.payload, name: "CI reviewer", model: testModel.id,
-    instructions: "Review the change.", assets: { ...base.payload.assets, files: ["review-rules.md"], inputs: [] } } });
-  const flow = await request("workflows", {}, { project, payload: { name: "CI review workflow", nodes: [
-    { id: "start", label: "Start", type: "start", x: 0, y: 40 },
-    { id: "review", label: "Review", type: "agent", definition: harness.id, version: 1, instruction: "Review the change.", x: 200, y: 40 },
-    { id: "end", label: "End", type: "end", x: 420, y: 40 }],
-  edges: [{ from: "start", to: "review", port: "next" }, { from: "review", to: "end", port: "next" }] } });
-  await request("definitions", {}, { scope: "personal", kind: "harness", id: harness.id, version: 1,
-    payload: { ...harness.payload, instructions: "Review changed test cases as well." } });
-  await page.goto(page.url().split("?")[0] + "?mode=design&project=" + project);
-  const node = page.locator('.studio-node[data-kind="harness"]', { hasText: "CI reviewer" }).first();
-  await node.waitFor({ timeout: 15000 });
-  await node.locator(".studio-more").click();
-  await page.getByRole("menuitem", { name: /상세 · 버전 기록 · 실제 적용값/ }).click();
-  const panel = page.locator("#studio-inspect");
-  await panel.getByText("버전 기록 · 최신 v2").waitFor();
-  await panel.locator("summary", { hasText: "실제 적용값" }).click();
-  await panel.getByRole("button", { name: "편집 중 초안" }).click();
-  await panel.getByText(/CI review rules\./).waitFor();
-  // CI 에는 실행 환경이 없어 실행할 수 없다고 나오고, 실행 환경이 있는 PC 에서는 준비 완료로 나온다.
-  await panel.getByText(/현재 실행할 수 없습니다|실행 준비 완료/).waitFor();
-  await panel.locator("summary", { hasText: "사용 중인 Workflow" }).click();
-  await panel.getByRole("button", { name: "v2 적용" }).click();
-  await page.locator("#studio-status").filter({ hasText: "Workflow v2 저장됨" }).waitFor();
-  const updated = await request("workflow", { project, id: flow.id });
-  assert.equal(updated.version, 2);
-  assert.equal(updated.payload.nodes.find(({ id }) => id === "review").version, 2);
-}
-
-// 관제(Live Map): 새 실행 → 완료 → 노드 이동 → 닫기·다시 열기(개입 필요 함의 최근 실행) → 설계에서 편집 → 관제에서 실행.
-async function verifyLiveMap(page, origin, project) {
-  await page.goto(origin + "/?mode=map");
-  await page.locator('#viewModes button[data-mode="map"][aria-pressed="true"]').waitFor();
-  const launch = page.locator("#workflow-launch-form");
-  await page.locator("#workflow-new-run").click();
-  await launch.locator('[name="project"]').selectOption({ label: "desktop fixture" });
-  await launch.locator('[name="source"]').selectOption({ label: "CI workflow · v2" });
-  await launch.locator('[name="goal"]').fill("Launch from the original Live Map");
-  await launch.locator('[name="acceptance"]').fill("The graph completes and the original positions remain draggable.");
-  await launch.getByRole("button", { name: "실행 시작" }).click();
-  await page.getByRole("heading", { name: "Launch from the original Live Map" }).waitFor();
-  const viewBefore = await page.evaluate(() => ({ ...wfMap.previousView }));
-  const inspector = page.locator("#workflow-inspector");
-  await inspector.locator("#wf-map-status").filter({ hasText: /^완료$/ }).waitFor();
-  const node = page.locator('.wf-node[data-workflow-node="start"]');
-  await node.click();
-  await inspector.getByRole("heading", { name: "Start · 완료" }).waitFor();
-  const before = await node.evaluate((element) => element.style.left);
-  const bounds = await node.boundingBox();
-  assert.ok(bounds);
-  await page.mouse.move(bounds.x + 18, bounds.y + 18);
-  await page.mouse.down();
-  await page.mouse.move(bounds.x + 57, bounds.y + 30, { steps: 4 });
-  await page.mouse.up();
-  const dragged = await node.evaluate((element) => element.style.left);
-  assert.notEqual(dragged, before);
-
-  await page.locator("#wf-map-close").click();
-  await page.waitForFunction((previous) => ["x", "y", "k"].every((key) => Math.abs(view[key] - previous[key]) < 0.001), viewBefore);
-  await page.locator("#workflow-queue-toggle").click();
-  const queue = page.locator("#workflow-queue");
-  await queue.locator("summary", { hasText: "최근 실행" }).click();
-  await queue.getByRole("button", { name: /Launch from the original Live Map/ }).click();
-  await inspector.locator("#wf-map-title").filter({ hasText: "Launch from the original Live Map" }).waitFor();
-  assert.equal(await node.evaluate((element) => element.style.left), dragged);
-  assert.equal(await page.locator("#workflow-queue-toggle").getAttribute("aria-expanded"), "false");
-
-  await inspector.getByRole("link", { name: "설계에서 편집" }).click();
-  await page.waitForFunction(() => mapMode === "design");
-  await page.locator("#studio-workflow option:checked").filter({ hasText: "CI workflow · v2" }).waitFor({ state: "attached" });
-  await page.locator("#studio-run").click();
-  await launch.locator('[name="source"] option:checked').filter({ hasText: "CI workflow · v2" }).waitFor({ state: "attached" });
-  // 설계 화면을 떠나지 않고, 캔버스에서 고른 프로젝트·Workflow는 고정된다.
-  assert.equal(await page.evaluate(() => mapMode), "design");
-  assert.equal(await launch.locator('[name="source"]').isDisabled(), true);
-  assert.equal(await launch.locator('[name="project"]').isDisabled(), true);
-  await launch.getByRole("button", { name: "닫기", exact: true }).click();
-}

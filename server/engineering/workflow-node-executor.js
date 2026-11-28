@@ -5,6 +5,7 @@ const { executionDefinitions } = require("./harness-provenance");
 const { verifyResult } = require("./harness-result");
 const { promptSections } = require("./adapters");
 const { problem, redact } = require("./state");
+const { BUDGET_REASON } = require("./run-cost");
 
 function nodeDefinitions(catalog, project, node) {
   const target = catalog.versionOf(node.definition, node.version);
@@ -76,6 +77,13 @@ function nodeExecutor(catalog, runner) {
       }
       return { status: "failed", passed: false, costCents: spent, definitions, attempts };
     } catch (error) {
+      // 실행 중 예산에 닿아 멈춘 시도: 쓴 금액을 더하고 '예산 초과'로 단계를 실패시킨다(같은 Run 의 다음 단계로 넘어가지 않는다).
+      if (error.budgetExceeded) {
+        spent += Number.isFinite(error.costCents) ? error.costCents : 0;
+        attempts.push({ costCents: error.costCents ?? 0, costBasis: "reported", sessionId: error.sessionId ?? null,
+          model: model.payload.model, agent: harness.payload.adapter, error: BUDGET_REASON });
+        return { status: "failed", passed: false, costCents: spent, definitions, attempts, error: BUDGET_REASON, interrupted: true, budgetExceeded: true };
+      }
       return { status: "failed", passed: false, costCents: spent, definitions, attempts, error: redact(error.message), interrupted: true };
     }
   };

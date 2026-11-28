@@ -60,7 +60,9 @@ test("size by content: running/attention tiles are big, idle tiles take one row 
   const size = (tile, sizes = {}, cols = 3) => plain(run("umapTileSize")(tile, sizes, cols));
   assert.deepEqual(size({ key: "a", state: "attention" }), { w: 1, h: W.ACTIVE_H, auto: true });
   assert.deepEqual(size({ key: "r", state: "running" }), { w: 1, h: W.ACTIVE_H, auto: true });
-  assert.deepEqual(size({ key: "i", state: "idle" }), { w: 1, h: W.IDLE_H, auto: true });
+  assert.deepEqual(size({ key: "i", state: "idle" }), { w: 1, h: W.IDLE_H, auto: true, small: true });
+  assert.deepEqual(size({ key: "i", state: "idle", idleH: 2 }), { w: 1, h: 2, auto: true, small: true }, "an idle tile grows to show its recent finished items");
+  assert.deepEqual(size({ key: "i", state: "idle", idleH: 9 }), { w: 1, h: W.IDLE_MAX, auto: true, small: true }, "but never past IDLE_MAX");
   assert.deepEqual(size({ key: "i", state: "idle", busy: true }), { w: 1, h: W.ACTIVE_H, auto: true }, "an idle tile with an open ＋ Task line grows while typing");
   assert.deepEqual(size({ key: "i", state: "idle" }, { i: { w: 2, h: 3 } }), { w: 2, h: 3, auto: false }, "a resized idle tile keeps the user's size");
   assert.deepEqual(size({ key: "r", state: "running" }, { r: { w: 9, h: 99 } }, 3), { w: 3, h: W.MAX_H, auto: false }, "a saved size never exceeds the grid");
@@ -79,7 +81,14 @@ test("an active tile is only as tall as its content (no half-empty tiles), still
   assert.deepEqual(size({ key: "a", state: "running", need: 1 }, 6), { w: 1, h: W.NEED_MIN, auto: true }, "but never less than the minimum for a working tile");
   assert.deepEqual(size({ key: "a", state: "attention", need: 12 }, 6), { w: 1, h: 6, auto: true }, "a long tile is capped at the active height (it scrolls inside)");
   assert.deepEqual(size({ key: "a", state: "running" }, 6), { w: 1, h: 6, auto: true }, "without a measured need the active height is used");
-  assert.deepEqual(size({ key: "a", state: "idle", need: 5 }, 6), { w: 1, h: W.IDLE_H, auto: true }, "idle tiles stay one row");
+  assert.deepEqual(size({ key: "a", state: "idle", need: 5 }, 6), { w: 1, h: W.IDLE_H, auto: true, small: true }, "idle tiles ignore the body need");
+  const idle = run("umapIdleRows");
+  assert.equal(idle(0, grid), Math.max(1, Math.ceil((W.IDLE_HEAD_PX + W.RECENT_EMPTY_PX + grid.gap) / (grid.unitH + grid.gap))));
+  for (const n of [1, 2, 3]) {
+    const h = idle(n, grid), px = h * grid.unitH + (h - 1) * grid.gap;
+    assert.ok(px >= W.IDLE_HEAD_PX + n * W.RECENT_PX, n + " recent items fit in " + h + " cells");
+    assert.ok(h === 1 || (h - 1) * grid.unitH + (h - 2) * grid.gap < W.IDLE_HEAD_PX + n * W.RECENT_PX, "and the tile is not taller than needed");
+  }
   const pack = plain(run("umapWallPack")([{ key: "a", state: "running", need: 2 }, { key: "b", state: "attention", need: 9 }], { cols: 3, fitRows: 6 }));
   assert.deepEqual(pack.tiles.map(({ key, h }) => key + ":" + h).sort(), ["a:2", "b:6"], "screen-fit growth still respects each tile's content");
 });

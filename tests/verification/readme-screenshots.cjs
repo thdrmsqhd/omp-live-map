@@ -1,27 +1,24 @@
 "use strict";
 
-// README 스크린샷을 실제 실행 화면에서 다시 만든다. CI 에서는 돌지 않는다.
-//   npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12 monaco-editor@0.52.2
-//   node tests/verification/readme-screenshots.cjs [main|engineering|all]
-// 개인 경로가 화면에 남지 않도록 데모 데이터는 모두 C:\omp-demo 아래에 만들고, 끝나면 지운다.
-// main: 가짜 omp·Claude Code 세션 기록을 둔 HOME 으로 서버를 띄워 관제·워크스페이스·Live Map 을 찍는다.
-// engineering: 같은 HOME 으로 데스크톱 앱(Electron)을 띄워 Engineering 화면을 찍는다.
+// README 스크린샷(docs/media/v9)을 지금 화면(관제 벽 · 위쪽 막대 한 줄 · 서랍)에서 다시 만든다. CI 에서는 돌지 않는다.
+//   npm install --no-save --package-lock=false playwright@1.56.1 electron@43.8.12
+//   node tests/verification/readme-screenshots.cjs
+// 개인 경로가 화면에 남지 않도록 데모 데이터는 모두 C:\omp-demo 아래에 만들고, 끝나면 지운다. 실제 ~/.omp · ~/.claude 는 읽지 않는다.
+// 데스크톱 앱은 화면 밖·포커스 불가로 띄운다(tests/verification/desktop-launch.cjs). 모델은 부르지 않는다(승인 단계만 있는 Workflow).
 
-const { spawn, execFileSync } = require("node:child_process");
-const { once } = require("node:events");
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const { launchDesktop } = require("./desktop-launch.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
-const OUT = path.join(ROOT, "docs/media/v8");
+const OUT = path.join(ROOT, "docs/media/v9");
 const DEMO = path.join(process.env.SystemDrive || "C:", "omp-demo");
 const HOME = path.join(DEMO, "home");
 const PROJECTS = { gateway: path.join(DEMO, "work", "modbus-gateway"), dashboard: path.join(DEMO, "work", "factory-dashboard") };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const VIEWPORT = { width: 1440, height: 900 };
-// 1 이면 Claude Code 로그인(사용자 ~/.claude)으로 코드 리뷰 Workflow 를 한 번 실제로 돌려 실행 중 화면(19)을 찍는다.
-const LIVE = process.env.OMP_README_LIVE === "1";
 
 const iso = (secondsAgo) => new Date(Date.now() - secondsAgo * 1000).toISOString();
 const line = (record) => JSON.stringify(record) + "\n";
@@ -106,18 +103,18 @@ function seedOmpSessions() {
   const subs = path.join(folder, "reconnect-fix");
   write(path.join(subs, "0-ReproduceDrop.jsonl"), head("sub-repro", PROJECTS.gateway, "ReproduceDrop", 790)
     + user(789, "소켓을 강제로 끊어 poller가 복구하지 못하는 상황을 재현하는 테스트를 추가하세요.")
-    + assistant(700, [{ type: "text", text: "test/reconnect.test.js 에 연결 끊김 시나리오를 추가했습니다." }, call("s1", "edit", { path: "test/reconnect.test.js" })], { tokens: [900, 260, 9000, 0.014] })
+    + assistant(700, [{ type: "text", text: "test/reconnect.test.js 에 연결 끊김 시나리오를 추가했습니다." }, call("s1", "edit", { input: "[test/reconnect.test.js#4C1A]\nPUT >1:\n+test(\"poller reconnects after a dropped socket\", async () => {\n+  const client = await connectAndDrop();\n+  assert.ok(await client.reconnected(5000));\n+});\n" })], { tokens: [900, 260, 9000, 0.014] })
     + result(690, "s1", "edit", "ok")
     + assistant(520, [{ type: "text", text: "재현 테스트가 수정 전 코드에서 실패하는 것을 확인했습니다." }], { stop: "stop", tokens: [700, 140, 9500, 0.011] }));
   write(path.join(subs, "1-FixReconnect.jsonl"), head("sub-fix", PROJECTS.gateway, "FixReconnect", 790)
     + user(789, "reconnect()가 이전 타이머와 소켓을 정리하고 지수 백오프로 다시 붙도록 고치세요.")
-    + assistant(600, [{ type: "text", text: "타이머 정리와 백오프를 적용합니다." }, call("s2", "edit", { path: "src/modbus-client.js" })], { tokens: [1000, 310, 11000, 0.016] })
+    + assistant(600, [{ type: "text", text: "타이머 정리와 백오프를 적용합니다." }, call("s2", "edit", { input: "[src/modbus-client.js#9E2B]\nPUT 15.=17:\n+  reconnect() {\n+    clearTimeout(this.timer);\n+    this.socket?.destroy();\n+    this.timer = setTimeout(() => this.connect(), this.retryMs = Math.min(this.retryMs * 2, 30000));\n+  }\n" })], { tokens: [1000, 310, 11000, 0.016] })
     + result(590, "s2", "edit", "ok")
     + assistant(30, [{ type: "text", text: "수정을 마쳤고 재현 테스트가 통과합니다." }], { stop: "stop", tokens: [800, 120, 11500, 0.012] }));
 
   write(path.join(sessions, "factory-dashboard", "chart-refactor.jsonl"), head("chart-refactor", PROJECTS.dashboard, "대시보드 차트 리팩토링", 4000)
     + user(3990, "차트 컴포넌트에서 중복된 스케일 계산을 하나로 합쳐 주세요.")
-    + assistant(3900, [{ type: "text", text: "scale 계산을 공용 함수로 분리하고 호출부 4곳을 교체했습니다." }, call("d1", "edit", { path: "src/charts.js" })], { tokens: [1500, 380, 15000, 0.022], model: "gpt-5.1" })
+    + assistant(3900, [{ type: "text", text: "scale 계산을 공용 함수로 분리하고 호출부 4곳을 교체했습니다." }, call("d1", "edit", { input: "[src/charts.js#31F0]\nPUT 1.=1:\n+// 차트 렌더링 · 스케일 계산은 scaleOf 하나로\n+const scaleOf = (values, height) => height / Math.max(1, ...values);\n" })], { tokens: [1500, 380, 15000, 0.022], model: "gpt-5.1" })
     + result(3890, "d1", "edit", "ok")
     + assistant(3800, [{ type: "text", text: "리팩토링을 마쳤습니다. 동작 변경은 없습니다." }], { stop: "stop", tokens: [1200, 210, 16000, 0.018], model: "gpt-5.1" }));
   // 세션 상태는 파일 수정 시각으로 정해지므로 이 세션은 한 시간 전에 끝난 것으로 둔다.
@@ -140,258 +137,80 @@ function seedClaudeSession() {
     + line({ type: "cost-state", totalCostUSD: 0.19, timestamp: iso(40) }));
 }
 
-async function startServer() {
-  const child = spawn(process.execPath, [path.join(ROOT, "server.js"), "--port", "0", "--hours", "24"], {
-    env: { ...process.env, HOME, USERPROFILE: HOME, OMP_MAP_STATE: path.join(DEMO, "state"), OMP_MAP_CWD: path.join(DEMO, "work") },
-    stdio: ["ignore", "pipe", "inherit"],
-  });
-  const [chunk] = await once(child.stdout, "data");
-  const port = chunk.toString().match(/http:\/\/127\.0\.0\.1:(\d+)/)?.[1];
-  if (!port) throw new Error("server did not report a port");
-  return { child, url: "http://127.0.0.1:" + port };
-}
-
 const shot = (page, name) => page.screenshot({ path: path.join(OUT, name) });
 
-async function captureMain() {
-  const { child, url } = await startServer();
-  const browser = await chromium.launch();
-  try {
-    const page = await browser.newPage({ viewport: VIEWPORT });
-    await page.goto(url);
-    await page.waitForSelector("#overview .mon-card", { timeout: 15000 });
-    await page.getByRole("button", { name: "2시간", exact: true }).first().click();
-    await page.setViewportSize({ width: 1440, height: 1080 });
-    await sleep(2000);
-    await shot(page, "01-overview.png");
-    await page.setViewportSize(VIEWPORT);
-
-    await page.locator('[data-mode="workspace"]').click();
-    await page.locator("#slList .sl-row.main .nm", { hasText: "Modbus 재접속 오류 수정" }).first().click();
-    await page.waitForSelector(".node.big.active-card", { timeout: 10000 });
-    await sleep(2500);
-    await shot(page, "02-workspace.png");
-
-    await page.locator('[data-mode="map"]').click();
-    for (const title of ["Modbus 재접속 오류 수정", "알람 목록 필터 추가"]) {
-      await page.locator("#slList .sl-row.main .nm", { hasText: title }).first().click();
-      await sleep(600);
-    }
-    await sleep(1500);
-    await page.locator("#slList .sl-row.main", { hasText: "대시보드 차트 리팩토링" }).locator("button, .x").first().click().catch(() => {});
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await sleep(1500);
-    await page.getByRole("button", { name: "fit", exact: true }).click().catch(() => {});
-    await page.locator("#layout-preset").selectOption("horizontal").catch(() => {});
-    await page.locator("#layout-apply").click().catch(() => {});
-    await sleep(1200);
-    for (let i = 0; i < 2; i++) { await page.getByRole("button", { name: "fit", exact: true }).click().catch(() => {}); await sleep(1500); }
-    await shot(page, "03-live-map.png");
-  } finally {
-    await browser.close();
-    child.kill();
-  }
-}
-
-async function captureEngineering() {
-  const electron = require("electron");
+async function capture() {
   const userData = path.join(DEMO, "appdata");
   fs.mkdirSync(userData, { recursive: true });
-  // HOME 을 데모 폴더로 바꾸므로 실행 중 화면을 찍을 때는 Claude Code 로그인 위치만 실제 사용자 폴더로 알려 준다(파일은 읽기만 한다).
-  const claudeConfig = LIVE ? { CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || path.join(require("node:os").homedir(), ".claude") } : {};
-  const app = spawn(electron, [path.join(ROOT, "desktop"), "--remote-debugging-port=0", "--user-data-dir=" + userData, "--skip-v2-import"], {
-    env: { ...process.env, HOME, USERPROFILE: HOME, OMP_MAP_STATE: path.join(DEMO, "state"), OMP_MAP_CWD: path.join(DEMO, "work"), ...claudeConfig },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let output = "";
-  const endpoint = await new Promise((resolve, reject) => {
-    app.stderr.on("data", (chunk) => {
-      output = (output + chunk.toString()).slice(-4000);
-      const match = output.match(/DevTools listening on (ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/[^\s]+)/);
-      if (match) resolve(match[1]);
-    });
-    app.once("close", (code) => reject(new Error("Desktop exited: " + code)));
-    setTimeout(() => reject(new Error("Desktop did not expose its debug port")), 20000).unref();
-  });
-  const browser = await chromium.connectOverCDP(endpoint);
+  const app = await launchDesktop({ userDataDir: userData, args: ["--skip-v2-import"], env: { HOME, USERPROFILE: HOME,
+    OMP_MAP_SESSIONS: path.join(HOME, ".omp", "agent", "sessions"), OMP_MAP_CLAUDE_PROJECTS: path.join(HOME, ".claude", "projects"),
+    OMP_MAP_STATE: path.join(DEMO, "state"), OMP_MAP_CWD: path.join(DEMO, "work") } });
+  const browser = await chromium.connectOverCDP(app.endpoint);
   try {
     const context = browser.contexts()[0];
-    const page = context.pages()[0] ?? await context.waitForEvent("page", { timeout: 15000 });
+    const page = context.pages().find((item) => item.url().startsWith("http://127.0.0.1")) ?? await context.waitForEvent("page", { timeout: 15000 });
     await page.setViewportSize(VIEWPORT);
-    await page.waitForLoadState("load");
-    const step = async (name, fn) => {
-      try { await fn(); } catch (error) { console.error("[skip] " + name + ": " + error.message.split("\n")[0] + " · 실행 대화상자: " + (await page.locator("#workflow-launch-status").textContent().catch(() => ""))); await page.screenshot({ path: path.join(process.env.TEMP, "debug-" + name.replace(/\W+/g, "_") + ".png") }).catch(() => {}); }
-    };
-    const click = (name, exact = true) => page.getByRole("button", { name, exact }).click();
-    const request = async (endpointName, params, payload) => {
-      const reply = await page.evaluate(([e, p, b]) => window.engineeringApi.request(e, p, b), [endpointName, params ?? {}, payload]);
-      if (!reply?.ok) throw new Error(endpointName + ": " + JSON.stringify(reply).slice(0, 200));
+    page.on("dialog", (dialog) => void dialog.accept());
+    await page.waitForFunction(() => typeof UM !== "undefined" && UM.loaded, null, { timeout: 20000 });
+    const request = async (name, params, payload) => {
+      const reply = await page.evaluate(([e, p, b]) => window.engineeringApi.request(e, p, b), [name, params ?? {}, payload]);
+      if (!reply?.ok) throw new Error(name + ": " + JSON.stringify(reply).slice(0, 200));
       return reply.value;
     };
-
-    const optionValue = (selector, text) => page.locator(selector + " option").filter({ hasText: text }).first().getAttribute("value");
-    // 확인 창(하네스 새 버전 적용, 곧 만료되는 Claude Code 로그인)은 모두 수락한다.
-    page.on("dialog", (dialog) => void dialog.accept());
-    // 관제 화면의 Task 탭에서 프로젝트를 등록하고, 기본 구성과 기본 Workflow 8종을 만든다.
-    await page.getByRole("button", { name: "Task", exact: true }).click({ timeout: 15000 });
-    await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached", timeout: 15000 });
-    await page.getByText("프로젝트 설정", { exact: true }).click();
-    const form = page.locator("#project-form");
-    await form.locator("[name=name]").fill("modbus-gateway");
-    await form.locator("[name=root]").fill(PROJECTS.gateway);
-    await form.locator("[name=branch]").fill("main");
-    await form.getByRole("button", { name: "등록 또는 수정" }).click();
-    await page.locator("#eng-project option").filter({ hasText: "modbus-gateway" }).waitFor({ state: "attached" });
-    const project = (await request("projects", {})).find((item) => item.name === "modbus-gateway");
-    await request("workflows/presets/defaults", {}, { scope: "personal" });
-    const presets = await request("workflows/presets/all", {}, { project: project.id });
-    console.log("기본 Workflow 개수:", presets.created.length);
-    const workflowId = async (name) => (await request("workflows", { project: project.id })).find((item) => item.name === name).id;
-    const origin = new URL(page.url()).origin;
-
-    // 설계 모드(관제 화면 안 노드 캔버스)
-    await step("설계 · 정의만 보기", async () => {
-      await page.goto(origin + "/?mode=design&project=" + project.id);
-      await page.locator('#design .studio-node[data-kind="harness"]').first().waitFor({ timeout: 15000 });
-      await sleep(1500);
-      console.log("설계 첫 화면 배율:", await page.locator("#studio-scale").textContent());
-      await shot(page, "13-design-library.png");
-    });
-    await step("설계 · 버그 수정 Workflow", async () => {
-      await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.goto(origin + "/?mode=design&project=" + project.id + "&workflow=" + await workflowId("버그 수정"));
-      await page.locator('#design .studio-node[data-kind="step"]').first().waitFor({ timeout: 15000 });
-      await sleep(1500);
-      await page.locator("#studio-fit").click();
-      await sleep(800);
-      console.log("노드 캔버스 배율:", await page.locator("#studio-scale").textContent());
-      await shot(page, "18-engineering-studio.png");
-      await page.setViewportSize(VIEWPORT);
-    });
-    await step("노드 상세", async () => {
-      await page.locator("#studio-fit").click().catch(() => {});
-      const harness = page.locator('#design .studio-node[data-kind="harness"]', { hasText: "기본 · 코드 리뷰" }).first();
-      await harness.locator(".studio-more").click();
-      await page.getByRole("menuitem", { name: /상세 · 버전 기록 · 실제 적용값/ }).click();
-      const panel = page.locator("#studio-inspect");
-      await panel.locator("summary", { hasText: "실제 적용값" }).click();
-      await panel.getByRole("button", { name: "편집 중 초안" }).click();
-      await panel.locator("dl").waitFor({ timeout: 15000 });
-      await panel.locator("summary", { hasText: "버전 기록" }).click();
-      await sleep(800);
-      await shot(page, "12-engineering-harness.png");
-      await panel.getByRole("button", { name: "닫기" }).click();
-    });
-    await step("개발 Task", async () => {
-      await page.goto(origin + "/?mode=tasks&project=" + project.id);
-      await page.locator('#engineering[data-ready="1"]').waitFor({ state: "attached" });
-      const task = page.locator("#sdlc-form");
-      await task.getByLabel("업무 제목").fill("Modbus 재접속 오류 수정");
-      await task.getByLabel("요구사항").fill("PLC 연결이 끊긴 뒤 5초 안에 자동으로 다시 접속한다. 재현 테스트를 포함한다.");
-      await task.getByLabel("Workflow 버전").selectOption(await optionValue("#sdlc-form [name=workflow]", "버그 수정"));
-      await task.getByRole("button", { name: "Task 저장" }).click();
-      await page.locator("#sdlc-board article").filter({ hasText: "Modbus 재접속 오류 수정" }).waitFor();
-      await page.locator("#sdlc-board article").filter({ hasText: "Modbus 재접속 오류 수정" }).getByRole("button", { name: "준비로 이동" }).click().catch(() => {});
-      await sleep(1000);
-      await shot(page, "14-engineering-tasks.png");
-    });
-    await step("승인 실행(관제 Live Map)", async () => {
-      const saved = await request("workflows", {}, { project: project.id, payload: { name: "계획 승인 데모",
-        nodes: [{ id: "start", label: "Start", type: "start", x: 35, y: 90 },
-          { id: "approve", label: "계획 승인", type: "approval", prompt: "재접속 수정 계획을 검토해 주세요.\n1. 이전 타이머 정리\n2. 매번 새 소켓 생성", x: 295, y: 90 },
-          { id: "end", label: "End", type: "end", x: 555, y: 90 }],
-        edges: [{ from: "start", to: "approve", port: "next" }, { from: "approve", to: "end", port: "approved" }] } });
-      const run = await request("workflow-runs", {}, { key: "readme-demo", project: project.id, workflow: saved.id, version: saved.version ?? 1,
-        title: "Modbus 재접속 수정 · 계획 승인", timeoutMs: 600000, budgetCents: 0 });
-      await page.goto(origin + "/?mode=overview");
-      await page.locator('[data-mode="overview"]').click();
-      await page.getByRole("button", { name: "2시간", exact: true }).first().click();
-      await page.waitForSelector("#overview .mon-card", { timeout: 15000 });
-      await page.setViewportSize({ width: 1440, height: 1080 });
-      await sleep(2500);
-      await shot(page, "15-overview-engineering.png");
-      await page.setViewportSize(VIEWPORT);
-      await page.goto(origin + "/?run=" + run.id);
-      await page.locator("#wf-map-title").filter({ hasText: "계획 승인" }).waitFor({ timeout: 15000 });
-      await sleep(3000);
-      await shot(page, "16-live-map-workflow.png");
-      // 개입 필요 함: Workflow 승인과 에이전트 질문(데모 세션에 질문 하나를 띄운다)
-      await page.evaluate((node) => handleAskEvent({ kind: "add", node, request: { id: "readme-ask", method: "ask", title: "질문",
-        questions: [{ id: "q1", header: "필터", question: "심각도 필터의 기본값을 무엇으로 할까요?",
-          options: [{ label: "전체", description: "모든 알람을 보여 준다" }, { label: "경고 이상", description: "정보성 알람은 숨긴다" }], recommended: 1 }] } }),
-      path.join(HOME, ".claude", "projects", PROJECTS.dashboard.replace(/[^A-Za-z0-9]/g, "-"), "claude-demo-1.jsonl"));
-      await page.keyboard.press("Alt+i");
-      await page.locator("#workflow-queue .inbox-run").first().waitFor({ timeout: 10000 });
-      await sleep(1200);
-      await shot(page, "20-live-map-inbox.png");
-      await page.keyboard.press("Escape");
-    });
-    // 실행 중 화면: 실제 모델을 부르므로 OMP_README_LIVE=1 일 때만 찍는다(Claude Code 구독 로그인 또는 저장한 키 필요).
-    // 코드 리뷰 템플릿을 한 번 돌려 리뷰 단계가 도구를 쓰며 출력하는 순간(19)과, 끝난 리뷰 단계의 전체 수행 기록(21)을 찍는다.
-    if (LIVE) await step("실행 중(관제 Live Map)", async () => {
-      const runtime = await request("runtime", {});
-      if (runtime.status !== "ready") throw new Error("실행 환경이 준비되지 않았습니다: " + runtime.detail);
-      await page.locator("#workflow-new-run").click();
-      const launch = page.locator("#workflow-launch-form");
-      await launch.locator("[name=project]").selectOption({ label: "modbus-gateway" }).catch(() => {});
-      await launch.locator("[name=source] option").first().waitFor({ state: "attached", timeout: 10000 });
-      await sleep(1200);
-      await launch.locator("[name=source]").selectOption("preset:review");
-      await launch.locator("[name=title]").fill("Modbus 클라이언트 재접속 리뷰");
-      await launch.locator("[name=goal]").fill("src/modbus-client.js 의 재접속(reconnect) 로직을 리뷰한다. 타이머 정리 누락과 닫힌 소켓 재사용 위험을 근거와 함께 찾는다.");
-      await launch.locator("[name=acceptance]").fill("발견 사항마다 파일·줄 근거와 심각도, 고치는 방법을 적는다. 구현 파일은 수정하지 않는다.");
-      await launch.locator("details").evaluate((details) => { details.open = true; });
-      await launch.locator("[name=minutes]").fill("10");
-      await launch.getByRole("button", { name: "실행 시작" }).click();
-      await page.locator("#workflow-launch").waitFor({ state: "hidden", timeout: 30000 });
-      const state = () => page.evaluate(() => ({ follow: wfMap.follow, target: wfMap.followTarget, k: Math.round(view.k * 100),
-        nodes: Object.fromEntries((wfMap.run?.nodes ?? []).map((item) => [item.node, item.status])), status: wfMap.run?.run.status, error: wfMap.run?.run.error,
-        live: Object.values(wfMap.run?.live ?? {})[0] }));
-      let captured = false;
-      for (const deadline = Date.now() + 12 * 60000; Date.now() < deadline;) {
-        await sleep(1500);
-        const now = await state();
-        if (!captured && now.nodes.review === "running" && (now.live?.text?.length ?? 0) > 400 && now.live?.tools?.length) {
-          await sleep(1500);
-          await shot(page, "19-live-map-running.png");
-          console.log("실행 중 캡처:", JSON.stringify({ follow: now.follow, target: now.target, k: now.k, tools: now.live.tools }));
-          captured = true;
-        }
-        if (now.status === "waiting_approval" || Object.values(now.nodes).includes("waiting_approval")) {
-          await sleep(1500);
-          const after = await state();
-          console.log("승인 대기로 넘어감:", JSON.stringify({ follow: after.follow, target: after.target, k: after.k }));
-          break;
-        }
-        if (!["running", "queued"].includes(now.status)) throw new Error("실행이 끝났습니다: " + now.status + " " + (now.error ?? ""));
-      }
-      if (!captured) throw new Error("실행 중 화면을 찍지 못했습니다.");
-      await page.evaluate(() => { wfMap.selected = "review"; paintWorkflowMap(); });
-      await sleep(1000);
-      await page.locator("#wf-map-details .wf-transcript-open").click();
-      await page.locator("#wf-transcript-text").waitFor();
-      await sleep(2000);
-      await shot(page, "21-live-map-transcript.png");
-      await page.locator("#wf-transcript-close").click();
-    });
+    const repaint = () => page.evaluate(async () => { await umapRefresh(true); await umapRefresh(true); paintUmap(true); umapFit(true); });
+    // 두 폴더를 프로젝트로 만들고, modbus-gateway 에 계획 승인 Task 를 하나 돌려 승인 대기로 둔다(모델 호출 없음).
+    const gateway = (await request("projects/ensure", {}, { root: PROJECTS.gateway })).id;
+    await request("projects/ensure", {}, { root: PROJECTS.dashboard });
+    const flow = await request("workflows", {}, { project: gateway, payload: { name: "계획 승인",
+      nodes: [{ id: "start", label: "Start", type: "start", x: 0, y: 0 },
+        { id: "approve", label: "계획 승인", type: "approval", prompt: "재접속 수정 계획을 검토해 주세요", x: 300, y: 0 },
+        { id: "end", label: "End", type: "end", x: 600, y: 0 }],
+      edges: [{ from: "start", to: "approve", port: "next" }, { from: "approve", to: "end", port: "approved" }] } });
+    const task = await request("tasks", {}, { project: gateway, text: "Modbus 재접속 수정 · 계획 승인", workflow: flow.id, version: flow.version });
+    await request("tasks/run", {}, { id: task.id, key: "readme-demo" });
+    await request("tasks", {}, { project: gateway, text: "poller 주기 설정을 환경 변수로", template: "feature" });
+    await repaint();
+    await page.locator(".um-stage.s-waiting_approval").first().waitFor({ timeout: 20000 });
+    await sleep(1200);
+    await shot(page, "01-wall.png");
+    const key = "project:" + gateway;
+    await page.evaluate((k) => umapEnterFocus(k), key);
+    await sleep(1200);
+    await shot(page, "02-project-full.png");
+    const card = page.locator(".um-stage.s-waiting_approval").first();
+    await card.screenshot({ path: path.join(OUT, "03-approval.png") });
+    await page.evaluate((id) => openTaskDrawer(id), task.id);
+    await page.locator("#umap-drawer-body .um-prop", { hasText: "예산" }).waitFor();
+    await sleep(600);
+    await shot(page, "04-task-drawer.png");
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => umapLeaveFocus());
+    await sleep(800);
+    await page.locator("#topbar-more").click();
+    await page.locator(".inline-menu").waitFor();
+    await sleep(400);
+    await shot(page, "05-topbar-menu.png");
+    await page.keyboard.press("Escape");
+    await page.setViewportSize({ width: 768, height: 1000 });
+    await repaint();
+    await sleep(1200);
+    await shot(page, "06-narrow-768.png");
   } finally {
     await browser.close().catch(() => {});
-    app.kill();
+    await app.stop();
   }
 }
 
 (async () => {
-  const mode = process.argv[2] ?? "all";
   fs.rmSync(DEMO, { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });
   seedProjects();
   seedOmpSessions();
   seedClaudeSession();
   try {
-    if (mode === "main" || mode === "all") await captureMain();
-    if (mode === "engineering" || mode === "all") await captureEngineering();
+    await capture();
   } finally {
     await sleep(500);
-    fs.rmSync(DEMO, { recursive: true, force: true });
+    fs.rmSync(DEMO, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
   }
 })().catch((error) => { console.error(error); process.exitCode = 1; });

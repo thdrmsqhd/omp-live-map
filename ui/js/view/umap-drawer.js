@@ -54,6 +54,12 @@ function umapProp(label, value, edit = {}) {
   return umEl("div", { className: "um-prop" }, umEl("span", { className: "um-prop-k" }, label), umEl("div", { className: "um-prop-cell" }, button, note));
 }
 const umapSheet = (...rows) => umEl("div", { className: "um-sheet" }, ...rows);
+// 예산 칸: 원화로 보이고 원화로 고친다('₩12,000'·'12000'·'12,000원' 모두). 저장값은 센트(maxCents 까지).
+const umapCentsOf = (maxCents, what) => (value) => {
+  const cents = centsOfWon(value);
+  if (!(Number.isFinite(cents) && cents >= 0 && cents <= maxCents)) throw new Error(what + "은(는) ₩0~" + krwCents(maxCents).slice(1) + " 사이입니다.");
+  return cents;
+};
 const umapNumber = (min, max, what) => (value) => { const n = Number(value); if (!(Number.isFinite(n) && n >= min && n <= max)) throw new Error(what + "은(는) " + min + "~" + max + " 사이입니다."); return n; };
 // 하네스가 쓸 수 있는 모델 = 같은 범위(개인·팀·프로젝트)의 모델 정의.
 async function umapModelOptions(project, harness) {
@@ -91,7 +97,7 @@ function umapSessionLinks(stage) {
     const node = index.get(entry.sessionId);
     const name = node ? (ALIAS.get(node.id) || node.sessionTitle || node.title) : "세션 " + entry.sessionId.slice(0, 8) + " · 기록 없음";
     const open = node ? umEl("button", { type: "button", textContent: "열기", onclick: () => umapOpenSession(node.id) }) : null;
-    return umEl("li", {}, umEl("span", {}, `시도 ${entry.attempt}${entry.retry ? " · 재시도 " + entry.retry : ""} · ${name}${entry.costCents !== null ? " · " + umapDollars(entry.costCents) : ""}`), open);
+    return umEl("li", {}, umEl("span", {}, `시도 ${entry.attempt}${entry.retry ? " · 재시도 " + entry.retry : ""} · ${name}${entry.costCents !== null ? " · " + umapMoney(entry.costCents) : ""}`), open);
   }));
 }
 
@@ -125,13 +131,14 @@ async function openStageDrawer(taskId, node, focus = "stage") {
     body.push(umapSection("루프 · " + stage.loop.name, umapSheet(
       umapProp("최대 시도", stage.loop.attempts, { type: "number", min: 1, max: 8, show: (v) => v + "회", save: (v) => save({ loop: { attempts: Math.round(umapNumber(1, 8, "최대 시도")(v)) } }) }),
       umapProp("시간 한도", Math.round(stage.loop.timeoutMs / 60000), { type: "number", min: 1, max: 60, show: (v) => v + "분", save: (v) => save({ loop: { timeoutMs: Math.round(umapNumber(1, 60, "시간 한도")(v)) * 60000 } }) }),
-      umapProp("예산", (stage.loop.budgetCents / 100).toFixed(2), { type: "number", min: 0, max: 1000, step: 0.01, show: (v) => "$" + Number(v).toFixed(2), save: (v) => save({ loop: { budgetCents: Math.round(umapNumber(0, 1000, "예산")(v) * 100) } }) }),
+      umapProp("예산", won(wonOfCents(stage.loop.budgetCents)), { show: (v) => won(centsOfWon(v) / 100 * FX), save: (v) => save({ loop: { budgetCents: umapCentsOf(100000, "예산")(v) } }) }),
       umapProp("검증 명령", stage.loop.checks.map(umapCommandText).join("\n"), { multiline: true, save: (text) => save({ loop: { checks: text.split(/\n+/).filter(Boolean).map(umapParseCommand) } }) }))));
   }
   const log = umEl("pre", { className: "um-log", hidden: true });
   const record = [umapSessionLinks(stage)];
   if (stage.live?.text) record.push(umEl("pre", { className: "um-log" }, stage.live.text));
-  if (stage.error) record.push(umEl("p", { className: "um-note err" }, stage.error));
+  if (task.run?.legacy) record.push(umEl("p", { className: "um-note" }, UMAP_LEGACY_RUN));
+  else if (stage.error) record.push(umEl("p", { className: "um-note err" }, stage.error));
   if (task.run) record.push(umEl("button", { type: "button", textContent: "수행 기록 보기", onclick: async () => {
     log.hidden = false;
     log.textContent = "불러오는 중…";
@@ -174,8 +181,8 @@ function openTaskDrawer(taskId) {
       umapProp("본문", task.instruction, { disabled: locked, multiline: true, empty: "(없음 · 눌러서 쓰기)", save: (instruction) => save({ instruction }) }),
       umapProp("시간 한도", task.timeoutSet ? minutes : "", { disabled: locked, type: "number", min: 1, max: 60, placeholder: "비우면 기본 " + minutes + "분",
         show: (v) => (v === "" || v === null ? "기본 " + minutes + "분" : v + "분"), save: (v) => save({ timeoutMs: v === "" ? null : Math.round(umapNumber(1, 60, "시간 한도")(v)) * 60000 }) }),
-      umapProp("예산", task.budgetSet ? (task.budgetCents / 100).toFixed(2) : "", { disabled: locked, type: "number", min: 0, max: 1000, step: 0.01, placeholder: "비우면 기본 " + umapDollars(task.budgetCents),
-        show: (v) => (v === "" || v === null ? "기본 " + umapDollars(task.budgetCents) : "$" + Number(v).toFixed(2)), save: (v) => save({ budgetCents: v === "" ? null : Math.round(umapNumber(0, 1000, "예산")(v) * 100) }) }),
+      umapProp("예산", task.budgetSet ? won(wonOfCents(task.budgetCents)) : "", { disabled: locked, placeholder: "비우면 기본 " + umapMoney(task.budgetCents),
+        show: (v) => (v === "" || v === null ? "기본 " + umapMoney(task.budgetCents) : won(centsOfWon(v) / 100 * FX)), save: (v) => save({ budgetCents: v === "" ? null : umapCentsOf(100000, "예산")(v) }) }),
       umapProp("Workflow", current, { disabled: locked, options, show: (value) => (options.find(([id]) => id === value)?.[1] || task.workflow?.name || "없음"),
         save: (value) => {
           if (value.startsWith("preset:")) return save({ template: value.slice(7) });
@@ -184,7 +191,8 @@ function openTaskDrawer(taskId) {
         } })),
       umEl("small", { className: "um-muted" }, "본문에 '완료 조건:'으로 시작하는 줄을 쓰면 기본 완료 조건 대신 그 내용을 씁니다. 단계는 맵에서 Task ⋯ > Workflow 편집으로 고칩니다.")),
   ];
-  if (task.run?.error) body.push(umEl("p", { className: "um-note err" }, task.run.error));
+  if (task.run?.legacy) body.push(umEl("p", { className: "um-note" }, UMAP_LEGACY_RUN));
+  else if (task.run?.error) body.push(umEl("p", { className: "um-note err" }, task.run.error));
   openUmapDrawer("task", taskId, task.title, body);
 }
 

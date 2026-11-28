@@ -22,7 +22,7 @@ function paintSLFrame() {
 function rowTip(n, s) {
   const t = n.tokens || {};
   const lines = [
-    `${n.kind === "main" ? s.title : displayName(n)} · ${n.kind} · ${n.status}`,
+    `${n.kind === "main" ? umapPlain(s.title) : displayName(n)} · ${n.kind} · ${n.status}`,
     s.folder || "",
     `모델 ${modelShort(n.model || n.agentModel || "?")}${n.provider ? " · " + n.provider : ""}`,
     `in ${fmt(t.input || 0)} · out ${fmt(t.output || 0)} · cache ${fmt(t.cacheRead || 0)} tok · 요청 ${n.requests || 0}회`,
@@ -43,7 +43,7 @@ function subBadge(n) {
 function rowHTML({ n, depth }, s) {
   const open = openIds.has(n.id);
   const main = n.kind === "main";
-  const name = ALIAS.get(n.id) || (main ? s.title : n.name);
+  const name = umapPlain(ALIAS.get(n.id) || (main ? s.title : n.name));
   const close = open ? `<button class="x sl-x" data-slclose="1" title="카드 닫기 (세션 유지)" aria-label="카드 닫기">✕</button>` : "";
   const menu = `<button class="x sl-menu" data-slmenu="1" title="카드 메뉴" aria-label="카드 메뉴">⋯</button>`;
   return `<div class="sl-row ${n.kind} ${n.status}${open ? " open" : ""}" data-id="${esc(n.id)}" style="padding-left:${8 + depth * 14}px" title="${esc(rowTip(n, s))}">

@@ -1,12 +1,17 @@
 /* omp-live-map · view · 두 모드 셸: map(한 맵 #umap) · workspace(세션 하나 전체 화면 #stage). 예전 탭(프로젝트·설계·Task)은 없다. */
 :root{--card-radius:8px;--card-gap:12px;--card-pad:14px}
-#topbar{flex-wrap:wrap;gap:6px}
+/* 위쪽 막대는 한 줄이다(접지 않는다). 좁으면 검색 칸·자원 줄이 줄고, 900px 아래에서는 상표·실행 환경 이름을 감춘다. */
+#topbar{flex-wrap:nowrap;gap:6px;min-width:0}
+#topbar>*{flex:none}
+#topbar #unhide,#topbar #doneSubs{display:none!important}
+#topbar #topbar-more{padding:2px 10px;font-weight:650}
 #workarea{position:relative;flex:1;display:flex;min-height:0}
 #app[data-view="map"] #sessions,#app[data-view="map"] #stage,#app[data-view="map"] #minimap{display:none!important}
 #app[data-view="workspace"] #sessions,#app[data-view="workspace"] #minimap{display:none!important}
-#app[data-view="workspace"] #topbar .zoom,#app[data-view="workspace"] #umap-attention{display:none}
+#app[data-view="workspace"] #umap-attention{display:none}
 #app[data-view="map"] #spath,#app[data-view="map"] #doneSubs{display:none}
-#topbar .searchwrap{width:180px}
+#topbar .searchwrap{width:auto;flex:0 1 170px;min-width:90px}
+#app[data-view="workspace"] #topbar #spath{flex:1 1 auto;min-width:0}
 #minimap[hidden],#workspace-empty[hidden],#umap[hidden],#back-to-map[hidden]{display:none!important}
 #app[data-view="workspace"] #stage{background:#0b1219;cursor:default;touch-action:auto}
 #app[data-view="workspace"] #wrapper{inset:0;transform:none!important}
@@ -33,4 +38,5 @@
 .node.big .body{overscroll-behavior:contain}
 .node.big .cmsgs,.node.big .tout,.node.big .ctlist{overscroll-behavior:contain}
 .node.big.group-selected{outline:3px solid #a98bff;outline-offset:3px}
-@media(max-width:800px){#topbar .searchwrap{width:150px}}
+@media(max-width:1100px){#topbar .brand{display:none}}
+@media(max-width:900px){#topbar .runtime-dot{font-size:0;padding:2px 4px}#topbar .runtime-dot i{font-size:13px}#topbar .filters{padding-left:4px}#topbar .filters button{padding:3px 6px}}

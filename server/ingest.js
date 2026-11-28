@@ -171,7 +171,7 @@ function onAssistant(st, m, ts) {
 function onToolResult(st, e, m, ts) {
   if (e.errorMessage) st.errors += 1;
   const text = typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((c) => (c && c.text) || "").join(" ") : "";
-  activity.onResult(st.act, { id: m.toolCallId, error: m.isError || e.errorMessage, text, ts });
+  activity.onResult(st.act, { id: m.toolCallId, error: m.isError || e.errorMessage, text, ts, details: m.details });
   toolResult(st, e, m, ts);
 }
 
@@ -184,7 +184,8 @@ function ingest(st, raw) {
   }
   const ts = e.timestamp ? Date.parse(e.timestamp) : 0;
   if (ts) st.lastTs = Math.max(st.lastTs, ts);
-  if (e.type === "title" && e.title) st.title = sessionTitleText(e.title, 200) || st.title;
+  // omp 는 제목을 title·title_change 로 남긴다(앞에 Nerd Font 아이콘이 붙는다 — sessionTitleText 가 뺀다).
+  if ((e.type === "title" || e.type === "title_change") && e.title) st.title = sessionTitleText(e.title, 200) || st.title;
   else if (e.type === "session") {
     st.id = e.id || "";
     st.cwd = e.cwd || st.cwd;

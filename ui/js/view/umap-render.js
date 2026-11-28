@@ -2,7 +2,7 @@
    타일 본문에 Task 카드 · Workflow 단계 카드(하네스·루프 칩 + 가장 최근 세션의 에이전트 문장을 한 장에 합침) · 그 아래 서브에이전트·예전 시도 나무(view/umap-agent.js) ·
    Task 없이 연 세션을 그린다. 타일 머리의 CPU·RAM 은 잰 표본만 더하고 없으면 '–'(미수집).
    타일 격자·순서·크기는 model/umap-wall.js, 타일 안 배치는 model/task-map.js umapTileLayout, 데이터·타일 상태는 viewmodel/task-map.js.
-   접기·펼치기·의미 확대 없음: 쉬는 타일은 내용대로 작게(머리 + '최근 끝남' 한 줄) 그릴 뿐 단추로 접지 않는다. 입력·끌기는 view/umap-input.js. */
+   접기·펼치기·의미 확대 없음: 쉬는 타일은 내용대로 작게(머리 + 최근 끝난 일 2~3개) 그릴 뿐 단추로 접지 않는다. 입력·끌기는 view/umap-input.js. */
 
 let UMAP_LAYOUT = null, UMAP_BANDS = [], UMAP_TILES = new Map(), UMAP_PACK = null, UMAP_GRID = null, UMAP_WALL_PX = { width: 0, height: 0 };
 let umapPending = false, umapPaintAt = 0, umapTimer = 0;
@@ -10,7 +10,9 @@ let umapPending = false, umapPaintAt = 0, umapTimer = 0;
 const UMAP_TILE_CHROME = 16;
 const UMAP_KIND = { agent: "에이전트", loop: "루프", approval: "승인", command: "명령", subgraph: "하위 Workflow", condition: "조건", parallel: "병렬", join: "합류" };
 const UMAP_STAGE_STATE = { pending: "대기", running: "실행 중", succeeded: "완료", failed: "실패", waiting_approval: "승인 대기", skipped: "건너뜀", interrupted: "중단" };
-const umapDollars = (cents) => "$" + (Number(cents || 0) / 100).toFixed(2);
+const umapMoney = (cents) => krwCents(cents); // 센트 → '₩1,234'(core/format.js)
+// 예전 격리 작업 폴더에서 돈 실행(서버 run.legacy): 그 폴더는 지워져 산출물·변경 검토·PR 을 열 수 없다(서랍·쉬는 타일 목록).
+const UMAP_LEGACY_RUN = "이전 방식(격리 작업 폴더) 실행이라 산출물을 열 수 없습니다";
 const umapStatusLabel = (band, status) => band.labels.find((item) => item.status === status)?.label ?? TASK_STATUS[status]?.label ?? status;
 const umapStatusColor = (status) => (TASK_STATUS[status] ?? { color: "#6f8296" }).color;
 const umapMemoryLimit = () => Math.min(1048576, Math.max(128, Number(readJSON("omp-map-overview-memory", 2048)) || 2048));
@@ -77,21 +79,25 @@ function umapTileSummaryHTML(band, meta) {
     const now = agent ? agent.lines.now : "";
     return line("running", `진행 중 · ${esc(what)}${now ? ` <span class="um-muted">· ${esc(now)}</span>` : ""}`, [what, now].filter(Boolean).join(" · "));
   }
-  // 쉬는 중: 가장 최근에 끝난 Task(실행) 또는 세션.
-  // Task 실행이 있으면 그것을(그 단계 세션이 몇 분 늦게 끝나도 같은 일이다), 훨씬 뒤에 끝난 대화형 세션이 있으면 그 세션을.
-  const done = band.tasks.filter((task) => task.run).map((task) => ({ title: task.title, at: task.run.updated || task.updated || 0, state: UMAP_STAGE_STATE[task.run.status] || task.run.status }))
-    .sort((a, b) => b.at - a.at)[0];
-  const session = band.sessions.map((item) => ({ title: item.title || "세션", at: item.lastTs || 0, state: "대화형 세션" })).sort((a, b) => b.at - a.at)[0];
-  const last = done && !(session && session.at > done.at + 600000) ? done : session;
-  return last ? line("idle", `최근 끝남 · ${esc(last.title)} <span class="um-muted">· ${esc(last.state)} · ${esc(ago(last.at))}</span>`, last.title)
-    : line("idle", `<span class="um-muted">최근 기록 없음 · ＋ Task 로 시작하세요</span>`, "");
+  // 쉬는 중: 최근 끝난 일 2~3개를 문장으로(제목 · 언제 / 결과 한 줄). 펼침 단추 없이 타일 크기가 내용에 맞는다(umapIdleRows).
+  const recent = umapRecentDone(band, 3);
+  if (!recent.length) return line("idle", `<span class="um-muted">최근 기록 없음 · ＋ Task 로 시작하세요</span>`, "");
+  const rows = recent.map((item) => {
+    const state = item.kind === "task" ? (UMAP_STAGE_STATE[item.status] || item.status) + (item.total ? ` · ${item.done}/${item.total}단계` : "")
+      : UMAP_AGENT_STATE[item.status]?.label || "세션";
+    const result = item.legacy ? UMAP_LEGACY_RUN : item.result;
+    const bad = item.status === "failed" ? " bad" : "";
+    return `<li title="${esc(item.title + (result ? "\n" + result : ""))}"><div class="um-done-t"><b>${esc(item.title)}</b><span>${esc(ago(item.at))}</span></div>`
+      + `<div class="um-done-r${bad}"><em>${esc(state)}</em>${result ? " · " + esc(result) : ""}</div></li>`;
+  });
+  return `<ol class="um-done" aria-label="최근 끝난 일">${rows.join("")}</ol>`;
 }
 function umapMetricsHTML(project) {
   const entry = UM.metrics.get(project);
   if (!entry) return `<span class="um-muted">지표 불러오는 중</span>`;
   const count = entry.dashboard?.measures?.count ?? 0;
   const spent = entry.budget ? Math.ceil(entry.budget.committed) : (entry.dashboard?.usage ?? []).reduce((sum, item) => sum + (item.costCents ?? 0), 0);
-  return `<button class="inline-num" data-um="period" title="집계 기간 · 눌러서 고치기">최근 ${entry.days}일</button> 실행 ${count}건 · ${umapDollars(spent)} / 예산 <button class="inline-num" data-um="budget" title="프로젝트 예산 · 눌러서 고치기(비우면 제한 없음)">${entry.budget ? umapDollars(entry.budget.cap) : "없음"}</button>`;
+  return `<button class="inline-num" data-um="period" title="집계 기간 · 눌러서 고치기">최근 ${entry.days}일</button> 실행 ${count}건 · ${umapMoney(spent)} / 예산 <button class="inline-num" data-um="budget" title="프로젝트 예산(원) · 눌러서 고치기(비우면 제한 없음)">${entry.budget ? umapMoney(entry.budget.cap) : "없음"}</button>`;
 }
 
 function umapTaskHTML(band, task, box) {
@@ -107,8 +113,8 @@ function umapTaskHTML(band, task, box) {
       <div class="um-edit-bar"><span>저장 범위</span><span class="um-seg" role="group" aria-label="저장 범위"><button data-um="edit-scope" data-scope="task" aria-pressed="${UM.edit.scope === "task"}">이 Task만</button><button data-um="edit-scope" data-scope="template" aria-pressed="${UM.edit.scope === "template"}">템플릿</button></span></div>
       <small class="um-edit-status">${esc(UM.edit.status || "＋ 넣기 · 끌어서 순서 · ⋯ 지우기")}</small></article>`;
   }
-  const meta = task.run ? `${esc(UMAP_STAGE_STATE[task.run.status] || label)} · ${done}/${task.stages.length}단계 · ${umapDollars(task.run.costCents)} · ${esc(ago(task.run.updated))}`
-      : `아직 실행 전 · ${Math.round(task.timeoutMs / 60000)}분 · ${umapDollars(task.budgetCents)}`;
+  const meta = task.run ? `${esc(UMAP_STAGE_STATE[task.run.status] || label)} · ${done}/${task.stages.length}단계 · ${umapMoney(task.run.costCents)} · ${esc(ago(task.run.updated))}`
+      : `아직 실행 전 · ${Math.round(task.timeoutMs / 60000)}분 · ${umapMoney(task.budgetCents)}`;
   return `<article class="${cls}" ${base}>
     <div class="um-task-top"><i class="um-pill">${esc(label)}</i>${flow}<span class="um-spacer"></span>
       <button class="um-run" data-um="run" ${busy ? "disabled" : ""} title="${busy ? "실행 중입니다" : "실행 · " + esc(task.workflow?.name || "")}" aria-label="${esc(task.title)} 실행">▶</button><button data-um="task-menu" aria-label="Task 메뉴">⋯</button></div>
@@ -207,7 +213,7 @@ function umapTileBodyHTML(band, layout) {
 // 타일 하나. 쉬는 타일(내용대로 작은 크기)은 머리만 — 접은 것이 아니라 보여 줄 일이 없다는 뜻이다. 크기를 키우면 본문이 보인다.
 function umapTileHTML(entry, focus) {
   const { band, tile, rect, layout, meta } = entry;
-  const body = focus || tile.h > UMAP_WALL.IDLE_H || tile.state !== "idle";
+  const body = focus || !tile.small;
   const scroll = (focus ? "full|" : "wall|") + band.key;
   return `<section class="um-tile t-${esc(tile.state)}${focus ? " focus" : ""}${body ? "" : " small"}" data-band="${esc(band.key)}" style="left:${rect.x}px;top:${rect.y}px;width:${rect.w}px;height:${rect.h}px">
     ${umapTileHead(band, meta, focus)}${body ? `<div class="um-tile-body" data-body="${esc(band.key)}" data-scroll="${esc(scroll)}">${umapTileBodyHTML(band, layout)}</div>` : ""}
@@ -271,7 +277,8 @@ function paintUmap(force = false) {
   const view = { width: rect.width || innerWidth, height: rect.height || innerHeight - 90 };
   const grid = UMAP_GRID = umapWallGrid(view);
   // ＋ Task 한 줄을 연 쉬는 타일은 그 줄이 보이게 일하는 타일 크기로 그린다(순서는 그대로).
-  const tiles = UMAP_BANDS.map((band) => ({ key: band.key, ...states.get(band.key), busy: UM.adding?.band === band.key, need: umapTileNeed(band, grid) }));
+  const tiles = UMAP_BANDS.map((band) => ({ key: band.key, ...states.get(band.key), busy: UM.adding?.band === band.key, need: umapTileNeed(band, grid),
+    idleH: umapIdleRows(umapRecentDone(band, 3).length, grid) }));
   const pack = UMAP_PACK = umapWallPack(tiles, { cols: grid.cols, order: UM.wall.order, sizes: UM.wall.sizes, fitRows: grid.rows });
   UMAP_WALL_PX = UM.focus ? { width: view.width, height: view.height } : umapWallSize(pack, grid);
   UMAP_TILES = new Map();
@@ -281,6 +288,8 @@ function paintUmap(force = false) {
     if (UM.focus && !focus) continue;
     const band = UMAP_BANDS.find(({ key }) => key === tile.key);
     const r = focus ? { x: 0, y: 0, w: view.width, h: view.height } : umapWallRect(tile, grid);
+    // 쉬는 타일은 내용 높이로(격자 칸이 남아도 아래를 비워 두지 않는다).
+    if (!focus && tile.small) r.h = Math.min(r.h, umapIdlePx(umapRecentDone(band, 3).length));
     const layout = umapTileLayout(band, { manual: UM.manual, width: Math.max(UMAP_AGENT.MIN_W + 20, Math.floor(r.w - UMAP_TILE_CHROME)) });
     const entry = { band, tile, rect: r, layout, meta: states.get(tile.key) };
     UMAP_TILES.set(tile.key, entry);
@@ -289,7 +298,7 @@ function paintUmap(force = false) {
     html.push(umapTileHTML(entry, focus));
   }
   UMAP_LAYOUT = { boxes, width: UMAP_WALL_PX.width, height: UMAP_WALL_PX.height };
-  if (!UMAP_BANDS.length) html.push(`<p class="um-empty" style="left:20px;top:20px;width:640px">${UM.loaded ? "표시할 프로젝트·세션이 없습니다. 위쪽 필터를 넓히거나 ＋ 세션·＋ 새 실행으로 시작하세요." : esc(UM.error || "불러오는 중…")}</p>`);
+  if (!UMAP_BANDS.length) html.push(`<p class="um-empty" style="left:20px;top:20px;width:640px">${UM.loaded ? "표시할 프로젝트·세션이 없습니다. 위쪽 필터를 넓히거나 ＋ 세션·＋ Task 로 시작하세요." : esc(UM.error || "불러오는 중…")}</p>`);
   items.innerHTML = html.join("");
   items.style.width = UMAP_WALL_PX.width + "px";
   items.style.height = UMAP_WALL_PX.height + "px";

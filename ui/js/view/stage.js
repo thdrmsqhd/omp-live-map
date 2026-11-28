@@ -3,7 +3,7 @@
 function applyView() {
   // 이동값이 소수 픽셀이면 글자가 픽셀 경계에 걸려 흐려지므로 정수로 맞춘다.
   $("wrapper").style.transform = `translate(${Math.round(view.x)}px,${Math.round(view.y)}px) scale(${view.k})`;
-  if (mapMode !== "map") $("zk").textContent = Math.round(view.k * 100) + "%";   // 맵의 배율 글자는 umapApplyView 가 쓴다
+  if (mapMode !== "map" && $("zk")) $("zk").textContent = Math.round(view.k * 100) + "%";   // 맵의 배율 글자는 umapApplyView 가 쓴다
   paintMinimap();
   if (typeof queueCardVisibility === "function") queueCardVisibility();
 }

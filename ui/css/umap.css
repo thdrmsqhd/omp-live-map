@@ -1,6 +1,6 @@
 /* omp-live-map · view · 관제 벽(#umap): 프로젝트 타일 격자 · 타일 안 Task 카드 · Workflow 단계 노드(하네스 보라 · 루프 주황 칩) · 세션 카드 · 서랍 · 위쪽 막대 */
 #umap { position: relative; flex: 1; min-width: 0; overflow: hidden; background: radial-gradient(circle at 1px 1px, #18232f 1px, transparent 0) 0 0 / 24px 24px, #0a0e13; }
-#umap-viewport { position: absolute; inset: 40px 0 0 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
+#umap-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
 #umap-viewport.panning { cursor: grabbing; }
 #umap-surface { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 #umap-items { position: absolute; left: 0; top: 0; }
@@ -34,6 +34,15 @@
 .um-tile-sum { font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #c2d1df; }
 .um-tile-sum.attention { color: #ffd489; font-weight: 650; }
 .um-tile-sum.running { color: #9fe0ff; }
+/* 쉬는 타일의 최근 끝난 일: 한 개 = 두 줄(제목 · 언제 / 상태 · 결과), 높이 고정 — model/umap-wall.js RECENT_PX(38 + 틈 2)와 같다. */
+.um-done { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+.um-done li { height: 38px; box-sizing: border-box; padding: 2px 0 2px 8px; border-left: 2px solid #2a3c50; min-width: 0; }
+.um-done-t { display: flex; gap: 8px; align-items: baseline; min-width: 0; font-size: 13px; line-height: 18px; }
+.um-done-t b { flex: 1; min-width: 0; font-weight: 600; color: #dce7f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.um-done-t span { flex: none; font-size: 12px; color: var(--dim); }
+.um-done-r { font-size: 12px; line-height: 16px; color: #9fb2c3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.um-done-r em { font-style: normal; color: #7fd8bf; }
+.um-done-r.bad em { color: #ff9a93; }
 .um-tile-sum small { font-size: 12px; color: #e0c080; font-weight: 500; }
 .um-tile-body { flex: 1; min-height: 0; overflow: auto; position: relative; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2a3c50 transparent; cursor: default; }
 .um-tile-canvas { position: relative; }
@@ -42,11 +51,9 @@
 .um-tile-resize:hover { background-color: #1c2a38; }
 .um-wall-back { border-color: var(--accent); color: #dcefff; font-weight: 650; }
 
-/* 맵 위 도구 막대: 라이브러리 · 전체 보기 · ⋯(자동 배치로 되돌리기 · 단축키) · 알림 한 줄(되돌리기 단추). 맵(#umap-viewport)은 이 막대 아래에서 시작해 카드를 가리지 않는다. */
-#umap-tools { position: absolute; left: 0; right: 0; top: 0; height: 40px; box-sizing: border-box; z-index: 30; display: flex; gap: 6px; align-items: center; padding: 0 12px; background: #0d141c; border-bottom: 1px solid #1f2c3a; }
-#umap-tools button { background: #111821ee; }
-#umap-tools #umap-library { border-color: #6c55c9; color: #d6ccff; font-weight: 650; }
-#umap-status { color: #bfe0ff; font-size: 12px; background: #0d1620e6; border-radius: 6px; padding: 2px 8px; }
+/* 알림 한 줄(되돌리기 단추): 맵 위 가운데에 잠깐 뜬다. 도구 막대 줄은 없다(라이브러리·전체 보기·배치 되돌리기는 위쪽 ⋯). */
+#umap-status { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; max-width: calc(100% - 32px); box-sizing: border-box;
+  color: #bfe0ff; font-size: 12px; line-height: 22px; background: #0d1620f2; border: 1px solid #2f5d85; border-radius: 6px; padding: 2px 10px; box-shadow: 0 8px 20px #0009; }
 #umap-status:empty { display: none; }
 #umap-status .um-toast-act { margin-left: 6px; padding: 0 8px; line-height: 20px; border-color: var(--accent); color: #dcefff; font-weight: 650; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -282,11 +289,11 @@ textarea.inline-edit { display: block; width: 100%; box-sizing: border-box; resi
 .um-check { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: #c2d1df; }
 
 /* 위쪽 막대 */
-#topbar #umap-resources { font: 12px var(--mono); color: #c2d1df; white-space: nowrap; }
+#topbar #umap-resources { font: 12px var(--mono); color: #c2d1df; white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #topbar #umap-resources.resource-warning { color: #ffd489; border-color: #6b5420; }
 #topbar #umap-attention.has-items { background: #3a2c13; border-color: var(--idle); color: #ffd489; font-weight: 650; }
 #topbar #back-to-map { border-color: var(--accent); color: #dcefff; font-weight: 650; }
-#topbar .runtime-dot { padding: 2px 8px; border-color: transparent; background: none; color: var(--muted); white-space: nowrap; }
+#topbar .runtime-dot { margin-left: auto; flex: none; padding: 2px 8px; border-color: transparent; background: none; color: var(--muted); white-space: nowrap; }
 #topbar .runtime-dot i { font-style: normal; color: #8a93a3; }
 #topbar .runtime-dot[data-tone="ok"] i { color: var(--live); }
 #topbar .runtime-dot[data-tone="bad"] i, #topbar .runtime-dot s { color: var(--error); }

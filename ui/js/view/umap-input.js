@@ -204,8 +204,6 @@ function bindUmapInput() {
     umapSessionMenu(card);
   });
   bindUmapAddLine(items);
-  $("umap-more").onclick = (event) => umapWallMenu(event.currentTarget);
-  $("umap-fit-all").onclick = () => umapFit();
   addEventListener("keydown", umapKey, true);
   addEventListener("resize", () => paintUmapSoon());
 }
@@ -242,7 +240,7 @@ function umapKey(event) {
   }
 }
 
-// 맵 위 도구 막대의 알림 한 줄. action({ label, run })을 주면 그 단추(예: '되돌리기')를 붙이고 10초 동안 남긴다.
+// 맵 위에 뜨는 알림 한 줄(#umap-status). action({ label, run })을 주면 그 단추(예: '되돌리기')를 붙이고 10초 동안 남긴다.
 function umapToast(text, action = null) {
   const status = $("umap-status");
   if (!status) return;

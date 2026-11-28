@@ -11,7 +11,7 @@ let INFRA = { distros: [], containers: [], projects: [], error: null };
 // 진행 중인 인프라 조작: nodeId -> kind. 렌더가 다시 그려져도 버튼이 잠긴 채로 남는다.
 const PENDING = new Map();
 
-let FILTER = "live";
+let FILTER = "24h"; // 시간 필터. 처음은 24시간(쉬는 프로젝트도 최근 일과 함께 보인다), 고른 값은 view/topbar.js 가 저장·복원한다.
 
 const openIds = new Set();
 

@@ -12,6 +12,7 @@ const COMMAND = /^(bash|shell|exec|powershell|terminal)$/i;
 const SEARCH = /^(grep|glob|find|search|ls|web_search|websearch|webfetch|fetch|lsp)$/i;
 const PATH_KEYS = ["path", "file_path", "filePath", "file", "notebook_path"];
 
+const URI = /^[a-z][a-z0-9+.-]+:\/\//i; // agent://·proc://·xd:// 같은 내부 주소는 파일 수정이 아니다
 const one = (s, n = 140) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 const firstLine = (s, n = 140) => one(String(s ?? "").split(/\r?\n/).map((l) => l.trim()).find(Boolean) || "", n);
 const base = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || String(p || "");
@@ -33,20 +34,53 @@ function lineDelta(oldText, newText) {
   return { add: b.length - head - tail, del: a.length - head - tail };
 }
 
-// 패치 글(apply_patch·unified diff) → [{ file, add, del, patch }]
+// omp hashline 머리 한 줄 → 지우는 원래 줄 수. `PUT N.=M:`·`CUT N.=M` = M−N+1, 블록(`N*`)은 끝 줄을 모르므로 1,
+// 끼워 넣기(`PUT <N:`·`PUT >N:`)·붙여넣기(`PUT >N @r`)는 0. 결과의 diff 가 오면 onResult 가 정확한 수로 고친다.
+const HASH_OP = /^(PUT|CUT|REM|MV)\b(.*)$/;
+function hashlineDel(op, rest) {
+  if (op === "REM" || op === "MV") return 0;
+  const span = /^\s*(\d+)\.=(\d+)/.exec(rest);
+  if (span) return Math.max(0, Number(span[2]) - Number(span[1]) + 1);
+  if (/^\s*\d+\*/.test(rest)) return 1;
+  return 0;
+}
+
+// 패치 글(apply_patch·unified diff·omp hashline) → [{ file, add, del, patch }]
 function patchFiles(text, fallback) {
   const out = [];
-  let cur = null;
+  let cur = null, hashline = false;
   for (const line of lines(text)) {
-    const head = /^\*\*\* (?:Update|Add|Delete) File: (.+)$/.exec(line) || /^\+\+\+ (?:b\/)?(.+)$/.exec(line) ||
-      /^\[(.+?)#[0-9A-Za-z]+\]$/.exec(line.trim()); // omp hashline 편집: [파일#해시]
-    if (head) { cur = { file: head[1].trim(), add: 0, del: 0, patch: [] }; out.push(cur); continue; }
+    const hash = /^\[(.+?)#[0-9A-Za-z]+\]$/.exec(line.trim()); // omp hashline 편집: [파일#해시]
+    const head = /^\*\*\* (?:Update|Add|Delete) File: (.+)$/.exec(line) || /^\+\+\+ (?:b\/)?(.+)$/.exec(line) || hash;
+    if (head) {
+      hashline = Boolean(hash);
+      const file = head[1].trim();
+      // 같은 파일 머리가 거듭 나오면(한 호출에 여러 덩이) 한 항목으로 모은다.
+      cur = hashline && out.find((x) => x.file === file) || null;
+      if (!cur) { cur = { file, add: 0, del: 0, patch: [] }; out.push(cur); }
+      continue;
+    }
     if (/^(---|\*\*\*|diff |index |@@)/.test(line) && !/^@@/.test(line)) continue;
     if (!cur) { cur = { file: fallback || "", add: 0, del: 0, patch: [] }; out.push(cur); }
     cur.patch.push(line);
-    if (/^\+/.test(line)) cur.add++; else if (/^-/.test(line)) cur.del++;
+    const op = hashline && HASH_OP.exec(line);
+    if (op) { cur.del += hashlineDel(op[1], op[2]); continue; }
+    if (/^\+/.test(line)) cur.add++; else if (!hashline && /^-/.test(line)) cur.del++;
   }
   return out.filter((x) => x.file).map((x) => ({ ...x, patch: x.patch.join("\n").slice(0, HUNK_TEXT) }));
+}
+
+// 툴 결과의 줄 번호 diff(omp edit 결과 details.diff: ` 29|…`·`-31|…`·`+31|…`) → { add, del }. 모양이 아니면 null.
+function resultDelta(diff) {
+  if (typeof diff !== "string" || !diff) return null;
+  let add = 0, del = 0, seen = false;
+  for (const line of lines(diff)) {
+    const m = /^([+\- ])\s*\d+\|/.exec(line);
+    if (!m) continue;
+    seen = true;
+    if (m[1] === "+") add++; else if (m[1] === "-") del++;
+  }
+  return seen ? { add, del } : null;
 }
 
 // 편집 툴 인자 → [{ file, add, del, hunk }]
@@ -56,7 +90,7 @@ function editsOf(a) {
   const OLD = ["oldText", "old_string", "old_text", "old", "search"], NEW = ["newText", "new_string", "new_text", "new", "replace"];
   const patch = pick(a, ["patch", "diff", "input"]);
   if (typeof patch === "string" && /^(\*\*\* |@@|\+\+\+ |--- |[+-]|\[[^\]\n]+#[0-9A-Za-z]+\]$)/m.test(patch)) return patchFiles(patch, file).map((x) => ({ file: x.file, add: x.add, del: x.del, hunk: { patch: x.patch } }));
-  if (!file || /^agent:\/\//.test(file)) return [];
+  if (!file || URI.test(file)) return [];
   const pairs = Array.isArray(a.edits) ? a.edits.filter((e) => e && typeof e === "object") : [a];
   const out = { file, add: 0, del: 0, hunk: null };
   let any = false;
@@ -141,9 +175,10 @@ function onCall(act, { id, name, args, ts }) {
 }
 
 // 툴 결과 하나: 도는 툴을 닫고 명령 통과/실패를 적는다.
-function onResult(act, { id, error, text, ts }) {
+function onResult(act, { id, error, text, ts, details }) {
   const item = act.pending.get(String(id || ""));
   act.pending.delete(String(id || ""));
+  if (item && item.kind === "edit" && !error && !item.more) fixEdit(act, item, resultDelta(details && details.diff));
   if (String(text || "").includes("<task-result")) onNotice(act, String(text), ts || 0);
   const failed = Boolean(error) || /\b(exit(?:ed with)? code[: ]+[1-9]\d*)/i.test(String(text || "").slice(-400));
   if (item) item.ok = !failed;
@@ -151,6 +186,19 @@ function onResult(act, { id, error, text, ts }) {
   if (row && row.ok === null) { row.ok = !failed; act.counts[row.ok ? "ok" : "fail"]++; if (item) item.text = "명령 " + (row.ok ? "✓ " : "✗ ") + row.cmd; }
   if (item && item.kind === "spawn" && failed && id) act.results.set(String(id), { status: "failed", text: firstLine(text, 160) });
   else if (item && item.kind === "spawn" && id && text) act.results.set(String(id), { status: "completed", text: firstLine(text, 160) });
+}
+
+// 편집 결과의 실제 diff 로 그 호출의 +/− 를 고친다(hashline 블록·붙여넣기처럼 인자만으로는 모르는 줄 수).
+function fixEdit(act, item, d) {
+  if (!d || (d.add === item.add && d.del === item.del)) return;
+  const da = d.add - item.add, dd = d.del - item.del;
+  act.counts.add += da; act.counts.del += dd;
+  const row = act.edits.find((x) => x.file === item.file);
+  if (row) { row.add += da; row.del += dd; }
+  const hunk = act.diffs.get(item.file)?.at(-1);
+  if (hunk && hunk.ts === item.ts) { hunk.add = d.add; hunk.del = d.del; }
+  item.add = d.add; item.del = d.del;
+  item.text = item.text.replace(/ \+\d+ −\d+$/, " +" + d.add + " −" + d.del);
 }
 
 function onUserText(act, text, ts) {
@@ -208,4 +256,4 @@ function summary(act, status, extra = {}) {
   };
 }
 
-module.exports = { newActivity, onCall, onResult, onUserText, onAssistantText, onNotice, summary, editsOf, lineDelta, patchFiles, base };
+module.exports = { newActivity, onCall, onResult, onUserText, onAssistantText, onNotice, summary, editsOf, lineDelta, patchFiles, resultDelta, base };

@@ -16,9 +16,13 @@ const UMAP_TOOL_KO = Object.freeze({
 const UMAP_TEST_CMD = /(^|[\s;&|])(node\s+--test|npm\s+(run\s+)?t(est)?|pnpm\s+(run\s+)?test|yarn\s+test|npx\s+(jest|vitest|mocha)|jest|vitest|mocha|pytest|python\s+-m\s+(pytest|unittest)|go\s+test|cargo\s+test|mvn\S*\s+test|gradle\S*\s+test|dotnet\s+test|deno\s+test|bun\s+test)\b/i;
 
 const umapBaseName = (file) => String(file || "").split(/[\\/]/).filter(Boolean).pop() || String(file || "");
+// 화면 글꼴에 없는 글리프(omp 제목의 Nerd Font 아이콘 = 사용자 영역 PUA U+E000–U+F8FF·U+F0000–U+10FFFF, 대체 문자, 두부 '□')를 뺀다.
+// server/session-title.js 와 같은 범위. 제목·부제·목표·결과처럼 사람이 읽는 줄은 모두 이것을 거친다.
+const UMAP_GLYPHS = /[\uE000-\uF8FF\uFFFD\u25A1]|[\u{F0000}-\u{10FFFF}]/gu;
+const umapPlain = (text) => String(text ?? "").replace(UMAP_GLYPHS, "").replace(/[ \t]{2,}/g, " ").trim();
 // 한 줄로 자른다. 마크다운 강조(**·`)와 제목 표시(#)는 뺀다.
 const umapClip = (text, n = 60) => {
-  const s = String(text ?? "").replace(/\*\*|__|`/g, "").replace(/^#+\s*/, "").replace(/\s+/g, " ").trim();
+  const s = umapPlain(text).replace(/\*\*|__|`/g, "").replace(/^#+\s*/, "").replace(/\s+/g, " ").trim();
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 };
 // 명령 줄 → 보여 줄 짧은 명령: 앞의 cd …&&·환경 변수 대입을 빼고, powershell -Command "…" 는 안쪽 명령, 이어진 명령은 첫 토막만.
@@ -78,9 +82,9 @@ function umapNowLine(it, waitingSubs = 0) {
 
 // 카드 제목: 별칭 → 세션 제목 → 첫 지시 → 하네스 이름(절대 '에이전트'만 쓰지 않는다). 서브는 기록 이름(Fixer 등).
 function umapAgentTitle(n, { alias = "", harness = "" } = {}) {
-  if (alias) return alias;
-  if (n.kind === "sub") return n.name || n.agent || (harness ? harness + " 서브에이전트" : "서브에이전트");
-  return n.sessionTitle || n.title || n.firstUser || (harness ? harness + " 세션" : "세션");
+  if (umapPlain(alias)) return umapPlain(alias);
+  if (n.kind === "sub") return umapPlain(n.name) || umapPlain(n.agent) || (harness ? harness + " 서브에이전트" : "서브에이전트");
+  return umapPlain(n.sessionTitle) || umapPlain(n.title) || umapPlain(n.firstUser) || (harness ? harness + " 세션" : "세션");
 }
 const UMAP_NODE_STATE = { live: "running", done: "done", idle: "waiting" };
 

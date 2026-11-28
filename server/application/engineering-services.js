@@ -26,6 +26,7 @@ const workflowLive = require("../engineering/workflow-live");
 const shadowRepo = require("../engineering/shadow-repo");
 const { mergeProfilesIntoHarnesses } = require("../engineering/harness-merge");
 const sessionHarness = require("../harness/session-harness");
+const { cleanLegacyWorktrees, legacyWorkspace } = require("../engineering/legacy-worktrees");
 
 
 function createEngineeringServices({ directory, runner = secureRunner() }) {
@@ -51,6 +52,9 @@ function createEngineeringServices({ directory, runner = secureRunner() }) {
       runs.recover();
       flowRuns.recover();
       const budget = projectBudget(db);
+      // 예전 격리 작업 폴더(worktrees/<uuid>)가 남아 있으면 한 번 정리한다(등록된 프로젝트 저장소의 worktree 만).
+      cleanLegacyWorktrees({ directory: path.resolve(directory), projects: definitions.projects(),
+        log: (line) => console.log("[engineering] " + line) }).catch((error) => console.warn("[engineering] 이전 작업 폴더 정리 실패: " + error.message));
       services = { definitions, workflows, runs, flowRuns, tasks, budget, trials: harnessTrials(definitions, runner, workspace, budget),
         presetDefinitions: (project) => addPresetDefinitions(db, definitions, project),
         presetWorkflows: (project) => addPresetWorkflows(db, definitions, workflows, project),
@@ -94,7 +98,7 @@ function workflowRunDetail({ flowRuns, workflows, observability, delivery, stagi
   const workflow = workflows.get(run.project, run.workflow, run.version);
   const { document: graph, display } = workflows.executionPlan(run.project, workflow.payload, run.workflow);
   const nodes = flowRuns.nodes(id);
-  return { run, nodes, interventions: run.status === "failed" ? retryOptions(graph, nodes) : {}, retries: flowRuns.retries(id), timeline: observability.timeline(id),
+  return { run, legacy: legacyWorkspace(run.workspace), nodes, interventions: run.status === "failed" ? retryOptions(graph, nodes) : {}, retries: flowRuns.retries(id), timeline: observability.timeline(id),
     delivery: delivery.get(id), staging: staging.get(id),
     labels: Object.fromEntries(graph.nodes.map(({ id, label }) => [id, label])),
     // 관제 화면이 단계 안에서 어떤 프롬프트가 어떤 정의로 실행되는지 보여 주는 데 쓴다.

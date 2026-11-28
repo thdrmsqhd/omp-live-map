@@ -17,7 +17,7 @@ function tokenSection(n) {
       <u class="m-tok" title="${scope} 토큰(입력+출력+캐시읽기+캐시쓰기)">합계 <b>${fmt(t.total)}</b></u>
       <u class="m-req" title="${scope} 모델 호출 수${!hour && n.turns ? ` (사용자 턴 ${n.turns})` : ""}">요청 <b>${requests}</b></u>
       <u class="m-ctx" title="ttft · 요청부터 첫 토큰까지 평균 지연, 세션 누적${n.ttftN ? ` 표본 ${n.ttftN}회` : ""}">ttft <b>${n.avgTtft}ms</b>${n.ttftN ? ` <small>(${n.ttftN}회)</small>` : ""}</u>
-      <u class="m-cost" title="${scope} 비용 $${(+cost || 0).toFixed(4)} (원화 환산)${aux}">cost <b>${krw(cost)}</b></u>
+      <u class="m-cost" title="${scope} 비용 ${krw(cost)} (환율 1 USD = ${won(FX)})${aux}">cost <b>${krw(cost)}</b></u>
       <u class="${n.errors ? "m-warn m-err" : "m-off"}" title="오류 · 세션 누적 stopReason=error 응답 수${n.errors ? " — API 오류·요청 한도 초과·사용자 중단·네트워크 끊김 등. 유형은 채팅 로그에서 확인" : ""}">오류 <b>${n.errors}</b></u>
     </div>`;
 }
