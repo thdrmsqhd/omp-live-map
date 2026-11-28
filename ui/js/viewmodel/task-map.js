@@ -1,30 +1,40 @@
-/* omp-live-map · viewmodel · 한 맵의 상태: 프로젝트·Task 맵 데이터, 띠 순서, 옮긴 카드 자리, 편집 중인 줄. 접기·펼치기 상태는 없다.
-   화면 갱신은 viewUpdates.umap() 으로만 알린다(view 전역을 부르지 않는다). 데이터는 /api/engineering/* 를 그대로 쓴다. */
+/* omp-live-map · viewmodel · 관제 벽의 상태: 프로젝트·Task 맵 데이터, 타일 순서·크기, 옮긴 카드 자리(타일별), 전체 화면 타일, 편집 중인 줄. 접기·펼치기 상태는 없다.
+   화면 갱신은 viewUpdates.umap() 으로만 알린다(view 전역을 부르지 않는다). 데이터는 /api/engineering/* 를 그대로 쓴다.
+   저장 키: omp-umap-wall-v1 { v: 1, order: [타일 key], sizes: { key: { w, h } } }(타일 순서·크기), omp-umap-manual-v2(옮긴 카드, 타일 캔버스 기준).
+   예전 키(omp-umap-bands-v1 띠 순서·접힘, omp-umap-manual-v1 띠 기준 카드 자리, omp-umap-view-v1 한 맵 배율)는 읽지 않고 지운다 — 띠 좌표는 타일 안 좌표와 맞지 않는다. */
 
-const UMAP_MANUAL_KEY = "omp-umap-manual-v1", UMAP_BANDS_KEY = "omp-umap-bands-v1", UMAP_VIEW_KEY = "omp-umap-view-v1";
+const UMAP_MANUAL_KEY = "omp-umap-manual-v2", UMAP_WALL_KEY = "omp-umap-wall-v1";
+const UMAP_OLD_KEYS = ["omp-umap-bands-v1", "omp-umap-manual-v1", "omp-umap-view-v1"];
 const UM = {
   projects: [], maps: new Map(), labels: new Map(), metrics: new Map(), definitions: new Map(), workflows: new Map(), presets: [],
-  manual: {}, order: [],
+  manual: {}, wall: { order: [], sizes: {} },
   adding: null, edit: null, current: "", signature: "", loaded: false, error: "",
-  view: { x: 40, y: 24, k: 1 },
+  // view: 벽 이동·배율(저장하지 않는다 — 열 때마다 맨 위 100%). focus: 전체 화면으로 연 타일 key. scroll: 타일 본문 스크롤 자리(벽·전체 화면 따로).
+  // autoFocus: 타일 본문을 마지막으로 자동 스크롤한 '지금 볼 곳' key(바뀌면 다시 그곳으로).
+  view: { x: 0, y: 0, k: 1 }, focus: "", focusReturn: null, scroll: new Map(), autoFocus: new Map(),
 };
 {
   const manual = readJSON(UMAP_MANUAL_KEY, {});
   for (const [key, spot] of Object.entries(manual && typeof manual === "object" ? manual : {})) {
     if (spot && typeof spot.band === "string" && Number.isFinite(spot.dx) && Number.isFinite(spot.dy)) UM.manual[key] = { band: spot.band, dx: spot.dx, dy: spot.dy };
   }
-  const bands = readJSON(UMAP_BANDS_KEY, {});
-  UM.order = strList(bands?.order);
-  // 예전 저장 값의 띠 접힘(collapsed)은 읽지 않고 지운다(접기는 없어졌다).
-  if (bands && typeof bands === "object" && "collapsed" in bands) writeJSON(UMAP_BANDS_KEY, { order: UM.order });
-  const saved = readJSON(UMAP_VIEW_KEY, null);
-  if (saved && [saved.x, saved.y, saved.k].every(Number.isFinite)) UM.view = { x: saved.x, y: saved.y, k: Math.min(2, Math.max(0.2, saved.k)) };
+  UM.wall = umapReadWall(readJSON(UMAP_WALL_KEY, null));
+  for (const key of UMAP_OLD_KEYS) if (localStorage.getItem(key) !== null) localStorage.removeItem(key);
 }
-const umapSaveBands = () => writeJSON(UMAP_BANDS_KEY, { order: UM.order });
-const umapSaveView = () => writeJSON(UMAP_VIEW_KEY, UM.view);
+// 저장 값 → { order, sizes }. 모양이 틀린 값·버전이 다른 값은 버린다.
+function umapReadWall(saved) {
+  const wall = { order: [], sizes: {} };
+  if (!saved || typeof saved !== "object" || saved.v !== 1) return wall;
+  wall.order = strList(saved.order);
+  for (const [key, size] of Object.entries(saved.sizes && typeof saved.sizes === "object" ? saved.sizes : {})) {
+    if (size && Number.isFinite(size.w) && Number.isFinite(size.h) && size.w >= 1 && size.h >= 1) wall.sizes[key] = { w: Math.round(size.w), h: Math.round(size.h) };
+  }
+  return wall;
+}
+const umapSaveWall = () => writeJSON(UMAP_WALL_KEY, { v: 1, order: UM.wall.order, sizes: UM.wall.sizes });
 const umapNotify = () => viewUpdates.umap?.();
 
-// 옮긴 카드 자리(띠 원점 기준). 저장하면 다음에 열어도 그 자리다.
+// 옮긴 카드 자리(그 타일 캔버스 기준). 저장하면 다음에 열어도 그 자리다.
 function umapSetManual(key, band, dx, dy) {
   UM.manual[key] = { band, dx: Math.round(dx), dy: Math.round(dy) };
   writeJSON(UMAP_MANUAL_KEY, UM.manual);
@@ -41,17 +51,11 @@ function umapResetAllManual(band) {
 }
 const umapIsManual = (key) => key in UM.manual;
 
-// 띠를 위·아래로 한 칸 옮긴다. keys: 지금 화면 순서.
-function umapMoveBand(key, delta, keys) {
-  const order = [...keys];
-  const from = order.indexOf(key), to = from + delta;
-  if (from < 0 || to < 0 || to >= order.length) return false;
-  order.splice(from, 1);
-  order.splice(to, 0, key);
-  UM.order = order;
-  umapSaveBands();
-  return true;
-}
+// 타일 순서(끌어 놓기 결과 전체 목록)·크기(격자 단위)를 저장한다. 되돌리기는 상태 순서·내용 크기로.
+function umapWallSetOrder(keys) { UM.wall.order = strList(keys); umapSaveWall(); }
+function umapWallSetSize(key, size) { UM.wall.sizes[key] = { w: Math.max(1, Math.round(size.w)), h: Math.max(1, Math.round(size.h)) }; umapSaveWall(); }
+function umapWallResetSize(key) { if (!(key in UM.wall.sizes)) return false; delete UM.wall.sizes[key]; umapSaveWall(); return true; }
+function umapWallReset() { UM.wall = { order: [], sizes: {} }; umapSaveWall(); }
 
 async function umapRequest(endpoint, params, payload) {
   const result = await window.engineeringApi.request(endpoint, params ?? {}, payload);
@@ -161,9 +165,24 @@ function umapBands(sessions) {
       if (session) band.sessions.push(session);
     }
   }
-  const ordered = umapOrderBands([...bands.values()], UM.order);
-  for (const band of ordered) band.adding = UM.adding?.band === band.key;
-  return ordered;
+  const list = [...bands.values()];
+  for (const band of list) band.adding = UM.adding?.band === band.key;
+  return list;
+}
+
+// 타일 상태(관제 벽의 순서·테두리·크기): attention(승인 대기·보류/실패·답 필요) → running(도는 Task·세션) → idle(그 밖).
+// 돌려주는 값: Map key → { state, at(최근 활동 ms), attention: [umapAttention 항목] }
+function umapTileStates(bands) {
+  const attention = umapAttention(bands), out = new Map();
+  for (const band of bands) {
+    const items = umapFlatItems([...band.tasks.flatMap((task) => task.stages.flatMap((stage) => stage.sessions)), ...band.free.flatMap((group) => group.sessions)]);
+    const mine = attention.filter((item) => item.band === band.key);
+    const running = band.tasks.some((task) => task.status === "running" || ["running", "queued"].includes(task.run?.status))
+      || items.some((item) => item.lines?.state === "running");
+    const at = Math.max(0, ...band.tasks.map((task) => Math.max(task.updated || 0, task.run?.updated || 0)), ...band.sessions.map((session) => session.lastTs || 0));
+    out.set(band.key, { state: mine.length ? "attention" : running ? "running" : "idle", at, attention: mine });
+  }
+  return out;
 }
 
 // 세션 폴더 → 띠 키(프로젝트면 project:<id>, 아니면 folder:<경로>).
@@ -177,8 +196,13 @@ function umapAttention(bands) {
   const out = [];
   for (const band of bands) for (const task of band.tasks) {
     const waiting = task.stages.find((stage) => stage.status === "waiting_approval");
-    if (waiting) out.push({ key: umapStageKey(task.id, waiting.id), band: band.key, label: task.title + " · " + waiting.label + " 승인" });
-    else if (task.status === "blocked") out.push({ key: umapTaskKey(task.id), band: band.key, label: task.title + " · 보류" });
+    if (waiting) out.push({ key: umapStageKey(task.id, waiting.id), band: band.key, label: task.title + " · " + waiting.label + (waiting.label.includes("승인") ? " 대기" : " 승인 대기") });
+    else if (task.status === "blocked") {
+      // 실패한 실행은 실패한 단계로, 그 밖의 보류는 Task 카드로 옮긴다.
+      const failed = task.run?.status === "failed" && task.stages.find((stage) => stage.status === "failed");
+      out.push(failed ? { key: umapStageKey(task.id, failed.id), band: band.key, label: task.title + " · " + failed.label + " 실패" }
+        : { key: umapTaskKey(task.id), band: band.key, label: task.title + (task.run?.status === "failed" ? " · 실패" : " · 보류") });
+    }
   }
   for (const band of bands) {
     const items = [...band.tasks.flatMap((task) => task.stages.flatMap((stage) => stage.sessions)), ...band.free.flatMap((group) => group.sessions)];

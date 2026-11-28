@@ -1,8 +1,8 @@
 /* omp-live-map · model · 맵의 에이전트·서브에이전트 카드에 쓰는 문장. 서버 활동 요약(act, server/activity.js summary) → 한국어 줄.
    카드는 배율과 상관없이 늘 같은 내용·같은 크기다(의미 확대 없음, 확대·축소는 길찾기용). 접기·펼치기도 없다.
-   DOM·전역 상태 접근 없음(별칭·답 대기·하네스 이름은 인자로 받는다). 카드 높이도 여기서 정해 umapLayout 과 그리기가 같은 값을 쓴다. */
+   DOM·전역 상태 접근 없음(별칭·답 대기·하네스 이름은 인자로 받는다). 카드 높이도 여기서 정해 umapTileLayout 과 그리기가 같은 값을 쓴다. */
 
-const UMAP_AGENT = Object.freeze({ W: 380, PAD: 18, HEAD: 26, ROW: 21, RECENT: 3, INDENT: 36, GAP: 14, MISSING_H: 36 });
+const UMAP_AGENT = Object.freeze({ W: 380, MIN_W: 260, PAD: 18, HEAD: 26, ROW: 21, RECENT: 3, INDENT: 36, GAP: 14, MISSING_H: 36 });
 const UMAP_AGENT_STATE = Object.freeze({
   running: { label: "실행 중", color: "#4aa8ff" }, done: { label: "완료", color: "#2fbf9b" },
   failed: { label: "실패", color: "#e3564f" }, waiting: { label: "대기", color: "#8a9bb0" }, ask: { label: "답 필요", color: "#e0a83c" },

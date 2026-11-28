@@ -1,4 +1,4 @@
-/* omp-live-map · view · 한 맵의 누르기: 띠 머리(＋ Task·⋯·상태 이름·예산), Task(▶·⋯·서랍), 단계(칩·서랍·승인/반려·편집 ＋),
+/* omp-live-map · view · 관제 벽의 누르기: 타일 머리(＋ Task·⋯·벽으로·상태 이름·예산), Task(▶·⋯·서랍), 단계(칩·서랍·승인/반려·편집 ＋),
    에이전트 카드(카운터·한 일 줄 → 활동 서랍의 diff·대화 자리, 두 번 누르기 = 세션 열기). 접기·펼치기는 없다. */
 
 async function umapClick(event) {
@@ -19,7 +19,8 @@ async function umapClick(event) {
     case "run": return umapRunTask(umapTaskById(taskId)).then((run) => run && umapToast("실행을 시작했습니다 · 단계 아래에 세션이 이어집니다."));
     case "task-menu": return umapTaskMenu(button, taskId);
     case "edit-scope": UM.edit.scope = button.dataset.scope; UM.edit.status = button.dataset.scope === "template" ? "다음 변경부터 템플릿에 저장합니다" : "다음 변경부터 이 Task 사본에 저장합니다"; return paintUmap(true);
-    case "edit-done": return umapStopEdit();
+    case "edit-done": return umapEndEdit();
+    case "wall": return umapLeaveFocus();
     case "insert": return umapInsertMenu(button, Number(button.dataset.index));
     case "harness": return openStageDrawer(taskId, node, "harness");
     case "loop": return openStageDrawer(taskId, node, "loop");
@@ -58,18 +59,22 @@ async function umapClick(event) {
 
 function umapResetItem(key) { umapResetManual(key); paintUmap(true); }
 
+// 타일 ⋯: 앞·뒤로 옮기기(끌기와 같은 저장), 전체 화면, 크기 자동으로, 이 타일 카드 되돌리기, 프로젝트 문서·이름·보관.
 function umapBandMenu(anchor, band) {
-  const keys = UMAP_BANDS.map(({ key }) => key), index = keys.indexOf(band.key), project = band.project;
+  const keys = UMAP_PACK?.order || UMAP_BANDS.map(({ key }) => key), index = keys.indexOf(band.key), project = band.project;
   const title = $("umap-items").querySelector(`[data-band="${CSS.escape(band.key)}"] .um-band-title`);
+  const move = (delta) => { umapWallSetOrder(umapMoveStage(keys, band.key, index + delta)); paintUmap(true); };
   inlineMenu(anchor, [
-    { label: "위로 옮기기", disabled: index === 0, run: () => { umapMoveBand(band.key, -1, keys); paintUmap(true); } },
-    { label: "아래로 옮기기", disabled: index === keys.length - 1, run: () => { umapMoveBand(band.key, 1, keys); paintUmap(true); } },
-    { label: "이 띠 자동 배치로 되돌리기", disabled: !Object.values(UM.manual).some((spot) => spot.band === band.key), run: () => { umapResetAllManual(band.key); paintUmap(true); } },
+    UM.focus === band.key ? { label: "관제 벽으로 (Esc)", run: () => umapLeaveFocus() } : { label: "전체 화면으로 보기 (머리 두 번 누르기)", run: () => umapEnterFocus(band.key) },
+    { label: "앞으로 옮기기", disabled: index <= 0 || Boolean(UM.focus), run: () => move(-1) },
+    { label: "뒤로 옮기기", disabled: index < 0 || index === keys.length - 1 || Boolean(UM.focus), run: () => move(1) },
+    { label: "타일 크기 자동으로", disabled: !(band.key in UM.wall.sizes), title: "일하는 타일은 크게, 쉬는 타일은 한 줄로", run: () => { umapWallResetSize(band.key); paintUmap(true); } },
+    { label: "이 타일 카드 자동 배치로 되돌리기", disabled: !Object.values(UM.manual).some((spot) => spot.band === band.key), run: () => { umapResetAllManual(band.key); paintUmap(true); } },
     ...(project ? [
       { label: "프로젝트 문서", run: () => openProjectDrawer(project) },
       { label: "이름 바꾸기", run: () => inlineEdit(title, { value: project.name, label: "프로젝트 이름",
         onSave: async (name) => { if (!name) return; await umapRequest("projects/rename", {}, { id: project.id, name }); await umapRefresh(true); } }) },
-      { label: "보관", title: "띠가 세션 폴더로 돌아갑니다. ＋ Task 로 다시 만들면 되살아납니다.", run: () => void umapRequest("projects/archive", {}, { id: project.id }).then(() => umapRefresh(true)) },
+      { label: "보관", title: "타일이 세션 폴더로 돌아갑니다. ＋ Task 로 다시 만들면 되살아납니다.", run: () => void umapRequest("projects/archive", {}, { id: project.id }).then(() => umapRefresh(true)) },
     ] : []),
   ]);
 }
@@ -102,7 +107,7 @@ function umapTaskMenu(anchor, taskId) {
     .filter(({ status }) => !["running", "waiting_approval", "completed"].includes(status) && status !== task.status);
   const failed = task.stages.find(({ status }) => status === "failed");
   inlineMenu(anchor, [
-    { label: "Workflow 편집", disabled: busy, title: busy ? "실행이 끝난 뒤 고칠 수 있습니다" : "단계 넣기·순서 바꾸기·지우기", run: () => umapStartEdit(taskId) },
+    { label: "Workflow 편집", disabled: busy, title: busy ? "실행이 끝난 뒤 고칠 수 있습니다" : "단계 넣기·순서 바꾸기·지우기", run: () => umapBeginEdit(taskId) },
     { label: "내용·한도 고치기", run: () => openTaskDrawer(taskId) },
     ...(task.run && ["running", "queued", "waiting_approval", "paused", "interrupted"].includes(task.run.status) ? [{ label: "실행 취소", run: () => void umapRunAction(task.run.id, "cancel").catch((error) => umapToast(error.message)) }] : []),
     ...(failed && task.run?.status === "failed" ? [{ label: "‘" + failed.label + "’ 다시 시도", run: () => void umapRetry(task.run.id, failed.id).catch((error) => umapToast(error.message)) }] : []),
@@ -127,7 +132,7 @@ function umapSessionMenu(card) {
   ]);
 }
 
-// 주소 ?run=<id>(예전 실행 링크): 그 실행의 Task 줄로 옮긴다.
+// 주소 ?run=<id>(예전 실행 링크): 그 실행의 Task 카드가 보이게 그 타일을 옮기고 스크롤한다.
 function umapRevealRun(runId) {
   for (const band of UMAP_BANDS) for (const task of band.tasks) {
     if (task.run?.id !== runId) continue;
@@ -137,13 +142,16 @@ function umapRevealRun(runId) {
   }
 }
 
-// 위쪽 '개입 필요 N': 누를 때마다 다음 항목(승인 대기 단계 → 보류 Task → 답을 기다리는 세션)으로 옮긴다.
+// 위쪽 '개입 필요 N': 누를 때마다 다음 항목(승인 대기 단계 → 실패·보류 → 답을 기다리는 세션)으로 — 그 타일이 화면에 오게 벽을 옮기고,
+// 타일 본문을 그 단계·카드까지 스크롤해 반짝인다. 다른 프로젝트를 전체 화면으로 보고 있었으면 벽으로 돌아온다.
 let umapAttentionAt = 0;
 function umapJumpAttention() {
   if (mapMode !== "map") setMapMode("map");
   const list = umapAttention(UMAP_BANDS);
   if (!list.length) return umapToast("지금 개입이 필요한 항목이 없습니다.");
   const item = list[umapAttentionAt++ % list.length];
+  if (UM.focus && UM.focus !== item.band) umapLeaveFocus();
+  UM.current = item.band;
   const box = UMAP_LAYOUT.boxes[item.key];
   if (box) umapReveal(box, true);
   umapToast(item.label);

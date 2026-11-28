@@ -1,6 +1,6 @@
 /* omp-live-map · view · 맵 안의 두 편집 줄.
-   1) '＋ Task' 한 줄: 띠 머리의 ＋ Task(또는 위쪽 ＋ 새 실행)가 그 띠 맨 위에 글 + Workflow 칩 한 줄을 연다. Enter = 만들기(새 실행이면 만들고 실행), Esc = 닫기.
-   2) Workflow 편집: Task ⋯ > 'Workflow 편집'이 그 Task 의 단계 줄만 편집 상태로 둔다(나머지는 흐리게). 단계 사이 ＋ = 넣기,
+   1) '＋ Task' 한 줄: 타일 머리의 ＋ Task(또는 위쪽 ＋ 새 실행)가 그 타일 본문 맨 위에 글 + Workflow 칩 한 줄을 연다(쉬는 타일은 그동안 일하는 크기로 커진다). Enter = 만들기(새 실행이면 만들고 실행), Esc = 닫기.
+   2) Workflow 편집: Task ⋯ > 'Workflow 편집'이 그 프로젝트를 전체 화면(넓은 배치)으로 열고 그 Task 의 단계 줄만 편집 상태로 둔다(나머지는 흐리게, 끝내면 벽으로). 단계 사이 ＋ = 넣기,
       단계를 끌면 순서 바꾸기, 단계 ⋯ = 지우기. 바꿀 때마다 저장한다(범위: 이 Task만 · 템플릿). */
 
 function umapAddLineHTML(band, box) {
@@ -14,7 +14,7 @@ function umapAddLineHTML(band, box) {
     <select class="um-flow-select" aria-label="Workflow">${groups}</select><small>${esc(UM.adding.status || "Esc 닫기")}</small></div>`;
 }
 
-// ＋ Task 한 줄 열기. bandKey 가 없으면 지금(마지막으로 만진) 띠 → 가장 최근 프로젝트 띠.
+// ＋ Task 한 줄 열기. bandKey 가 없으면 지금(마지막으로 만진) 타일 → 가장 최근 프로젝트 타일.
 function umapOpenAdd(bandKey, { run = false } = {}) {
   const key = bandKey || umapCurrentBand();
   if (!key) return;
@@ -62,15 +62,10 @@ function bindUmapAddLine(items) {
   items.addEventListener("input", (event) => { if (event.target.closest?.(".um-add-text") && UM.adding) UM.adding.text = event.target.value; });
 }
 
-// 편집 중인 줄의 ＋: 맨 앞(Task 카드와 첫 단계 사이), 단계 사이, 맨 뒤.
+// 편집 중인 줄의 ＋: 맨 앞(Task 카드와 첫 단계 사이), 단계 사이, 맨 뒤. 단계가 다음 줄로 넘어가도 그 단계 왼쪽에 놓는다(model umapEditSpots).
 function umapEditPlusHTML(task, layout) {
   const boxes = task.stages.map(({ id }) => layout.boxes[umapStageKey(task.id, id)]).filter(Boolean);
-  const taskBox = layout.boxes[umapTaskKey(task.id)];
-  const spots = [];
-  const y = (boxes[0] || taskBox).y + UMAP.STAGE_H / 2 - 13;
-  spots.push(!boxes.length ? UMAP.STAGE_X : boxes[0].x === UMAP.STAGE_X ? UMAP.PAD + UMAP.TASK_W + 6 : boxes[0].x - 32);
-  for (const box of boxes) spots.push(box.x + box.w + UMAP.STAGE_GAP / 2 - 13);
-  return spots.map((x, index) => `<button class="um-plus" data-um="insert" data-task="${esc(task.id)}" data-index="${index}" style="left:${x}px;top:${y}px" title="여기에 단계 넣기" aria-label="${index + 1}번째 자리에 단계 넣기">＋</button>`).join("");
+  return umapEditSpots(boxes, layout.boxes[umapTaskKey(task.id)]).map(({ x, y }, index) => `<button class="um-plus" data-um="insert" data-task="${esc(task.id)}" data-index="${index}" style="left:${x}px;top:${y}px" title="여기에 단계 넣기" aria-label="${index + 1}번째 자리에 단계 넣기">＋</button>`).join("");
 }
 
 async function umapInsertMenu(anchor, index) {
@@ -94,12 +89,12 @@ function umapEditStageMenu(anchor, taskId, node) {
     { label: "단계 고치기…", run: () => openStageDrawer(taskId, node, "stage") },
   ]);
 }
-// 편집 중 단계 끌기가 끝나면 놓은 x 로 새 자리를 정한다(옮긴 자리로 저장하지 않는다).
-function umapDropStage(taskId, node, worldX) {
-  // 단계 칸 폭은 그 아래 에이전트 나무만큼 달라서 실제 칸 위치로 자리를 찾는다.
+// 편집 중 단계 끌기가 끝나면 놓은 자리(캔버스 x, y)로 새 순서를 정한다(옮긴 자리로 저장하지 않는다).
+function umapDropStage(taskId, node, x, y) {
+  // 단계 칸 폭은 그 아래 에이전트 나무만큼 달라지고 줄을 넘기기도 해서 실제 칸 위치로 가장 가까운 자리를 찾는다.
   const task = umapTaskById(taskId);
-  const xs = (task?.stages || []).map(({ id }) => UMAP_LAYOUT?.boxes[umapStageKey(taskId, id)]?.x).filter(Number.isFinite);
-  const index = umapDropIndex(worldX, UM.edit.ids.length, xs.length === UM.edit.ids.length ? xs : undefined);
+  const spots = (task?.stages || []).map(({ id }) => UMAP_LAYOUT?.boxes[umapStageKey(taskId, id)]).filter(Boolean).map((box) => ({ x: box.x, y: box.y }));
+  const index = umapDropIndex(x, UM.edit.ids.length, spots.length === UM.edit.ids.length ? spots : undefined, y);
   const next = umapMoveStage(UM.edit.ids, node, index);
   if (next.join() !== UM.edit.ids.join()) void umapSaveEdit(next); else paintUmap(true);
 }

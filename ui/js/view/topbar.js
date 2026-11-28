@@ -31,7 +31,7 @@ $("filters").addEventListener("click", (e) => {
   FILTER = b.dataset.f;
   for (const x of $("filters").querySelectorAll("button")) x.classList.toggle("on", x === b);
   renderMap(true, true);
-  // 보이는 세션이 바뀌었으니 맵을 다시 내용에 맞춘다(읽을 수 있는 배율 70% 이상).
+  // 보이는 세션이 바뀌었으니 벽을 다시 그리고 맨 위 100%로 둔다.
   if (typeof mapMode !== "undefined" && mapMode === "map") { paintUmap(true); umapFit(true); }
 });
 

@@ -57,14 +57,14 @@
   <div id="ctxmenu"></div>
   <div id="minimap"><svg id="mmsvg" width="204" height="142"></svg></div>
   <div id="workarea">
-    <section id="umap" aria-label="한 맵: 프로젝트 · Task · Workflow 단계 · 세션">
-      <div id="umap-viewport" tabindex="0" aria-label="맵. 빈 곳을 끌어 이동, Ctrl+휠로 확대·축소">
-        <div id="umap-surface"><svg id="umap-links" aria-hidden="true"></svg><div id="umap-items"></div></div>
+    <section id="umap" aria-label="관제 벽: 프로젝트 타일마다 Task · Workflow 단계 · 세션">
+      <div id="umap-viewport" tabindex="0" aria-label="관제 벽. 타일 위 휠 = 그 타일 스크롤, 타일 사이 휠·끌기 = 벽 이동, 타일 머리 두 번 누르기 = 전체 화면">
+        <div id="umap-surface"><div id="umap-items"></div></div>
       </div>
       <div id="umap-tools">
         <button id="umap-library" type="button" title="하네스·루프·모델·Workflow 템플릿 (Alt+L)">라이브러리</button>
-        <button id="umap-reset" type="button" title="옮겨 둔 카드를 모두 자동 배치로 되돌립니다">자동 배치로 되돌리기</button>
-        <button id="umap-fit-all" type="button" title="전체 보기 (0)">전체 보기</button>
+        <button id="umap-reset" type="button" title="옮겨 둔 카드와 타일 순서·크기를 모두 자동 배치(개입 필요 → 진행 중 → 쉬는 중, 내용대로 크기)로 되돌립니다">자동 배치로 되돌리기</button>
+        <button id="umap-fit-all" type="button" title="벽 전체 보기 (0)">전체 보기</button>
         <span id="umap-status" role="status"></span>
       </div>
       <aside id="umap-drawer" hidden aria-labelledby="umap-drawer-title">
@@ -92,6 +92,7 @@
   <script src="js/model/workflow-summary.js"></script>
   <script src="js/model/agent-lines.js"></script>
   <script src="js/model/task-map.js"></script>
+  <script src="js/model/umap-wall.js"></script>
   <script src="js/viewmodel/prompt-composer.js"></script>
   <script src="js/viewmodel/map.js"></script>
   <script src="js/viewmodel/store.js"></script>

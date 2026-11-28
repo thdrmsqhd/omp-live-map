@@ -1,15 +1,69 @@
-/* omp-live-map · view · 한 맵(#umap): 프로젝트 띠 · Task 카드 · Workflow 단계 노드(하네스 보라 · 루프 주황 칩) · 세션 카드 · 서랍 · 위쪽 막대 */
+/* omp-live-map · view · 관제 벽(#umap): 프로젝트 타일 격자 · 타일 안 Task 카드 · Workflow 단계 노드(하네스 보라 · 루프 주황 칩) · 세션 카드 · 서랍 · 위쪽 막대 */
 #umap { position: relative; flex: 1; min-width: 0; overflow: hidden; background: radial-gradient(circle at 1px 1px, #18232f 1px, transparent 0) 0 0 / 24px 24px, #0a0e13; }
 #umap-viewport { position: absolute; inset: 40px 0 0 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
 #umap-viewport.panning { cursor: grabbing; }
 #umap-surface { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-#umap-links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 1; }
-#umap-links path { fill: none; stroke-width: 2; }
-#umap-links .um-l-flow, #umap-links .um-l-start { stroke: #3f8fd6; marker-end: url(#um-arrow); }
-#umap-links .um-l-start { stroke-dasharray: 5 4; stroke: #35587a; }
-#umap-links .um-l-sess { stroke: #4f6b84; stroke-dasharray: 3 3; }
 #umap-items { position: absolute; left: 0; top: 0; }
-#umap-items > * { position: absolute; box-sizing: border-box; }
+#umap-items > .um-empty { position: absolute; box-sizing: border-box; }
+.um-links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 1; }
+.um-links path { fill: none; stroke-width: 2; }
+.um-links .um-l-flow, .um-links .um-l-start { stroke: #3f8fd6; }
+.um-links .um-l-start { stroke-dasharray: 5 4; stroke: #35587a; }
+.um-links .um-l-sess { stroke: #4f6b84; stroke-dasharray: 3 3; }
+.um-links .um-l-sub { stroke: #6c7fd6; stroke-width: 2; }
+
+/* 프로젝트 타일: 머리(이름 · 지표 · 상태 한 줄) + 본문(타일 안에서만 스크롤). 테두리 색 = 상태(개입 필요 주황 · 진행 중 파랑 · 쉬는 중 회색). */
+.um-tile { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; border: 1px solid #1f2c3a; border-radius: 12px; background: linear-gradient(#111a24f2, #0d141cf2); overflow: hidden; }
+.um-tile.t-attention { border: 2px solid var(--idle); box-shadow: 0 0 0 1px #e0a83c44, 0 0 22px #e0a83c2e; }
+.um-tile.t-running { border-color: #2f6fa8; }
+.um-tile.t-idle { background: #0f161e; }
+.um-tile.focus { border-radius: 0; border-width: 0 0 0 4px; }
+.um-tile.dragging { z-index: 40; opacity: .92; box-shadow: 0 18px 44px #000d; cursor: grabbing; }
+.um-tile.resizing { z-index: 40; outline: 2px dashed #4aa8ff; outline-offset: -2px; }
+.um-tile.um-flash { animation: um-tile-flash 1.2s ease-out 2; }
+@keyframes um-tile-flash { 0%, 100% { box-shadow: 0 0 0 0 #ffd48900; } 40% { box-shadow: 0 0 0 5px #ffd489cc; } }
+.um-tile-head { flex: none; padding: 6px 10px 6px 12px; display: grid; gap: 3px; cursor: grab; border-bottom: 1px solid #1a2632; min-width: 0; }
+.um-tile.small .um-tile-head { border-bottom: 0; }
+.um-tile.focus .um-tile-head { cursor: default; padding: 8px 16px; }
+.um-tile-head .um-line { min-width: 0; }
+.um-tile-head button { padding: 0 8px; font-size: 12px; line-height: 22px; }
+.um-tile-state { flex: none; font-style: normal; font-size: 12px; font-weight: 650; padding: 0 7px; border-radius: 99px; color: #9fb2c3; background: #1a2430; }
+.t-attention .um-tile-state { color: #1b1408; background: var(--idle); }
+.t-running .um-tile-state { color: #dcefff; background: #1d4a73; }
+.um-tile-sum { font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #c2d1df; }
+.um-tile-sum.attention { color: #ffd489; font-weight: 650; }
+.um-tile-sum.running { color: #9fe0ff; }
+.um-tile-sum small { font-size: 12px; color: #e0c080; font-weight: 500; }
+.um-tile-body { flex: 1; min-height: 0; overflow: auto; position: relative; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2a3c50 transparent; cursor: default; }
+.um-tile-canvas { position: relative; }
+.um-tile-canvas > * { position: absolute; box-sizing: border-box; }
+.um-tile-resize { position: absolute; right: 0; bottom: 0; z-index: 8; width: 18px; height: 18px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 55%, #4f6b84 55%, #4f6b84 65%, transparent 65%, transparent 75%, #4f6b84 75%, #4f6b84 85%, transparent 85%); }
+.um-tile-resize:hover { background-color: #1c2a38; }
+.um-wall-back { border-color: var(--accent); color: #dcefff; font-weight: 650; }
+
+/* 맵 위 도구 막대: 라이브러리 · 자동 배치로 되돌리기 · 전체 보기. 맵(#umap-viewport)은 이 막대 아래에서 시작해 카드를 가리지 않는다. */
+#umap-tools { position: absolute; left: 0; right: 0; top: 0; height: 40px; box-sizing: border-box; z-index: 30; display: flex; gap: 6px; align-items: center; padding: 0 12px; background: #0d141c; border-bottom: 1px solid #1f2c3a; }
+#umap-tools button { background: #111821ee; }
+#umap-tools #umap-library { border-color: #6c55c9; color: #d6ccff; font-weight: 650; }
+#umap-status { color: #bfe0ff; font-size: 12px; background: #0d1620e6; border-radius: 6px; padding: 2px 8px; }
+#umap-status:empty { display: none; }
+
+/* 타일 머리 줄 */
+.um-line { min-width: 0; }
+.um-tile-head button { padding: 0 8px; font-size: 12px; line-height: 22px; }
+.um-tile-state { flex: none; font-style: normal; font-size: 12px; font-weight: 650; padding: 0 7px; border-radius: 99px; color: #9fb2c3; background: #1a2430; }
+.t-attention .um-tile-state { color: #1b1408; background: var(--idle); }
+.t-running .um-tile-state { color: #dcefff; background: #1d4a73; }
+.um-tile-sum { font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #c2d1df; }
+.um-tile-sum.attention { color: #ffd489; font-weight: 650; }
+.um-tile-sum.running { color: #9fe0ff; }
+.um-tile-sum small { font-size: 12px; color: #e0c080; font-weight: 500; }
+.um-tile-body { flex: 1; min-height: 0; overflow: auto; position: relative; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2a3c50 transparent; cursor: default; }
+.um-tile-canvas { position: relative; }
+.um-tile-canvas > * { position: absolute; box-sizing: border-box; }
+.um-tile-resize { position: absolute; right: 0; bottom: 0; z-index: 8; width: 18px; height: 18px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 55%, #4f6b84 55%, #4f6b84 65%, transparent 65%, transparent 75%, #4f6b84 75%, #4f6b84 85%, transparent 85%); }
+.um-tile-resize:hover { background-color: #1c2a38; }
+.um-wall-back { border-color: var(--accent); color: #dcefff; font-weight: 650; }
 
 /* 맵 위 도구 막대: 라이브러리 · 자동 배치로 되돌리기 · 전체 보기. 맵(#umap-viewport)은 이 막대 아래에서 시작해 카드를 가리지 않는다. */
 #umap-tools { position: absolute; left: 0; right: 0; top: 0; height: 40px; box-sizing: border-box; z-index: 30; display: flex; gap: 6px; align-items: center; padding: 0 12px; background: #0d141c; border-bottom: 1px solid #1f2c3a; }
@@ -23,9 +77,9 @@
 .um-band-head { position: absolute; left: 0; right: 0; top: 0; padding: 8px 14px 0; display: grid; gap: 6px; }
 .um-line { display: flex; gap: 10px; align-items: center; white-space: nowrap; min-width: 0; }
 .um-line2 { gap: 16px; }
-.um-band-title { font-size: 17px; color: #eef4fb; }
-.um-path { color: var(--dim); font: 12px var(--mono); overflow: hidden; text-overflow: ellipsis; max-width: 460px; }
-.um-stats { color: #c2d1df; font-size: 13px; }
+.um-band-title { font-size: 15px; color: #eef4fb; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.um-path { color: var(--dim); font: 12px var(--mono); overflow: hidden; text-overflow: ellipsis; max-width: 460px; flex: none; }
+.um-stats { color: #c2d1df; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .um-stats .um-warn { color: #ffd489; }
 .um-spacer { flex: 1; }
 .um-add { border-color: var(--accent); background: #18324a; color: #dcefff; font-weight: 650; }
@@ -135,7 +189,6 @@ input.inline-edit { font: inherit; padding: 1px 6px; border: 1px solid var(--acc
 /* 끝난 Task: 접지 않고 조금 흐리게(글은 그대로 읽힌다) */
 .um-card.um-dim { opacity: .72; filter: saturate(.65); }
 .um-card.um-dim:hover { opacity: 1; filter: none; }
-#umap-links .um-l-sub { stroke: #6c7fd6; stroke-width: 2; }
 /* 활동 서랍 */
 .um-diffs { display: grid; gap: 8px; }
 .um-diff-file { display: grid; gap: 4px; }
@@ -161,7 +214,7 @@ input.inline-edit { font: inherit; padding: 1px 6px; border: 1px solid var(--acc
 .um-add-line small { color: #bcd3e6; white-space: nowrap; }
 
 /* Workflow 편집: 그 줄만 또렷하게, 나머지는 흐리게 */
-#umap.editing .um-card:not(.um-edit-row), #umap.editing .um-band-head, #umap.editing .um-folder, #umap.editing #umap-links { opacity: .28; }
+#umap.editing .um-card:not(.um-edit-row), #umap.editing .um-tile-head, #umap.editing .um-folder, #umap.editing .um-links { opacity: .28; }
 .um-stage.editing { cursor: grab; outline: 2px dashed #ffd48988; outline-offset: 2px; opacity: 1; }
 .um-plus { z-index: 6; width: 26px; height: 26px; padding: 0; border-radius: 50%; border-color: #ffd489; background: #3a2c13; color: #ffd489; font-weight: 700; }
 

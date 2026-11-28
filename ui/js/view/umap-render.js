@@ -1,8 +1,12 @@
-/* omp-live-map · view · 한 맵 그리기: 프로젝트 띠(머리 한 줄 지표) · Task 카드 · Workflow 단계(하네스·루프 칩) · 단계 아래 에이전트 나무
-   (에이전트 카드 + 서브에이전트 카드 가지, view/umap-agent.js). 접기·펼치기·의미 확대 없음: 끝난 Task 는 흐리게 다 그리고, 카드는 배율과 상관없이 같은 문장을 보여 준다.
-   자동 배치는 model/task-map.js umapLayout, 데이터는 viewmodel/task-map.js umapBands. 입력·끌기는 view/umap-input.js. */
+/* omp-live-map · view · 관제 벽 그리기: 프로젝트마다 타일 하나(머리: 이름 · 한 줄 지표 · 상태 한 줄 · ＋ Task)를 격자에 채우고,
+   타일 본문에 승인된 내용 그대로 Task 카드 · Workflow 단계(하네스·루프 칩) · 단계 아래 에이전트 나무(view/umap-agent.js) · Task 없이 연 세션을 그린다.
+   타일 격자·순서·크기는 model/umap-wall.js, 타일 안 배치는 model/task-map.js umapTileLayout, 데이터·타일 상태는 viewmodel/task-map.js.
+   접기·펼치기·의미 확대 없음: 쉬는 타일은 내용대로 작게(머리 + '최근 끝남' 한 줄) 그릴 뿐 단추로 접지 않는다. 입력·끌기는 view/umap-input.js. */
 
-let UMAP_LAYOUT = null, UMAP_BANDS = [], umapPending = false, umapPaintAt = 0, umapTimer = 0;
+let UMAP_LAYOUT = null, UMAP_BANDS = [], UMAP_TILES = new Map(), UMAP_PACK = null, UMAP_GRID = null, UMAP_WALL_PX = { width: 0, height: 0 };
+let umapPending = false, umapPaintAt = 0, umapTimer = 0;
+// 타일 테두리(2px) + 본문 세로 스크롤 막대 자리. 타일 안 배치 폭 = 타일 폭 − 이 값.
+const UMAP_TILE_CHROME = 16;
 const UMAP_KIND = { agent: "에이전트", loop: "루프", approval: "승인", command: "명령", subgraph: "하위 Workflow", condition: "조건", parallel: "병렬", join: "합류" };
 const UMAP_STAGE_STATE = { pending: "대기", running: "실행 중", succeeded: "완료", failed: "실패", waiting_approval: "승인 대기", skipped: "건너뜀", interrupted: "중단" };
 const umapDollars = (cents) => "$" + (Number(cents || 0) / 100).toFixed(2);
@@ -22,7 +26,8 @@ function paintUmapSoon() {
   umapTimer = setTimeout(() => paintUmap(), Math.max(0, 400 - (Date.now() - umapPaintAt)));
 }
 
-function umapBandHead(band, box) {
+// 타일 머리: 1줄 이름 · 상태 · ＋ Task · ⋯, 2줄 한 줄 지표(세션 · 토큰 · 비용 · 주의 · CPU · RAM), 3줄 지금 상태 한 줄. 전체 화면이면 4줄 기간 지표·상태 칸.
+function umapTileHead(band, meta, focus) {
   const stats = band.sessions.reduce((acc, session) => {
     const st = monitorSessionStats(session, umapMemoryLimit());
     acc.tokens += st.tokens; acc.cost += st.cost; acc.cpu += st.cpu || 0; acc.ram += st.ram || 0;
@@ -33,19 +38,47 @@ function umapBandHead(band, box) {
   const parts = [`세션 ${band.sessions.length}`, `토큰 ${fmt(stats.tokens)}`, krw(stats.cost),
     `<b class="${stats.attention + waiting ? "um-warn" : ""}">주의 ${stats.attention + waiting}</b>`, `CPU ${Math.round(stats.cpu)}%`, `RAM ${memSize(Math.round(stats.ram))}`];
   const project = band.project;
-  const counts = new Map();
-  for (const task of band.tasks) counts.set(task.status, (counts.get(task.status) || 0) + 1);
-  const labels = project ? (band.labels.length ? band.labels : Object.entries(TASK_STATUS).map(([status, meta]) => ({ status, label: meta.label, builtin: true }))) : [];
-  const legend = labels.map((item) => `<button class="um-st" data-um="status" data-status="${esc(item.status)}" style="--c:${umapStatusColor(item.status)}" title="눌러서 이름 바꾸기${item.builtin ? "" : " · 지우기"}"><i></i>${esc(item.label)} <b>${counts.get(item.status) || 0}</b></button>`).join("")
-    + (project ? `<button class="um-st um-st-add" data-um="status-add" title="상태 칸 더하기">＋</button>` : "");
-  const metrics = project ? umapMetricsHTML(project.id) : `<span class="um-muted">아직 프로젝트가 아닙니다 · ＋ Task 를 만들면 이 폴더가 프로젝트가 됩니다</span>`;
-  return `<section class="um-band" data-band="${esc(band.key)}" style="left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px">
-    <header class="um-band-head" data-band-head="${esc(band.key)}">
-      <div class="um-line"><b class="um-band-title" title="${esc(band.folder)}">${esc(band.title)}</b><span class="um-path" title="${esc(band.folder)}">${esc(cut(band.folder, 44))}${project?.branch ? " · " + esc(project.branch) : ""}</span>
-        <span class="um-stats">${parts.join(" · ")}</span><span class="um-spacer"></span>
-        <button class="um-add" data-um="add-task" title="이 프로젝트에 Task 한 줄 만들기 (Alt+T)">＋ Task</button><button data-um="band-menu" aria-label="${esc(band.title)} 띠 메뉴">⋯</button></div>
-      <div class="um-line um-line2"><span class="um-metrics">${metrics}</span><span class="um-legend">${legend}</span></div>
-    </header></section>`;
+  let extra = "";
+  if (focus) {
+    const counts = new Map();
+    for (const task of band.tasks) counts.set(task.status, (counts.get(task.status) || 0) + 1);
+    const labels = project ? (band.labels.length ? band.labels : Object.entries(TASK_STATUS).map(([status, m]) => ({ status, label: m.label, builtin: true }))) : [];
+    const legend = labels.map((item) => `<button class="um-st" data-um="status" data-status="${esc(item.status)}" style="--c:${umapStatusColor(item.status)}" title="눌러서 이름 바꾸기${item.builtin ? "" : " · 지우기"}"><i></i>${esc(item.label)} <b>${counts.get(item.status) || 0}</b></button>`).join("")
+      + (project ? `<button class="um-st um-st-add" data-um="status-add" title="상태 칸 더하기">＋</button>` : "");
+    const metrics = project ? umapMetricsHTML(project.id) : `<span class="um-muted">아직 프로젝트가 아닙니다 · ＋ Task 를 만들면 이 폴더가 프로젝트가 됩니다</span>`;
+    extra = `<div class="um-line um-line2"><span class="um-path" title="${esc(band.folder)}">${esc(cut(band.folder, 60))}${project?.branch ? " · " + esc(project.branch) : ""}</span><span class="um-metrics">${metrics}</span><span class="um-legend">${legend}</span></div>`;
+  }
+  const back = focus ? `<button class="um-wall-back" data-um="wall" title="관제 벽으로 돌아가기 (Esc · 머리 두 번 누르기)">벽으로</button>` : "";
+  return `<header class="um-tile-head" data-band-head="${esc(band.key)}" title="${focus ? "두 번 눌러 관제 벽으로" : "끌어서 순서 바꾸기 · 두 번 눌러 전체 화면"}">
+      <div class="um-line"><b class="um-band-title" title="${esc(band.folder)}">${esc(band.title)}</b><i class="um-tile-state">${esc(UMAP_TILE_LABEL[meta.state])}</i><span class="um-spacer"></span>
+        ${back}<button class="um-add" data-um="add-task" title="이 프로젝트에 Task 한 줄 만들기 (Alt+T)">＋ Task</button><button data-um="band-menu" aria-label="${esc(band.title)} 타일 메뉴">⋯</button></div>
+      <div class="um-line"><span class="um-stats">${parts.join(" · ")}</span></div>
+      ${umapTileSummaryHTML(band, meta)}${extra}</header>`;
+}
+// 상태 한 줄: 개입 필요면 무엇을(승인·보류·답), 진행 중이면 무엇이 도는지, 쉬면 '최근 끝남'.
+function umapTileSummaryHTML(band, meta) {
+  const line = (cls, text, title = text) => `<div class="um-tile-sum ${cls}" title="${esc(title)}">${text}</div>`;
+  if (meta.state === "attention") {
+    const [first, ...more] = meta.attention;
+    return line("attention", `⚠ ${esc(first.label)}${more.length ? ` <small>외 ${more.length}건</small>` : ""}`, meta.attention.map(({ label }) => label).join("\n"));
+  }
+  const items = umapFlatItems([...band.tasks.flatMap((task) => task.stages.flatMap((stage) => stage.sessions)), ...band.free.flatMap((group) => group.sessions)]);
+  if (meta.state === "running") {
+    const task = band.tasks.find((item) => item.status === "running");
+    const stage = task?.stages.find(({ status }) => status === "running");
+    const agent = items.find((item) => item.lines?.state === "running" && !item.lines.sub) || items.find((item) => item.lines?.state === "running");
+    const what = task ? task.title + (stage ? " · " + stage.label : "") : agent ? agent.lines.title : "";
+    const now = agent ? agent.lines.now : "";
+    return line("running", `▶ 진행 중 · ${esc(what)}${now ? ` <span class="um-muted">· ${esc(now)}</span>` : ""}`, [what, now].filter(Boolean).join(" · "));
+  }
+  // 쉬는 중: 가장 최근에 끝난 Task(실행) 또는 세션.
+  // Task 실행이 있으면 그것을(그 단계 세션이 몇 분 늦게 끝나도 같은 일이다), 훨씬 뒤에 끝난 대화형 세션이 있으면 그 세션을.
+  const done = band.tasks.filter((task) => task.run).map((task) => ({ title: task.title, at: task.run.updated || task.updated || 0, state: UMAP_STAGE_STATE[task.run.status] || task.run.status }))
+    .sort((a, b) => b.at - a.at)[0];
+  const session = band.sessions.map((item) => ({ title: item.title || "세션", at: item.lastTs || 0, state: "대화형 세션" })).sort((a, b) => b.at - a.at)[0];
+  const last = done && !(session && session.at > done.at + 600000) ? done : session;
+  return last ? line("idle", `최근 끝남 · ${esc(last.title)} <span class="um-muted">· ${esc(last.state)} · ${esc(ago(last.at))}</span>`, last.title)
+    : line("idle", `<span class="um-muted">최근 기록 없음 · ＋ Task 로 시작하세요</span>`, "");
 }
 function umapMetricsHTML(project) {
   const entry = UM.metrics.get(project);
@@ -96,22 +129,104 @@ function umapStageHTML(task, stage, box) {
     <div class="um-chips">${chips.join("")}</div>${approve || live || error}</article>`;
 }
 
-function umapLinksSVG(layout) {
-  const paths = layout.links.map(({ from, to, kind }) => {
-    const a = layout.boxes[from], b = layout.boxes[to];
-    if (kind === "sub") {
-      // 서브에이전트 가지: 부모 왼쪽 아래에서 내려와 자식 왼쪽으로 꺾는다(들여쓴 칸 안이라 다른 노드를 가로지르지 않는다).
-      const x1 = a.x + 14, y1 = a.y + a.h, y2 = b.y + Math.min(22, b.h / 2);
-      return `<path class="um-l-sub" d="M${x1} ${y1} L${x1} ${y2 - 6} Q${x1} ${y2},${x1 + 6} ${y2} L${b.x} ${y2}"/>`;
-    }
-    if (kind === "session") {
-      const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = b.x + Math.min(b.w / 2, 26), y2 = b.y;
-      return `<path class="um-l-sess" d="M${x1} ${y1} C${x1} ${y1 + 16},${x2} ${y2 - 16},${x2} ${y2}"/>`;
-    }
-    const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2, mid = (x1 + x2) / 2;
+// 선: 단계 → 다음 단계(같은 줄이면 옆으로, 줄을 넘기면 칸 사이 틈으로 돌아 내려간다 — 카드를 가로지르지 않는다), 단계 → 에이전트, 에이전트 → 서브에이전트.
+function umapLinkPath(a, b, kind) {
+  if (kind === "sub") {
+    // 서브에이전트 가지: 부모 왼쪽 아래에서 내려와 자식 왼쪽으로 꺾는다(들여쓴 칸 안이라 다른 노드를 가로지르지 않는다).
+    const x1 = a.x + 14, y1 = a.y + a.h, y2 = b.y + Math.min(22, b.h / 2);
+    return `<path class="um-l-sub" d="M${x1} ${y1} L${x1} ${y2 - 6} Q${x1} ${y2},${x1 + 6} ${y2} L${b.x} ${y2}"/>`;
+  }
+  if (kind === "session") {
+    const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = b.x + Math.min(b.w / 2, 26), y2 = b.y;
+    return `<path class="um-l-sess" d="M${x1} ${y1} C${x1} ${y1 + 16},${x2} ${y2 - 16},${x2} ${y2}"/>`;
+  }
+  const y1 = a.y + Math.min(a.h, UMAP.STAGE_H) / 2, y2 = b.y + b.h / 2;
+  if (b.x >= a.x + a.w - 1) {
+    const x1 = a.x + a.w, x2 = b.x, mid = (x1 + x2) / 2;
     return `<path class="um-l-${kind}" d="M${x1} ${y1} C${mid} ${y1},${mid} ${y2},${x2} ${y2}"/>`;
-  });
-  return `<defs><marker id="um-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#5fb4ff"/></marker></defs>` + paths.join("");
+  }
+  // 다음 줄(또는 아래)로 넘어간 단계: a 왼쪽 틈으로 나와 줄 사이로 건너 b 왼쪽으로 들어간다.
+  const g = Math.max(4, Math.min(12, b.x - 4)), gap = Math.min(12, (b.y - a.y) / 2);
+  return `<path class="um-l-${kind}" d="M${a.x} ${y1} H${a.x - g} V${b.y - gap} H${b.x - g} V${y2} H${b.x}"/>`;
+}
+function umapLinksSVG(layout) {
+  const paths = layout.links.map(({ from, to, kind }) => umapLinkPath(layout.boxes[from], layout.boxes[to], kind));
+  return `<defs><marker id="um-arrow-${esc(umapDomId(layout.key))}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#5fb4ff"/></marker></defs>`
+    + paths.join("").replace(/class="um-l-(flow|start)"/g, `$& marker-end="url(#um-arrow-${esc(umapDomId(layout.key))})"`);
+}
+const umapDomId = (key) => String(key).replace(/[^A-Za-z0-9_-]/g, "_");
+
+// 타일 본문(캔버스) 안의 카드들. 배치는 umapTileLayout 결과(layout).
+function umapTileBodyHTML(band, layout) {
+  const html = [];
+  const agents = (items, dim) => { for (const item of umapFlatItems(items)) { const b = layout.boxes[umapSessionKey(item.id)]; if (b) html.push(umapAgentHTML(item, b, dim)); } };
+  const add = layout.boxes["add:" + band.key];
+  if (add) html.push(umapAddLineHTML(band, add));
+  const empty = layout.boxes["empty:" + band.key];
+  if (empty) html.push(`<p class="um-empty" style="left:${empty.x}px;top:${empty.y}px;width:${empty.w}px">＋ Task 로 첫 Task 를 만들거나 위쪽 ＋ 세션으로 세션을 여세요.</p>`);
+  for (const task of band.tasks) {
+    const box = layout.boxes[umapTaskKey(task.id)];
+    if (!box) continue;
+    html.push(umapTaskHTML(band, task, box));
+    for (const stage of task.stages) {
+      html.push(umapStageHTML(task, stage, layout.boxes[umapStageKey(task.id, stage.id)]));
+      agents(stage.sessions, umapDimTask(task));
+    }
+    if (UM.edit?.task === task.id) html.push(umapEditPlusHTML(task, layout));
+  }
+  for (const group of band.free) {
+    const label = layout.boxes["folder:" + band.key + ":" + group.folder];
+    html.push(`<div class="um-folder" style="left:${label.x}px;top:${label.y}px;width:${label.w}px">Task 없이 연 세션 · <span title="${esc(group.folder)}">${esc(group.folder)}</span> · ${group.sessions.length}</div>`);
+    agents(group.sessions, false);
+  }
+  return `<div class="um-tile-canvas" style="width:${layout.width}px;height:${layout.height}px"><svg class="um-links" aria-hidden="true" width="${layout.width}" height="${layout.height}">${umapLinksSVG(layout)}</svg>${html.join("")}</div>`;
+}
+
+// 타일 하나. 쉬는 타일(내용대로 작은 크기)은 머리만 — 접은 것이 아니라 보여 줄 일이 없다는 뜻이다. 크기를 키우면 본문이 보인다.
+function umapTileHTML(entry, focus) {
+  const { band, tile, rect, layout, meta } = entry;
+  const body = focus || tile.h > UMAP_WALL.IDLE_H || tile.state !== "idle";
+  const scroll = (focus ? "full|" : "wall|") + band.key;
+  return `<section class="um-tile t-${esc(tile.state)}${focus ? " focus" : ""}${body ? "" : " small"}" data-band="${esc(band.key)}" style="left:${rect.x}px;top:${rect.y}px;width:${rect.w}px;height:${rect.h}px">
+    ${umapTileHead(band, meta, focus)}${body ? `<div class="um-tile-body" data-body="${esc(band.key)}" data-scroll="${esc(scroll)}">${umapTileBodyHTML(band, layout)}</div>` : ""}
+    ${focus ? "" : `<i class="um-tile-resize" data-tile-resize="${esc(band.key)}" title="끌어서 타일 크기 바꾸기(격자에 맞춤)"></i>`}</section>`;
+}
+
+// 다시 그려도 타일 본문의 스크롤 자리는 그대로(벽·전체 화면은 따로 기억한다).
+function umapKeepScroll(root) {
+  for (const body of root.querySelectorAll(".um-tile-body[data-scroll]")) UM.scroll.set(body.dataset.scroll, { top: body.scrollTop, left: body.scrollLeft });
+}
+function umapRestoreScroll(root) {
+  for (const body of root.querySelectorAll(".um-tile-body[data-scroll]")) {
+    const spot = UM.scroll.get(body.dataset.scroll);
+    if (spot) { body.scrollTop = spot.top; body.scrollLeft = spot.left; }
+  }
+}
+
+// 타일이 처음 보이거나 그 타일의 '지금 볼 곳'(개입 필요 항목 → 도는 단계 → 도는 에이전트)이 바뀌면 그곳으로 스크롤한다.
+// 승인 단계처럼 아래에 에이전트가 없는 단계는 본문 아래쪽에 맞춰 바로 앞 단계의 에이전트 카드(한 일)가 함께 보이게 한다. 사용자가 굴린 자리는 그 뒤로 그대로 둔다.
+function umapTileFocusKey(entry) {
+  const { band, meta, layout } = entry;
+  const first = meta.attention.find(({ key }) => layout.boxes[key]);
+  if (first) return first.key;
+  for (const task of band.tasks) {
+    const stage = task.stages.find(({ status }) => status === "running");
+    if (stage) return umapStageKey(task.id, stage.id);
+  }
+  const items = umapFlatItems(band.free.flatMap((group) => group.sessions));
+  const agent = items.find((item) => item.lines?.state === "running");
+  return agent ? umapSessionKey(agent.id) : "";
+}
+function umapAutoScroll(root) {
+  for (const body of root.querySelectorAll(".um-tile-body[data-scroll]")) {
+    const entry = UMAP_TILES.get(body.dataset.body), key = entry ? umapTileFocusKey(entry) : "", mark = body.dataset.scroll;
+    if (!key || UM.autoFocus.get(mark) === key) continue;
+    UM.autoFocus.set(mark, key);
+    const box = entry.layout.boxes[key];
+    const below = entry.layout.links.some(({ from, kind }) => from === key && kind === "session");
+    body.scrollTop = box.kind === "stage" && !below ? Math.max(0, box.y + box.h + 12 - body.clientHeight) : Math.max(0, box.y - 8);
+    UM.scroll.set(mark, { top: body.scrollTop, left: body.scrollLeft });
+  }
 }
 
 function paintUmap(force = false) {
@@ -119,43 +234,43 @@ function paintUmap(force = false) {
   if (!force && umapBlocked()) { umapPending = true; return; }
   umapPending = false;
   umapPaintAt = Date.now();
-  UMAP_BANDS = umapBands(filteredSessions());
-  const layout = UMAP_LAYOUT = umapLayout(UMAP_BANDS, { manual: UM.manual, width: UMAP.MIN_W });
-  const agents = (items, dim) => { for (const item of umapFlatItems(items)) { const b = layout.boxes[umapSessionKey(item.id)]; if (b) html.push(umapAgentHTML(item, b, dim)); } };
-  const html = [];
-  UMAP_BANDS.forEach((band, index) => {
-    html.push(umapBandHead(band, layout.bands[index]));
-    const add = layout.boxes["add:" + band.key];
-    if (add) html.push(umapAddLineHTML(band, add));
-    const empty = layout.boxes["empty:" + band.key];
-    if (empty) html.push(`<p class="um-empty" style="left:${empty.x}px;top:${empty.y}px;width:${empty.w}px">＋ Task 로 첫 Task 를 만들거나 위쪽 ＋ 세션으로 세션을 여세요.</p>`);
-    for (const task of band.tasks) {
-      const box = layout.boxes[umapTaskKey(task.id)];
-      if (!box) continue;
-      html.push(umapTaskHTML(band, task, box));
-      for (const stage of task.stages) {
-        const sbox = layout.boxes[umapStageKey(task.id, stage.id)];
-        html.push(umapStageHTML(task, stage, sbox));
-        agents(stage.sessions, umapDimTask(task));
-      }
-      if (UM.edit?.task === task.id) html.push(umapEditPlusHTML(task, layout));
-    }
-    for (const group of band.free) {
-      const label = layout.boxes["folder:" + band.key + ":" + group.folder];
-      html.push(`<div class="um-folder" style="left:${label.x}px;top:${label.y}px;width:${label.w}px">Task 없이 연 세션 · <span title="${esc(group.folder)}">${esc(group.folder)}</span> · ${group.sessions.length}</div>`);
-      agents(group.sessions, false);
-    }
-  });
-  if (!UMAP_BANDS.length) html.push(`<p class="um-empty" style="left:20px;top:20px;width:640px">${UM.loaded ? "표시할 프로젝트·세션이 없습니다. 위쪽 필터를 넓히거나 ＋ 세션·＋ 새 실행으로 시작하세요." : esc(UM.error || "불러오는 중…")}</p>`);
   const items = $("umap-items");
+  umapKeepScroll(items);
+  UMAP_BANDS = umapBands(filteredSessions());
+  if (UM.focus && !UMAP_BANDS.some(({ key }) => key === UM.focus)) { UM.focus = ""; UM.view = UM.focusReturn || { x: 0, y: 0, k: 1 }; UM.focusReturn = null; }
+  const states = umapTileStates(UMAP_BANDS);
+  const rect = $("umap-viewport").getBoundingClientRect();
+  const view = { width: rect.width || innerWidth, height: rect.height || innerHeight - 90 };
+  const grid = UMAP_GRID = umapWallGrid(view);
+  // ＋ Task 한 줄을 연 쉬는 타일은 그 줄이 보이게 일하는 타일 크기로 그린다(순서는 그대로).
+  const tiles = UMAP_BANDS.map((band) => ({ key: band.key, ...states.get(band.key), busy: UM.adding?.band === band.key }));
+  const pack = UMAP_PACK = umapWallPack(tiles, { cols: grid.cols, order: UM.wall.order, sizes: UM.wall.sizes, fitRows: grid.rows });
+  UMAP_WALL_PX = UM.focus ? { width: view.width, height: view.height } : umapWallSize(pack, grid);
+  UMAP_TILES = new Map();
+  const boxes = {}, html = [];
+  for (const tile of pack.tiles) {
+    const focus = UM.focus === tile.key;
+    if (UM.focus && !focus) continue;
+    const band = UMAP_BANDS.find(({ key }) => key === tile.key);
+    const r = focus ? { x: 0, y: 0, w: view.width, h: view.height } : umapWallRect(tile, grid);
+    const layout = umapTileLayout(band, { manual: UM.manual, width: Math.max(UMAP_AGENT.MIN_W + 20, Math.floor(r.w - UMAP_TILE_CHROME)) });
+    const entry = { band, tile, rect: r, layout, meta: states.get(tile.key) };
+    UMAP_TILES.set(tile.key, entry);
+    Object.assign(boxes, layout.boxes);
+    html.push(umapTileHTML(entry, focus));
+  }
+  UMAP_LAYOUT = { boxes, width: UMAP_WALL_PX.width, height: UMAP_WALL_PX.height };
+  if (!UMAP_BANDS.length) html.push(`<p class="um-empty" style="left:20px;top:20px;width:640px">${UM.loaded ? "표시할 프로젝트·세션이 없습니다. 위쪽 필터를 넓히거나 ＋ 세션·＋ 새 실행으로 시작하세요." : esc(UM.error || "불러오는 중…")}</p>`);
   items.innerHTML = html.join("");
-  const svg = $("umap-links");
-  svg.setAttribute("width", layout.width + 40);
-  svg.setAttribute("height", layout.height + 40);
-  svg.innerHTML = umapLinksSVG(layout);
+  items.style.width = UMAP_WALL_PX.width + "px";
+  items.style.height = UMAP_WALL_PX.height + "px";
+  umapRestoreScroll(items);
+  umapAutoScroll(items);
   $("umap").classList.toggle("editing", Boolean(UM.edit));
+  $("umap").classList.toggle("focus", Boolean(UM.focus));
+  umapClampView();
   umapApplyView();
-  for (const input of items.querySelectorAll(".um-add-text")) if (UM.adding?.focus) { input.focus(); UM.adding.focus = false; }
+  for (const input of items.querySelectorAll(".um-add-text")) if (UM.adding?.focus) { input.focus({ preventScroll: true }); UM.adding.focus = false; }
   if (typeof paintUmapTopbar === "function") paintUmapTopbar(UMAP_BANDS);
 }
 function umapApplyView() {
