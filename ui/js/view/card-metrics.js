@@ -1,9 +1,6 @@
 /* omp-live-map · view · 큰 카드 지표 구역(토큰·컨텍스트·칩·자원 행) */
 
 // 카드 펼침 상태(저장하지 않음 — 새로고침하면 접힌 상태로 돌아간다).
-const CTX_OPEN = new Set();   // 세션 컨텍스트 목록 전체 표시: nodeId
-const SUB_OPEN = new Set();   // 부제 2줄 표시: nodeId
-const TOOLS_OPEN = new Set(); // 툴 칩 전체 표시: nodeId
 
 // 토큰 바·범례·누적 지표. 바를 누르면 세션 누적 ↔ 최근 1시간으로 바뀐다.
 function tokenSection(n) {
@@ -25,15 +22,13 @@ function tokenSection(n) {
     </div>`;
 }
 
-// 누적 칩은 6개까지만 펼치고, 나머지는 한 줄 버튼으로 접는다.
+// 누적 툴 칩은 접지 않고 모두 보인다(칩 줄이 줄바꿈된다).
 function toolChips(n) {
   const tools = n.tools || [];
-  const open = TOOLS_OPEN.has(n.id);
   const picked = CHAT_TOOL.get(n.id);
-  const shown = open ? tools : tools.slice(0, 6);
+  const shown = tools;
   const chips = shown.map((t) => `<button class="chip t${picked === t.name ? " on" : ""}" data-tool="${esc(t.name)}" title="${esc(t.name)} ${t.count}회 · 마지막 사용 ${ago(t.lastTs)}${t.intent ? " · " + esc(t.intent) : ""} · 클릭: 대화에서 이 툴을 쓴 턴만 보기">${esc(t.name)} ${t.count}</button>`).join("");
-  if (tools.length <= 6) return chips;
-  return chips + `<button class="chip more" data-toolsmore="${esc(n.id)}" title="${open ? "툴 칩 접기" : esc(tools.slice(6).map((t) => t.name).join(" · "))}">${open ? "접기" : "+" + (tools.length - 6)}</button>`;
+  return chips;
 }
 
 function progChips(prog) {
@@ -87,16 +82,12 @@ function sessionCtxBlock(n) {
   const cl = ctxPartsOf(n.session);
   if (cl.parts.length < 2) return "";
   const max = Math.max(...cl.parts.map((p) => p.tok), 1);
-  const open = CTX_OPEN.has(n.id);
-  const TOP = 3;   // 접힌 상태에서 보일 행 수(큰 카드 크롬이 블록 자리를 덜 먹게)
-  const rest = cl.parts.length - TOP;
-  const rows = open ? cl.parts : cl.parts.slice(0, TOP);
+  const rows = cl.parts;   // 접지 않고 모두 보인다
   return `<div class="sec2" style="margin-top:7px">세션 컨텍스트 · 토큰순 · ${cl.parts.length} agent</div>
     ${rows.map((p) => `<button class="tbar${p.id === n.id ? " me" : ""}" data-ctxnode="${esc(p.id)}" title="${esc(p.name)} · ${fmt(p.tok)} tok (${pctText(p.tok, cl.total)}) · 클릭: 이 카드로 이동">
       <span class="tn">${esc(cut(p.name, 14))}</span>
       <span class="tb"><i style="width:${Math.max(3, (p.tok / max) * 100)}%"></i></span>
-      <span class="tv">${p.id === n.id ? "" : fmt(p.tok)}</span></button>`).join("")}
-    ${rest > 0 ? `<button class="ctxmore" data-ctxmore="${esc(n.id)}">${open ? "접기" : `나머지 ${rest}개`}</button>` : ""}`;
+      <span class="tv">${p.id === n.id ? "" : fmt(p.tok)}</span></button>`).join("")}`;
 }
 
 const cpuLevel = (cpu) => (cpu >= 85 ? "cpu-err" : cpu >= 60 ? "cpu-warn" : "cpu-ok");
