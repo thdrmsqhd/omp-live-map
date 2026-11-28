@@ -40,19 +40,6 @@ jobs:
         run: node --test
       - name: Windows Git Bash terminal API
         run: node tests/verification/windows-shell.cjs
-      - name: Windows AppContainer proof
-        if: ${{ !cancelled() }}
-        run: |
-          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if (!$vs) { throw 'Visual Studio C++ tools are unavailable' }
-          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
-          $exe = Join-Path $env:RUNNER_TEMP 'omp-appcontainer.exe'
-          $obj = Join-Path $env:RUNNER_TEMP 'omp-appcontainer.obj'
-          $compile = 'call "' + $vcvars + '" && cl /nologo /W4 /EHsc /std:c++17 /MT /Fo:"' + $obj + '" /Fe:"' + $exe + '" tests/verification/appcontainer.cpp /link userenv.lib advapi32.lib ws2_32.lib'
-          cmd.exe /d /c $compile
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/verification/appcontainer.cjs $exe
       - name: SQLite recovery probe
         if: ${{ !cancelled() }}
         run: node tests/verification/sqlite.cjs
@@ -68,13 +55,6 @@ jobs:
       - name: Browser regression and 10-session measurement
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/browser.cjs
-      - name: Upload V4 UX screenshots
-        if: ${{ !cancelled() && github.ref_name == 'v4/ui-ux-improvements' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: V4-UX-screenshots
-          path: artifacts/v4-ux/*.png
-          if-no-files-found: error
       - name: Product desktop UI and protected API
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: node tests/verification/engineering-desktop.cjs

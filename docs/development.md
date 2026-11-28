@@ -4,7 +4,7 @@
 
 **로컬 회귀 테스트**: `node --test`는 2026-11-26에 Node 26.5(Windows)에서 모두 통과했습니다.
 
-**CI**: `main` 대상 PR과 `main` push에서 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 Linux `unit` 잡(`node --test`)과 함께 `node --test`, Git Bash 터미널, AppContainer, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정, Engineering 데스크톱 UI 순서로 돕니다.
+**CI**: `main` 대상 PR과 `main` push에서 "V3 Windows verification"(`.github/workflows/v2-phase-0.yml`)이 Linux `unit` 잡(`node --test`)과 함께 `node --test`, Git Bash 터미널, SQLite, Electron 수명주기, 브라우저 회귀와 10개 세션 측정(관제 벽·세션 전체 화면·Monaco 편집기·axe 접근성·폭 1024/1440/1920, 갱신 20건 scan → SSE → 벽 DOM P95 1,000ms 미만 — 벽은 연달아 오는 갱신을 400ms 단위로 모아 그리므로 표본 사이를 500ms 띄워 갱신 하나의 지연을 잰다), Engineering 데스크톱 UI, 데스크톱 통합 흐름 순서로 돕니다.
 
 V4 시점의 기록은 [Windows CI #34](https://github.com/thdrmsqhd/omp-live-map/actions/runs/45507478308)의 40건 통과, 테스트용 10개 세션에서 scan → SSE → DOM 반영 지연 P95 29.4ms(허용 기준 1,000ms)입니다. 과거 측정값이며 현재 `main`의 결과가 아닙니다. 실제 에이전트 프로세스의 메모리 절감량과 설치 프로그램은 별도 검증 대상입니다.
 
