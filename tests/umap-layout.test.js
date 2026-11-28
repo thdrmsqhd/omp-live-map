@@ -37,7 +37,7 @@ test("task rows are ordered: needs attention → running → waiting(backlog) �
   assert.deepEqual(ids, ["held", "wait", "run", "back-new", "custom", "ready", "back-old", "done"]);
 });
 
-test("tile layout (wide, project full-screen): task card left, stages to the right, the row wraps when the width is full, agent trees under their stage", () => {
+test("tile layout (wide, project full-screen): task card left, stages to the right, the row wraps when the width is full; the latest session merges into its stage card", () => {
   const { run } = load(["model/agent-lines.js", "model/task-map.js"]);
   const U = run("UMAP"), A = run("UMAP_AGENT");
   const band = { key: "project:a", tasks: [
@@ -52,31 +52,41 @@ test("tile layout (wide, project full-screen): task card left, stages to the rig
   assert.equal(box("stage:t1:work").x, box("stage:t1:plan").x + box("stage:t1:plan").w + U.STAGE_GAP, "the next stage starts after the previous column");
   assert.equal(box("stage:t1:plan").y, box("task:t1").y, "stages share the task row");
   assert.equal(box("stage:t1:ok").x, U.STAGE_X, "a stage that does not fit the width wraps to the next line");
-  const rowBottom = Math.max(...["sess:s1", "sess:s2", "stage:t1:work"].map((key) => box(key).y + box(key).h));
+  const rowBottom = Math.max(...["sess:s1", "stage:t1:plan", "stage:t1:work"].map((key) => box(key).y + box(key).h));
   assert.equal(box("stage:t1:ok").y, rowBottom + U.ROW_GAP, "the wrapped line starts below the tallest column of the line above");
   assert.equal(box("stage:t1:ship").y, box("stage:t1:ok").y, "and keeps flowing to the right");
-  assert.equal(box("sess:s1").x, box("stage:t1:plan").x, "an agent sits right under its stage");
-  assert.equal(box("sess:s1").y, box("stage:t1:plan").y + U.STAGE_H + U.SESS_TOP);
+  // 가장 최근 세션(s2)은 단계 카드 한 장에 합쳐지고(따로 카드 없음), 예전 시도(s1)만 그 아래에 남는다.
+  assert.equal(box("sess:s2"), undefined, "the merged session has no card of its own");
+  assert.equal(box("stage:t1:plan").merged, "sess:s2");
+  assert.equal(layout.alias["sess:s2"], "stage:t1:plan");
+  assert.equal(run("umapBoxOf")(layout, "sess:s2").key, "stage:t1:plan", "looking the session up finds its stage card (attention jump, auto scroll)");
   const H = run("umapAgentHeight")(null);
-  assert.equal(box("sess:s2").y, box("sess:s1").y + H + A.GAP);
-  assert.equal(box("sess:s2").w, A.W, "a wide tile keeps the full card width");
+  const head = U.STAGE_PAD + U.STAGE_TOP + U.STAGE_TITLE;
+  assert.equal(box("stage:t1:plan").h, head + (2 + A.RECENT + 1) * A.ROW, "stage head + the agent sentences (goal · now/result · recent · counters)");
+  assert.ok(box("stage:t1:plan").h < 120 + U.SESS_TOP + H, "one merged card is shorter than the old stage card + gap + agent card");
+  assert.equal(box("stage:t1:work").h, head, "a stage without sessions or chips is only its head");
+  assert.equal(box("sess:s1").x, box("stage:t1:plan").x, "an earlier attempt sits right under its stage");
+  assert.equal(box("sess:s1").y, box("stage:t1:plan").y + box("stage:t1:plan").h + U.SESS_TOP);
+  assert.equal(box("sess:s1").w, A.W, "a wide tile keeps the full card width");
   assert.equal(box("task:t2").h, U.TASK_H, "a completed task is laid out fully (dimmed by the view, not collapsed)");
-  assert.ok(box("stage:t2:plan") && box("sess:s3"), "a completed task still shows its stages and agents");
-  assert.ok(box("sess:f1").y > box("sess:s3").y, "sessions without a task follow the task rows inside the tile");
-  assert.deepEqual(plain(layout.links.filter(({ from }) => from === "stage:t1:plan").map(({ to }) => to)).sort(), ["sess:s1", "sess:s2", "stage:t1:work"]);
+  assert.ok(box("stage:t2:plan").merged === "sess:s3", "a completed task still shows its stages and agents");
+  assert.ok(box("sess:f1").y > box("stage:t2:plan").y, "sessions without a task follow the task rows inside the tile");
+  assert.deepEqual(plain(layout.links.filter(({ from }) => from === "stage:t1:plan").map(({ to }) => to)).sort(), ["sess:s1", "stage:t1:work"]);
   const cards = Object.values(layout.boxes).filter(({ kind }) => kind !== "folder");
   for (const [i, p] of cards.entries()) for (const q of cards.slice(i + 1)) assert.equal(run("umapOverlap")(p, q), false, p.key + " overlaps " + q.key);
   for (const b of Object.values(layout.boxes)) assert.ok(b.x + b.w <= 1440, b.key + " stays inside the full-screen width");
 });
 
-test("tile layout (narrow wall tile): stages stack under the task card at the tile width, cards narrow but keep their sentence height, nothing overlaps or leaves the tile", () => {
+test("tile layout (narrow wall tile): stages stack under the task card at the tile width, merged cards keep their sentence height, subagents branch from the stage card, nothing overlaps", () => {
   const { run } = load(["model/agent-lines.js", "model/task-map.js"]);
   const U = run("UMAP"), A = run("UMAP_AGENT");
   const lines = (recent) => ({ recent: Array.from({ length: recent }, (_, i) => ({ text: "r" + i })), counters: "읽음 1" });
   const leaf = (id, recent = 0) => ({ id, node: {}, lines: lines(recent), children: [] });
   const main = { id: "m", node: {}, lines: lines(3), children: [{ id: "a", node: {}, lines: lines(3), children: [leaf("a1", 1)] }, leaf("b", 2)] };
-  const band = { key: "project:shop", adding: true, tasks: [{ id: "t", stages: [{ id: "plan", sessions: [leaf("p0", 3)] }, { id: "work", sessions: [main] }, { id: "ok", sessions: [] }] }],
+  const harness = { name: "Author", model: { id: "m1", name: "s", model: "claude-sonnet-5-5" } };
+  const band = { key: "project:shop", adding: true, tasks: [{ id: "t", stages: [{ id: "plan", harness, sessions: [leaf("p0", 3)] }, { id: "work", sessions: [main] }, { id: "ok", sessions: [] }] }],
     free: [{ folder: "C:/w", sessions: [leaf("i", 3), leaf("j", 1), leaf("k")] }] };
+  const head = U.STAGE_PAD + U.STAGE_TOP + U.STAGE_TITLE;
   for (const width of [448, 384, 300]) {
     const layout = run("umapTileLayout").call(null, band, { width });
     const box = (key) => layout.boxes[key];
@@ -84,50 +94,71 @@ test("tile layout (narrow wall tile): stages stack under the task card at the ti
     const stages = ["plan", "work", "ok"].map((id) => box("stage:t:" + id));
     assert.ok(stages.every((b) => b.x === U.PAD_NARROW && b.w === width - 2 * U.PAD_NARROW), width + ": stages span the tile width, one per line");
     assert.ok(stages[0].y >= box("task:t").y + U.TASK_H, width + ": the first stage starts under the task card");
-    assert.ok(stages[1].y > box("sess:p0").y + box("sess:p0").h && stages[2].y > box("sess:b").y + box("sess:b").h, width + ": the next stage comes after the previous stage's whole agent tree");
-    assert.equal(box("sess:a1").x, box("sess:m").x + 2 * A.INDENT, width + ": nested subagents still indent");
+    assert.equal(stages[0].h, head + U.STAGE_CHIPS + (2 + 3 + 1) * A.ROW, width + ": harness chips add their row; the merged sentences keep their height (text is not shrunk)");
+    assert.equal(stages[1].h, head + (2 + 3 + 1) * A.ROW, width + ": the work stage carries its main agent's sentences");
+    assert.ok(stages[1].y > stages[0].y + stages[0].h && stages[2].y > box("sess:b").y + box("sess:b").h, width + ": the next stage comes after the previous stage's whole agent tree");
+    assert.equal(box("sess:m"), undefined, width + ": the main agent is the stage card");
+    assert.equal(box("sess:a").x, stages[1].x + A.INDENT, width + ": a subagent branches one step in from the merged stage card");
+    assert.equal(box("sess:a").y, stages[1].y + stages[1].h + A.GAP, width + ": right below it");
+    assert.equal(box("sess:a1").x, stages[1].x + 2 * A.INDENT, width + ": nested subagents still indent");
     assert.ok(box("sess:a1").w >= A.MIN_W, width + ": a nested card never gets narrower than the readable minimum");
-    assert.equal(box("sess:m").h, A.PAD + A.HEAD + (2 + 3 + 1) * A.ROW, width + ": card height follows its sentences (text is not shrunk)");
     assert.ok(box("add:project:shop").w <= width, width + ": the ＋ Task line fits the tile");
     const cards = Object.values(layout.boxes).filter(({ kind }) => kind !== "folder");
     for (const [i, p] of cards.entries()) for (const q of cards.slice(i + 1)) assert.equal(run("umapOverlap")(p, q), false, width + ": " + p.key + " overlaps " + q.key);
-    // 벽 타일 폭(424px 이상)에서는 두 단계 들여쓴 서브에이전트까지 타일 안에 든다 → 옆으로 스크롤할 일이 없다.
     if (width >= A.MIN_W + 2 * A.INDENT + 2 * U.PAD_NARROW) {
       assert.equal(layout.width, width, width + ": nothing widens the tile canvas (no sideways scrolling)");
       for (const b of Object.values(layout.boxes)) assert.ok(b.x >= 0 && b.x + b.w <= width, width + ": " + b.key + " stays inside the tile");
     }
-    // 단계 → 다음 단계 선은 아래로 이어진다(왼쪽 틈으로 돌아 들어간다).
     assert.ok(layout.links.some(({ from, to, kind }) => from === "stage:t:plan" && to === "stage:t:work" && kind === "flow"));
+    assert.ok(layout.links.some(({ from, to, kind }) => from === "stage:t:work" && to === "sess:a" && kind === "sub"), width + ": the branch line starts at the stage card");
   }
+  // 합치기 전(단계 카드 120 + 틈 + 세션 카드)보다 짧다 → 실패 카드가 아래로 밀리지 않는다.
+  const narrow = run("umapTileLayout").call(null, band, { width: 448 });
+  const old = 120 + U.SESS_TOP + run("umapAgentHeight")(lines(3));
+  assert.ok(narrow.boxes["stage:t:work"].h + 0 < old - 80, "a stage with its agent takes well under the old two-card height");
 });
 
-test("subagent cards: nested children indent under their parent, widen the stage column, size to their sentences and never overlap", () => {
+test("subagent cards: nested children indent under the merged stage card, widen the stage column, earlier attempts follow, nothing overlaps", () => {
   const { run } = load(["model/agent-lines.js", "model/task-map.js"]);
   const U = run("UMAP"), A = run("UMAP_AGENT");
   const lines = (recent) => ({ recent: Array.from({ length: recent }, (_, i) => ({ text: "r" + i })), counters: "읽음 1" });
   const leaf = (id, recent = 0) => ({ id, node: {}, lines: lines(recent), children: [] });
   const main = { id: "m", node: {}, lines: lines(3), children: [{ id: "a", node: {}, lines: lines(3), children: [leaf("a1", 1)] }, leaf("b", 2)] };
-  const band = { key: "project:a", tasks: [{ id: "t", stages: [{ id: "plan", sessions: [leaf("p0")] }, { id: "work", sessions: [main, leaf("m2")] }, { id: "ok", sessions: [] }] }],
+  const band = { key: "project:a", tasks: [{ id: "t", stages: [{ id: "plan", sessions: [leaf("p0")] }, { id: "work", sessions: [leaf("m2"), main] }, { id: "ok", sessions: [] }] }],
     free: [{ folder: "C:/w", sessions: [{ id: "i", node: {}, lines: lines(3), children: [leaf("i1")] }, leaf("j"), leaf("k"), leaf("l"), leaf("m9"), leaf("n")] }] };
   const layout = run("umapTileLayout").call(null, band, { width: 2200 });
-  const box = (key) => layout.boxes[key];
-  assert.equal(box("sess:a").x, box("sess:m").x + A.INDENT, "a child is indented one step");
-  assert.equal(box("sess:a1").x, box("sess:m").x + 2 * A.INDENT, "a nested child two steps");
-  assert.ok(box("sess:a").y >= box("sess:m").y + box("sess:m").h && box("sess:a1").y >= box("sess:a").y + box("sess:a").h, "children go below the parent");
+  const box = (key) => layout.boxes[key], work = box("stage:t:work");
+  assert.equal(work.merged, "sess:m", "the latest attempt (last in the list) is merged");
+  assert.equal(box("sess:a").x, work.x + A.INDENT, "a child is indented one step");
+  assert.equal(box("sess:a1").x, work.x + 2 * A.INDENT, "a nested child two steps");
+  assert.ok(box("sess:a").y >= work.y + work.h && box("sess:a1").y >= box("sess:a").y + box("sess:a").h, "children go below the parent");
   assert.ok(box("sess:b").y >= box("sess:a1").y + box("sess:a1").h, "a sibling goes below the previous sibling's whole branch");
-  assert.ok(box("sess:m2").y >= box("sess:b").y + box("sess:b").h, "the next agent goes below the whole tree");
-  assert.equal(box("stage:t:work").w, 2 * A.INDENT + A.W, "the stage column widens to fit the tree");
-  assert.equal(box("stage:t:ok").x, box("stage:t:work").x + box("stage:t:work").w + U.STAGE_GAP, "the next stage starts after the widened column");
+  assert.equal(box("sess:m2").y, box("sess:b").y + box("sess:b").h + U.SESS_TOP, "an earlier attempt goes below the whole branch");
+  assert.equal(work.w, 2 * A.INDENT + A.W, "the stage column widens to fit the tree");
+  assert.equal(box("stage:t:ok").x, work.x + work.w + U.STAGE_GAP, "the next stage starts after the widened column");
   const cards = Object.values(layout.boxes).filter(({ kind }) => kind !== "folder");
   for (const [i, p] of cards.entries()) for (const q of cards.slice(i + 1)) assert.equal(run("umapOverlap")(p, q), false, p.key + " overlaps " + q.key);
   assert.deepEqual(plain(layout.links.filter(({ kind }) => kind === "sub").map(({ from, to }) => from + ">" + to)).sort(),
-    ["sess:a>sess:a1", "sess:i>sess:i1", "sess:m>sess:a", "sess:m>sess:b"]);
+    ["sess:a>sess:a1", "sess:i>sess:i1", "stage:t:work>sess:a", "stage:t:work>sess:b"]);
   // 카드 높이는 문장 줄 수로 정해진다(배율과 무관): 머리 + 목표 + 지금/결과 + 최근 한 일 n + 카운터.
-  assert.equal(box("sess:m").h, A.PAD + A.HEAD + (2 + 3 + 1) * A.ROW);
-  assert.equal(box("sess:p0").h, A.PAD + A.HEAD + (2 + 0 + 1) * A.ROW, "a card with no actions yet is shorter, not empty space");
+  assert.equal(box("sess:a").h, A.PAD + A.HEAD + (2 + 3 + 1) * A.ROW);
+  assert.equal(box("sess:m2").h, A.PAD + A.HEAD + (2 + 0 + 1) * A.ROW, "a card with no actions yet is shorter, not empty space");
   assert.equal(run("umapAgentHeight")({ recent: [], counters: "" }), A.PAD + A.HEAD + 2 * A.ROW);
+  const kidsOnly = run("umapTileLayout").call(null, { key: "k", tasks: [], free: [{ folder: "x", sessions: [{ id: "p", node: {}, lines: { recent: [], counters: "" }, children: [leaf("c")] }] }] }, { width: 900 });
+  assert.equal(kidsOnly.boxes["sess:p"].h, A.PAD + A.HEAD + 3 * A.ROW, "a card that shows only its subagent count still gets the counter row");
   assert.ok(A.W >= 320 && A.MIN_W >= 240, "agent cards are wide enough for one readable sentence per line");
   assert.equal(String(run("umapTileLayout")).includes("level"), false, "the layout does not depend on the zoom level");
+});
+
+test("approval stage card reserves room for what is being approved: the instruction (2 lines) and the previous stage's result line above 승인/반려", () => {
+  const { run } = load(["model/agent-lines.js", "model/task-map.js"]);
+  const U = run("UMAP"), A = run("UMAP_AGENT"), height = run("umapStageHeight");
+  const head = U.STAGE_PAD + U.STAGE_TOP + U.STAGE_TITLE;
+  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: "배포 전 확인", before: { label: "Tester", result: "경계값 테스트 4개 통과" }, sessions: [] }), head + U.APPROVE_H);
+  assert.equal(height({ type: "approval", status: "waiting_approval", prompt: "첫 단계 승인", sessions: [] }), head + U.APPROVE_H - A.ROW, "no previous stage → no result line");
+  assert.equal(height({ type: "approval", status: "pending", sessions: [] }), head, "a pending approval is only its head");
+  assert.equal(height({ type: "agent", status: "failed", error: "boom", harness: {}, sessions: [] }), head + U.STAGE_CHIPS + A.ROW, "a failed stage without a session shows its error line");
+  assert.equal(run("umapStageAgent")({ sessions: [{ id: "a", node: {} }, { id: "b", node: null }] }).id, "a", "a session without a record is never merged");
 });
 
 test("a moved card keeps its manual spot inside its own tile canvas (pulled back inside a narrower tile) while the rest stays auto-laid-out, and reset returns it", () => {
@@ -159,6 +190,24 @@ test("a moved card keeps its manual spot inside its own tile canvas (pulled back
   assert.deepEqual(plain(Object.keys(run("UM").manual)), ["task:t2"]);
   run("umapResetAllManual")();
   assert.deepEqual(plain(Object.keys(run("UM").manual)), []);
+});
+
+test("auto layout reset can be undone: the snapshot restores moved cards, tile order and tile sizes exactly", () => {
+  const { run, store } = load(["model/agent-lines.js", "model/task-map.js", "viewmodel/task-map.js"]);
+  assert.equal(run("umapHasManualLayout")(), false, "nothing to reset on a fresh wall");
+  run("umapSetManual")("task:t1", "project:a", 40, 60);
+  run("umapWallSetOrder")(["project:b", "project:a"]);
+  run("umapWallSetSize")("project:a", { w: 2, h: 5 });
+  assert.equal(run("umapHasManualLayout")(), true);
+  assert.equal(run("umapHasManualLayout")("project:b"), false, "per tile: only that tile's moved cards count");
+  const before = run("umapLayoutSnapshot")();
+  run("umapResetAllManual")(); run("umapWallReset")();
+  assert.equal(run("umapHasManualLayout")(), false);
+  run("umapRestoreLayout")(before);
+  assert.deepEqual(plain(run("UM").manual), { "task:t1": { band: "project:a", dx: 40, dy: 60 } });
+  assert.deepEqual(plain(run("UM").wall), { order: ["project:b", "project:a"], sizes: { "project:a": { w: 2, h: 5 } } });
+  assert.deepEqual(JSON.parse(store.get("omp-umap-wall-v1")), { v: 1, order: ["project:b", "project:a"], sizes: { "project:a": { w: 2, h: 5 } } }, "and it is saved again");
+  assert.deepEqual(JSON.parse(store.get("omp-umap-manual-v2")), { "task:t1": { band: "project:a", dx: 40, dy: 60 } });
 });
 
 test("persistence: tile order/sizes and card spots are read back on load; old band-order, band-relative card and old map-view keys are dropped", () => {
@@ -225,7 +274,7 @@ test("Workflow 편집 list operations insert, move and remove stage ids", () => 
   const boxes = [{ x: 330, y: 20, w: 380 }, { x: 766, y: 20, w: 380 }, { x: 330, y: 400, w: 380 }];
   const plus = plain(run("umapEditSpots")(boxes, { x: 20, y: 20, w: 272 }));
   assert.equal(plus.length, 4);
-  assert.deepEqual(plus.map(({ y }) => y), [20 + U.STAGE_H / 2 - 13, 20 + U.STAGE_H / 2 - 13, 400 + U.STAGE_H / 2 - 13, 400 + U.STAGE_H / 2 - 13]);
+  assert.deepEqual(plus.map(({ y }) => y), [20 + U.LINK_Y - 13, 20 + U.LINK_Y - 13, 400 + U.LINK_Y - 13, 400 + U.LINK_Y - 13]);
   assert.equal(plus[2].x, 330 - 32, "the ＋ before a wrapped stage sits at its left");
 });
 
@@ -256,3 +305,24 @@ test("sessions are joined to stages by the runtime session id and unlinked ones 
   assert.equal(shop.tasks[0].collapsed, undefined, "a completed task is not collapsed");
   assert.ok(bands.some(({ key, project }) => key === "folder:c:/w/notes" && project === null), "sessions outside projects get their own folder band");
 });
+
+test("an approval stage carries the previous stage's result line (session result summary → stage error → status)", () => {
+  const { run, context } = load(["model/monitor.js", "model/agent-lines.js", "model/task-map.js", "viewmodel/task-map.js"], { askPending: () => false });
+  context.DATA = { sessions: [{ key: "k1", title: "tester", nodes: [{ id: "file-t", kind: "main", sid: "sid-t", cwd: "C:/w/shop", status: "done",
+    act: { status: "done", resultSummary: "경계값 테스트 4개 통과" } }] }] };
+  const UM = run("UM");
+  UM.projects = [{ id: "p", name: "shop", root: "C:/w/shop", archived: 0 }];
+  UM.maps.set("p", { project: { id: "p" }, tasks: [
+    { id: "t", status: "waiting_approval", updated: 1, stages: [
+      { id: "test", label: "Tester", status: "succeeded", sessions: [{ sessionId: "sid-t", attempt: 1, retry: 0 }] },
+      { id: "ok", label: "배포 승인", type: "approval", status: "waiting_approval", prompt: "배포해도 될까요?", sessions: [] }] },
+    { id: "u", status: "waiting_approval", updated: 1, stages: [
+      { id: "build", label: "빌드", status: "failed", error: "npm ERR! missing script", sessions: [] },
+      { id: "ok", label: "승인", type: "approval", status: "waiting_approval", sessions: [] }] },
+  ] });
+  const shop = run("umapBands")(context.DATA.sessions).find(({ key }) => key === "project:p");
+  assert.deepEqual(plain(shop.tasks.find(({ id }) => id === "t").stages[1].before), { label: "Tester", status: "succeeded", result: "경계값 테스트 4개 통과" });
+  assert.deepEqual(plain(shop.tasks.find(({ id }) => id === "u").stages[1].before), { label: "빌드", status: "failed", result: "npm ERR! missing script" });
+  assert.equal(shop.tasks[0].stages[0].before, undefined, "only approval stages get the line");
+});
+

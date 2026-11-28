@@ -2,6 +2,7 @@
   .pendcard {
     position: absolute; z-index: 4; border-radius: 10px; padding: 8px 24px 8px 10px; overflow: hidden;
     border: 1px dashed #4aa8ff88; background: linear-gradient(180deg, #16212d, #111a24);
+    /* unslop-anything-ignore reduced-motion — 대체는 tokens.css 의 prefers-reduced-motion 블록 */
     box-shadow: 0 6px 18px #0006, 0 0 0 1px #4aa8ff22; animation: pendin .18s ease-out;
   }
   .pendcard .px2 {

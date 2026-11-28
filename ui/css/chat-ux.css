@@ -26,13 +26,13 @@
 .node.big .chat-composer .crow{margin:0;display:flex}
 .node.big .chat-composer .cin{width:100%;font-size:14px;line-height:1.6;min-height:52px;padding:8px;background:transparent;border:none;}
 .chat-compose-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.chat-compose-actions button,.chat-extra summary{font-size:12px;min-height:30px;padding:5px 8px}
+.chat-compose-actions button{font-size:12px;min-height:30px;padding:5px 8px}
 .chat-compose-actions .cmodel{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chat-compose-spacer{flex:1}
 .chat-compose-actions .chat-send{background:#2d5b83;border-color:#4679a4;color:#eff7ff;font-weight:650}
 .chat-compose-actions .chat-send:disabled{opacity:.45;cursor:default}
-.chat-extra{position:relative}.chat-extra summary{cursor:pointer;color:#aabfd2}
-.chat-extra>div{position:absolute;bottom:100%;right:0;z-index:40;display:flex;flex-direction:column;min-width:130px;padding:6px;background:#142332;border:1px solid #34495e;border-radius:6px}
+/* 대화 관리(요약·압축·비우기)는 접지 않고 늘 보인다. */
+.chat-manage{display:inline-flex;gap:4px;align-items:center}.chat-manage button{color:#aabfd2}
 .chat-hint{font-size:11px;color:#91a5b9}
 .chat.ro .chat-composer{display:none}
 .stream-label{color:#79d3bd;font-size:11px}

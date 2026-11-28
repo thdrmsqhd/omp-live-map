@@ -23,7 +23,7 @@ function fullCardWanted(id){
   return mapMode==="workspace"&&activeCardId===id;
 }
 function virtualBigCard(n){
-  const b=SATS.get(n.id), r=n.res;
+  const b=SATS.get(n.id), r=monitorResMeasured(n.res)?n.res:null;
   const style=`left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px`;
   const name=displayName(n), state={live:"실행 중",idle:"유휴",done:"완료"}[n.status]||n.status;
   return `<div class="node big virtual-card ${esc(n.kind)} ${esc(n.status)}" data-virtual="1" data-id="${esc(n.id)}" style="${style}">

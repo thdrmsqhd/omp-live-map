@@ -19,6 +19,7 @@
   .sl-empty { color: var(--dim); font-size: 11px; padding: 14px 8px; }
   .sl-sess { margin-bottom: 8px; padding: 3px 0; border: 1px solid #1b2734; border-radius: 9px; background: #0f1620; }
   .sl-sess.live { border-color: #1f5b4f; background: #0f1a1c; }
+  /* unslop-anything-ignore reduced-motion — 대체는 tokens.css 의 prefers-reduced-motion 블록 */
   .sl-sess.flash { animation: flash 1.2s ease-out; }
   .sl-row { padding: 4px 8px 4px 8px; margin: 1px 3px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; min-width: 0; }
   .sl-row:hover { background: #16222e; }

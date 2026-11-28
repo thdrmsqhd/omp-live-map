@@ -24,7 +24,7 @@ function askQuestionHTML(r, q, qi) {
     ${q.header ? `<div class="cask-qt">${esc(q.header)}</div>` : ""}
     <div class="cask-qu">${esc(q.question)}</div>
     <div class="cask-os">${opts}</div>
-    <input class="cask-in" data-ask-field="c${qi}" data-ask-custom="${qi}" placeholder="직접 입력 (고른 항목 대신)" autocomplete="off">
+    <input class="cask-in" data-ask-field="c${qi}" data-ask-custom="${qi}" aria-label="직접 입력" placeholder="직접 입력 (고른 항목 대신)" autocomplete="off">
   </div>`;
 }
 
@@ -52,7 +52,7 @@ function askBodyHTML(r) {
       <textarea class="cask-ta" rows="4" data-ask-field="v" data-ask-value="1"></textarea></div>`;
   }
   return `<div class="cask-q"><div class="cask-qu">${esc(r.title)}</div>
-    <input class="cask-in" type="${r.secret ? "password" : "text"}" data-ask-field="v" data-ask-value="1" placeholder="${esc(r.placeholder)}" autocomplete="off"></div>`;
+    <input class="cask-in" type="${r.secret ? "password" : "text"}" data-ask-field="v" data-ask-value="1" aria-label="${esc(r.title || r.placeholder || "답")}" placeholder="${esc(r.placeholder)}" autocomplete="off"></div>`;
 }
 
 function askCardHTML(r, i) {

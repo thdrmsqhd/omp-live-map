@@ -21,7 +21,7 @@ function memoBlock() {
       <div class="mtop"><span>memo</span><button data-memo-add="1" title="메모 추가">+</button></div>
       <div class="mlist"></div>
       <div class="mform" hidden>
-        <textarea class="minput" spellcheck="false" placeholder="메모 (Ctrl+Enter 저장 · Esc 취소)"></textarea>
+        <textarea class="minput" spellcheck="false" aria-label="메모" placeholder="메모 (Ctrl+Enter 저장 · Esc 취소)"></textarea>
         <div class="mrow"><button data-memo-save="1">저장</button><button data-memo-cancel="1">취소</button></div>
       </div>
     </div>`;

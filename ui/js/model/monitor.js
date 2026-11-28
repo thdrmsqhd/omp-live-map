@@ -11,10 +11,12 @@ function monitorProjectFor(folder, projects) {
     return !p.archived && root && (path === root || path.startsWith(root + "/"));
   }).sort((a,b) => monitorPath(b.root).length - monitorPath(a.root).length)[0] || null;
 }
+// 자원 표본이 있는지: 서버(proc.js resFor)는 프로세스를 못 찾아도 res {cpu:0, mb:0, proc:0} 을 싣는다 — 그것은 0 이 아니라 '미수집'이다.
+const monitorResMeasured = (res) => Boolean(res && Number.isFinite(res.mb) && res.proc !== 0);
 function monitorSessionStats(session, memoryLimit) {
   const nodes = session.nodes || [];
   const main = nodes.find((n) => n.kind === "main");
-  const measured = nodes.filter((n) => n.res && Number.isFinite(n.res.mb));
+  const measured = nodes.filter((n) => monitorResMeasured(n.res));
   const ram = measured.length ? measured.reduce((a,n) => a + n.res.mb, 0) : null;
   const cpuRows = measured.filter((n) => Number.isFinite(n.res.cpu));
   const cpu = cpuRows.length ? cpuRows.reduce((a,n) => a+n.res.cpu,0) : null;

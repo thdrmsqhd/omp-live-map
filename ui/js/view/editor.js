@@ -55,7 +55,7 @@ function edState(id) {
         <div class="edside-h"><span>탐색기</span>
           <button data-ex="up" title="상위 폴더로 이동">↑</button><button data-ex="reload" title="새로고침">↻</button><button data-ex="collapse" title="폴더 모두 접기">⊟</button></div>
         <div class="edroot"></div>
-        <input class="edfq" autocomplete="off" spellcheck="false" placeholder="경로 필터">
+        <input class="edfq" aria-label="탐색기 경로 필터" autocomplete="off" spellcheck="false" placeholder="경로 필터">
         <div class="extree"></div>
       </div>
       <div class="edsash" title="끌어서 폭 조절 · 더블클릭으로 원래대로"></div>

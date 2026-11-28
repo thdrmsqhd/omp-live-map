@@ -2,7 +2,7 @@
    벽: 빈 곳(타일 사이) 끌기·휠 = 벽 이동, Ctrl+휠 = 확대·축소(보통은 필요 없다). 타일 머리 끌기 = 타일 순서 바꾸기(격자 칸에 맞춰 저장),
    오른쪽 아래 모서리 끌기 = 타일 크기(격자 칸 단위로 맞춰 저장), 머리 두 번 누르기 = 그 프로젝트 전체 화면(Esc = 같은 스크롤 자리의 벽으로).
    타일 안: 휠·빈 곳 끌기 = 그 타일만 스크롤, 카드 끌기 = 그 카드만 옮겨 두기(그 타일 캔버스 기준 저장), 누르기 = 서랍·메뉴, 에이전트 두 번 누르기 = 세션 전체 화면.
-   키: + − 0(전체 보기) 1, Enter(마지막으로 만진 타일 전체 화면), Esc, Alt+I(개입 필요), Alt+T(＋ Task), Alt+L(라이브러리), ?(도움말). */
+   키: + − 0(전체 보기) 1, Enter(마지막으로 만진 타일 전체 화면 — 단추·카드 제목에 포커스가 있으면 그 단추), Esc, Alt+I(개입 필요), Alt+T(＋ Task), Alt+L(라이브러리), ?(도움말). */
 
 let umapDrag = null, umapSuppress = 0;
 // 화면 좌표 → 벽 좌표(px, 100%).
@@ -204,7 +204,7 @@ function bindUmapInput() {
     umapSessionMenu(card);
   });
   bindUmapAddLine(items);
-  $("umap-reset").onclick = () => { umapResetAllManual(); umapWallReset(); paintUmap(true); umapToast("카드·타일 순서·타일 크기를 모두 자동 배치로 되돌렸습니다."); };
+  $("umap-more").onclick = (event) => umapWallMenu(event.currentTarget);
   $("umap-fit-all").onclick = () => umapFit();
   addEventListener("keydown", umapKey, true);
   addEventListener("resize", () => paintUmapSoon());
@@ -224,6 +224,8 @@ function umapKey(event) {
     if (key === "l") { event.preventDefault(); event.stopPropagation(); openLibraryDrawer(); return; }
   }
   if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
+  // 포커스가 단추·링크에 있으면 Enter·Space 는 그 단추의 것이다(카드 제목 단추로 서랍을 연다).
+  if ((event.key === "Enter" || event.key === " ") && event.target?.closest?.("button, a, [role=button], summary")) return;
   const stop = () => { event.preventDefault(); event.stopPropagation(); };
   if (event.key === "+" || event.key === "=") { stop(); umapZoomTo(UM.view.k * 1.2); }
   else if (event.key === "-" || event.key === "_") { stop(); umapZoomTo(UM.view.k / 1.2); }
@@ -240,10 +242,16 @@ function umapKey(event) {
   }
 }
 
-function umapToast(text) {
+// 맵 위 도구 막대의 알림 한 줄. action({ label, run })을 주면 그 단추(예: '되돌리기')를 붙이고 10초 동안 남긴다.
+function umapToast(text, action = null) {
   const status = $("umap-status");
   if (!status) return;
-  status.textContent = text;
+  status.replaceChildren(text);
+  if (action) {
+    const button = umEl("button", { type: "button", className: "um-toast-act", textContent: action.label,
+      onclick: () => { clearTimeout(umapToast.timer); status.replaceChildren(); action.run(); } });
+    status.append(" ", button);
+  }
   clearTimeout(umapToast.timer);
-  umapToast.timer = setTimeout(() => { status.textContent = ""; }, 5000);
+  umapToast.timer = setTimeout(() => status.replaceChildren(), action ? 10000 : 5000);
 }

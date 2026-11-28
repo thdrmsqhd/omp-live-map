@@ -34,14 +34,13 @@
     <button id="runtime-dot" class="runtime-dot" type="button" data-tone="wait" aria-label="실행 환경 · 눌러서 다시 확인">● omp · claude</button>
     <button id="umap-attention" type="button" title="개입이 필요한 단계·세션으로 이동 (Alt+I)">개입 필요 0</button>
     <button id="new-session-action" title="새 세션 (Alt+N) · Task 없이 연 세션은 그 폴더의 프로젝트 띠에 놓입니다">＋ 세션</button>
-    <div class="zoom"><button id="zout" title="축소 (-)">−</button><button id="zk" title="현재 배율 · 클릭: 100% (1)">100%</button><button id="zin" title="확대 (+)">+</button>
-      <button id="zfit" title="전체 보기 (0)">fit</button>
-    </div>
+    <!-- unslop-anything-ignore invented-stat -->
+    <div class="zoom"><button id="zout" title="축소 (-)">−</button><button id="zk" title="현재 배율 · 클릭: 100% (1)">100%</button><button id="zin" title="확대 (+)">+</button></div>
     <div class="filters" id="filters">
       <button data-f="live" class="on" title="실행 중이거나 30분 안에 활동한 세션">활성</button>
       <button data-f="2h">2시간</button>
       <button data-f="24h">24시간</button>
-      <button data-f="all">전체</button>
+      <button data-f="all" title="기간 제한 없이 모든 세션">전체 기간</button>
     </div>
     <div class="searchwrap">
       <input id="search" aria-label="비활성 세션 검색" placeholder="비활성 세션 검색…" autocomplete="off">
@@ -63,8 +62,8 @@
       </div>
       <div id="umap-tools">
         <button id="umap-library" type="button" title="하네스·루프·모델·Workflow 템플릿 (Alt+L)">라이브러리</button>
-        <button id="umap-reset" type="button" title="옮겨 둔 카드와 타일 순서·크기를 모두 자동 배치(개입 필요 → 진행 중 → 쉬는 중, 내용대로 크기)로 되돌립니다">자동 배치로 되돌리기</button>
         <button id="umap-fit-all" type="button" title="벽 전체 보기 (0)">전체 보기</button>
+        <button id="umap-more" type="button" aria-label="벽 메뉴" title="벽 메뉴 · 자동 배치로 되돌리기 · 단축키">⋯</button>
         <span id="umap-status" role="status"></span>
       </div>
       <aside id="umap-drawer" hidden aria-labelledby="umap-drawer-title">

@@ -103,12 +103,12 @@ function chatBlock(n) {
     <div class="cworking" role="status" aria-live="polite"${st.busy || actItems(n.id).running ? "" : " hidden"}><span class="cworking-dot" aria-hidden="true"></span>응답 생성·작업 중</div>
     <div class="cmnote" hidden></div>
     ${chatModelPickerHTML()}
-    <div class="chat-composer">${promptToolbarHTML(n,st)}<div class="crow"><textarea class="cin" rows="4" placeholder="작업 지시를 입력하세요 · @파일 · /명령 · #Task">${esc(st.draft)}</textarea></div><div class="prompt-preview" hidden></div><div class="prompt-suggestions" hidden></div><div class="achips">${attachChipsHTML(st.files)}</div><div class="chat-compose-actions">
+    <div class="chat-composer">${promptToolbarHTML(n,st)}<div class="crow"><textarea class="cin" rows="4" aria-label="작업 지시" placeholder="작업 지시를 입력하세요 · @파일 · /명령 · #Task">${esc(st.draft)}</textarea></div><div class="prompt-preview" hidden></div><div class="prompt-suggestions" hidden></div><div class="achips">${attachChipsHTML(st.files)}</div><div class="chat-compose-actions">
       <button class="cmodel" data-model="1"${caps.model ? "" : ` disabled title="Claude Code는 대화 중 모델 변경을 지원하지 않습니다"`}>${esc(chatModelLabel(n))}</button>
       <button data-chat-attach="1" title="파일 첨부" aria-label="파일 첨부">＋ 첨부</button><input class="chat-file" type="file" multiple hidden>
-      <select class="prompt-mode" aria-label="전송 방식"><option value="steer">즉시 지시</option><option value="queue">완료 후 실행</option></select><span class="chat-compose-spacer"></span><details class="chat-extra"><summary>대화 관리</summary><div><button data-sum="1">요약</button>
+      <select class="prompt-mode" aria-label="전송 방식"><option value="steer">즉시 지시</option><option value="queue">완료 후 실행</option></select><span class="chat-compose-spacer"></span><span class="chat-manage" role="group" aria-label="대화 관리"><button data-sum="1">요약</button>
       <button data-compact="1"${caps.compact ? "" : ` disabled title="Claude Code는 컨텍스트 압축을 지원하지 않습니다"`}>${st.compacting ? "압축 중…" : "압축"}</button>
-      <button data-clear="1"${caps.clear ? "" : ` disabled title="Claude Code는 대화 비우기를 지원하지 않습니다"`}>${st.clearing ? "비우는 중…" : "비우기"}</button></div></details><button class="stop" data-cancel="1"${st.busy ? "" : " hidden"}>중단</button><button class="chat-send" data-send="1">보내기 ↑</button></div><div class="chat-hint"></div><div class="prompt-queue" hidden></div></div>
+      <button data-clear="1"${caps.clear ? "" : ` disabled title="Claude Code는 대화 비우기를 지원하지 않습니다"`}>${st.clearing ? "비우는 중…" : "비우기"}</button></span><button class="stop" data-cancel="1"${st.busy ? "" : " hidden"}>중단</button><button class="chat-send" data-send="1">보내기 ↑</button></div><div class="chat-hint"></div><div class="prompt-queue" hidden></div></div>
     <div class="csum">${chatSumHTML(st)}</div>
   </div>`;
 }

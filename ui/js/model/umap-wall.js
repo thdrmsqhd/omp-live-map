@@ -1,12 +1,15 @@
 /* omp-live-map · model · 관제 벽: 프로젝트마다 타일 하나를 화면 폭에 맞춘 격자(2~4열)에 채워 놓는다. DOM·상태 접근 없음.
    격자 단위: 열(col) × 줄 칸(row). 타일 크기 { w(열), h(줄 칸) }. 기본 크기는 내용으로 정한다 — 일이 있는 타일(개입 필요·진행 중)은
-   ACTIVE_H 칸, 쉬는 타일(도는 것·기다리는 것 없음)은 머리 한 줄 + '최근 끝남' 한 줄만 보이는 IDLE_H 칸. 접기·펼치기 단추는 없다.
+   ACTIVE_H 칸(내용이 그보다 적으면 내용 높이 need 칸까지만 — 반쯤 빈 타일을 만들지 않는다), 쉬는 타일(도는 것·기다리는 것 없음)은
+   머리 한 줄 + '최근 끝남' 한 줄만 보이는 IDLE_H 칸. 접기·펼치기 단추는 없다.
    순서: 사용자가 끌어 바꾼 순서(order)가 있으면 그 순서, 없으면 개입 필요 → 진행 중 → 쉬는 중(같은 묶음은 최근 활동 순).
    크기를 바꾼 타일(sizes[key])은 상태와 상관없이 그 크기다. */
 
 const UMAP_WALL = Object.freeze({
   PAD: 12, GAP: 12, TILE_MIN_W: 440, COLS_MIN: 2, COLS_MAX: 4,
-  ROWS_VIEW: 8, UNIT_MIN: 80, UNIT_MAX: 120, ACTIVE_H: 4, IDLE_H: 1, MAX_H: 16,
+  ROWS_VIEW: 8, UNIT_MIN: 80, UNIT_MAX: 120, ACTIVE_H: 4, IDLE_H: 1, MAX_H: 16, NEED_MIN: 2,
+  // 타일 머리(이름 · 지표 · 상태 한 줄)와 테두리 높이(px, CSS .um-tile-head 와 같아야 한다). 내용 높이 → 칸 수 계산에 쓴다.
+  HEAD_PX: 86,
 });
 const UMAP_TILE_RANK = Object.freeze({ attention: 0, running: 1, idle: 2 });
 const UMAP_TILE_LABEL = Object.freeze({ attention: "개입 필요", running: "진행 중", idle: "쉬는 중" });
@@ -22,7 +25,7 @@ function umapWallGrid(view) {
   return { cols, unitW, unitH, gap: W.GAP, pad: W.PAD, rows };
 }
 
-// tiles: [{ key, state: 'attention'|'running'|'idle', at(최근 활동 ms), busy? }] → 그릴 순서(key 목록).
+// tiles: [{ key, state: 'attention'|'running'|'idle', at(최근 활동 ms), busy?, need?(내용이 다 보이는 칸 수) }] → 그릴 순서(key 목록).
 function umapWallOrder(tiles, order) {
   const rank = new Map((order || []).map((key, index) => [key, index]));
   const auto = [...tiles].sort((a, b) => (UMAP_TILE_RANK[a.state] ?? 2) - (UMAP_TILE_RANK[b.state] ?? 2)
@@ -38,8 +41,15 @@ function umapTileSize(tile, sizes, cols, activeH = UMAP_WALL.ACTIVE_H) {
   if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
     return { w: Math.max(1, Math.min(cols, Math.round(saved.w))), h: Math.max(1, Math.min(W.MAX_H, Math.round(saved.h))), auto: false };
   }
-  // busy: 쉬는 타일이라도 지금 그 안에서 입력 중(＋ Task 한 줄)이면 일하는 크기.
-  return { w: 1, h: tile.state === "idle" && !tile.busy ? W.IDLE_H : activeH, auto: true };
+  // busy: 쉬는 타일이라도 지금 그 안에서 입력 중(＋ Task 한 줄)이면 일하는 크기. need: 내용이 activeH 보다 적으면 그 칸 수까지만(최소 NEED_MIN).
+  if (tile.state === "idle" && !tile.busy) return { w: 1, h: W.IDLE_H, auto: true };
+  const need = Number.isFinite(tile.need) && tile.need > 0 ? Math.max(W.NEED_MIN, Math.ceil(tile.need)) : activeH;
+  return { w: 1, h: Math.min(activeH, need), auto: true };
+}
+// 타일 안에 그릴 높이(px, 머리 제외) → 다 보이는 줄 칸 수.
+function umapWallRows(bodyPx, grid) {
+  const px = UMAP_WALL.HEAD_PX + Math.max(0, bodyPx || 0);
+  return Math.max(1, Math.ceil((px + grid.gap) / (grid.unitH + grid.gap)));
 }
 
 // 격자 채우기: 순서대로, 들어갈 수 있는 가장 위·왼쪽 칸에 놓는다(겹치지 않는다).

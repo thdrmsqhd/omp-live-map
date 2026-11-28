@@ -67,6 +67,23 @@ test("size by content: running/attention tiles are big, idle tiles take one row 
   assert.equal(W.IDLE_H < W.ACTIVE_H, true);
 });
 
+test("an active tile is only as tall as its content (no half-empty tiles), still in whole grid cells; content taller than the active height keeps the active height", () => {
+  const { run } = wall();
+  const W = run("UMAP_WALL"), grid = plain(run("umapWallGrid")({ width: 1440, height: 820 }));
+  const rows = run("umapWallRows");
+  const one = rows(grid.unitH - W.HEAD_PX - 4, grid);
+  assert.equal(one, 1, "a body that fits under the head in one cell needs one cell");
+  assert.equal(rows(grid.unitH * 2, grid), Math.ceil((W.HEAD_PX + grid.unitH * 2 + grid.gap) / (grid.unitH + grid.gap)));
+  const size = (tile, activeH) => plain(run("umapTileSize")(tile, {}, 3, activeH));
+  assert.deepEqual(size({ key: "a", state: "running", need: 2 }, 6), { w: 1, h: 2, auto: true }, "a running tile with one card takes 2 cells, not 6");
+  assert.deepEqual(size({ key: "a", state: "running", need: 1 }, 6), { w: 1, h: W.NEED_MIN, auto: true }, "but never less than the minimum for a working tile");
+  assert.deepEqual(size({ key: "a", state: "attention", need: 12 }, 6), { w: 1, h: 6, auto: true }, "a long tile is capped at the active height (it scrolls inside)");
+  assert.deepEqual(size({ key: "a", state: "running" }, 6), { w: 1, h: 6, auto: true }, "without a measured need the active height is used");
+  assert.deepEqual(size({ key: "a", state: "idle", need: 5 }, 6), { w: 1, h: W.IDLE_H, auto: true }, "idle tiles stay one row");
+  const pack = plain(run("umapWallPack")([{ key: "a", state: "running", need: 2 }, { key: "b", state: "attention", need: 9 }], { cols: 3, fitRows: 6 }));
+  assert.deepEqual(pack.tiles.map(({ key, h }) => key + ":" + h).sort(), ["a:2", "b:6"], "screen-fit growth still respects each tile's content");
+});
+
 test("packing: five projects fill a 3-column wall without overlap, attention tiles on the first row, idle tile small, resized tiles take their cells", () => {
   const { run } = wall();
   const W = run("UMAP_WALL");
@@ -146,3 +163,19 @@ test("tile state: approval waiting, failed run or an unanswered question → att
   assert.equal(states(bands)["project:olm"], "attention", "an agent waiting for an answer needs attention");
   assert.equal(typeof context.umapTileStates, "function");
 });
+
+test("CPU·RAM: a node whose process was not found (res.proc 0) is unmeasured, not 0 — a session with no sample reports null so the tile shows '–'", () => {
+  const { run } = load(["model/monitor.js"]);
+  const stats = run("monitorSessionStats");
+  const none = stats({ nodes: [{ id: "a", kind: "main", res: { cpu: 0, mb: 0, proc: 0 } }, { id: "b", kind: "sub", res: { cpu: 0, mb: 0, proc: 0 } }] }, 2048);
+  assert.equal(none.cpu, null);
+  assert.equal(none.ram, null);
+  assert.equal(none.resourceWarning, false);
+  const some = stats({ nodes: [{ id: "a", kind: "main", res: { cpu: 12.5, mb: 300, proc: 2 } }, { id: "b", kind: "sub", res: { cpu: 0, mb: 0, proc: 0 } }] }, 2048);
+  assert.deepEqual([some.cpu, some.ram], [12.5, 300], "only measured nodes are summed");
+  assert.equal(run("monitorResMeasured")({ cpu: 0, mb: 0, proc: 1 }), true, "a real idle process at 0% is a measurement");
+  assert.equal(run("monitorResMeasured")(undefined), false);
+  const render = fs.readFileSync(path.join(UI, "view/umap-render.js"), "utf8");
+  assert.ok(!/acc\.cpu \+= st\.cpu \|\| 0/.test(render) && render.includes("CPU –") === false && render.includes('unmeasured("CPU")'), "the tile head shows '–' for an unmeasured total");
+});
+

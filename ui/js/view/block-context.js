@@ -41,7 +41,7 @@ function ctxBlockMarkup() {
       <button data-ctxreload title="기록에서 다시 읽기">↻</button></div>
     <div class="ctlist"></div>
     <div class="ctedit">
-      <textarea class="ctin" rows="2" placeholder="작업 가이드 — 이 세션이 지금 이해해야 할 내용 (Ctrl+Enter)"></textarea>
+      <textarea class="ctin" rows="2" aria-label="작업 가이드" placeholder="작업 가이드 — 이 세션이 지금 이해해야 할 내용 (Ctrl+Enter)"></textarea>
       <div class="ctrow">
         <button data-ctguide title="작업 가이드를 프롬프트로 보냅니다. 에이전트가 도는 중이면 steer 로 끼워 넣습니다.">가이드 보내기</button>
         <button data-ctcompact title="omp compact 에 지시문을 붙여 컨텍스트를 압축합니다. 체크한 항목은 요약에서 뺍니다.">선택 빼고 압축</button>

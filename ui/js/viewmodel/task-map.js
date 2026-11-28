@@ -12,7 +12,10 @@ const UM = {
   // view: 벽 이동·배율(저장하지 않는다 — 열 때마다 맨 위 100%). focus: 전체 화면으로 연 타일 key. scroll: 타일 본문 스크롤 자리(벽·전체 화면 따로).
   // autoFocus: 타일 본문을 마지막으로 자동 스크롤한 '지금 볼 곳' key(바뀌면 다시 그곳으로).
   view: { x: 0, y: 0, k: 1 }, focus: "", focusReturn: null, scroll: new Map(), autoFocus: new Map(),
+  // stageScope: Task id → 단계를 제자리에서 고칠 때의 저장 범위('task' 이 Task만 · 'template' 템플릿). 기본은 이 Task만.
+  stageScope: new Map(),
 };
+const umapScopeOf = (taskId) => UM.stageScope.get(taskId) || "task";
 {
   const manual = readJSON(UMAP_MANUAL_KEY, {});
   for (const [key, spot] of Object.entries(manual && typeof manual === "object" ? manual : {})) {
@@ -56,6 +59,15 @@ function umapWallSetOrder(keys) { UM.wall.order = strList(keys); umapSaveWall();
 function umapWallSetSize(key, size) { UM.wall.sizes[key] = { w: Math.max(1, Math.round(size.w)), h: Math.max(1, Math.round(size.h)) }; umapSaveWall(); }
 function umapWallResetSize(key) { if (!(key in UM.wall.sizes)) return false; delete UM.wall.sizes[key]; umapSaveWall(); return true; }
 function umapWallReset() { UM.wall = { order: [], sizes: {} }; umapSaveWall(); }
+// 자동 배치로 되돌리기 전에 떠 두고, 토스트의 '되돌리기'로 그대로 되살린다(옮긴 카드 · 타일 순서 · 타일 크기).
+const umapLayoutSnapshot = () => JSON.parse(JSON.stringify({ manual: UM.manual, wall: UM.wall }));
+const umapHasManualLayout = (band) => Object.values(UM.manual).some((spot) => !band || spot.band === band) || (!band && (UM.wall.order.length > 0 || Object.keys(UM.wall.sizes).length > 0));
+function umapRestoreLayout(snapshot) {
+  UM.manual = { ...(snapshot?.manual || {}) };
+  UM.wall = umapReadWall({ v: 1, ...(snapshot?.wall || {}) });
+  writeJSON(UMAP_MANUAL_KEY, UM.manual);
+  umapSaveWall();
+}
 
 async function umapRequest(endpoint, params, payload) {
   const result = await window.engineeringApi.request(endpoint, params ?? {}, payload);
@@ -142,6 +154,7 @@ function umapBands(sessions) {
         linked.add(node.id);
         return { ...umapAgentItem(node, umapSessionOf(node.session)), entry };
       }) })) }));
+    for (const task of tasks) umapLinkBefore(task.stages);
     bands.set(key, { key, project, title: project.name, folder: project.root, tasks, free: [], sessions: [], labels: UM.labels.get(project.id) || [] });
   }
   for (const session of sessions) {
@@ -168,6 +181,17 @@ function umapBands(sessions) {
   const list = [...bands.values()];
   for (const band of list) band.adding = UM.adding?.band === band.key;
   return list;
+}
+
+// 승인 단계는 무엇을 승인하는지 카드에서 바로 보이게 앞 단계의 결과 한 줄을 싣는다: { label, status, result }.
+// 결과 = 앞 단계 최근 세션의 결과 요약 → 그 단계 오류 → (없으면 화면이 상태 이름을 쓴다).
+function umapLinkBefore(stages) {
+  for (const [index, stage] of stages.entries()) {
+    if (stage.status !== "waiting_approval" || !index) continue;
+    const prev = stages[index - 1], lead = [...prev.sessions].reverse().find((item) => item.node);
+    const summary = lead?.node.act?.resultSummary ? umapClip(lead.node.act.resultSummary, 140) : "";
+    stage.before = { label: prev.label, status: prev.status, result: summary || prev.error || "" };
+  }
 }
 
 // 타일 상태(관제 벽의 순서·테두리·크기): attention(승인 대기·보류/실패·답 필요) → running(도는 Task·세션) → idle(그 밖).

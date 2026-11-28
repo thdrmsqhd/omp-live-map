@@ -11,7 +11,7 @@ function browserBlock(n, key = "browser") {
     <div class="tinfo"><span>browser${num}</span><span class="cwd">${esc(st.url || "URL·로컬 html 경로 입력 후 Enter")}</span>
       <button data-breload="1" title="새로고침" style="padding:0 6px;font-size:10px">⟳</button>
       <button data-bgo="1" style="padding:0 6px;font-size:10px">열기</button></div>
-    <input class="bin" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8080 · C:\\폴더\\index.html · file:///…" value="${esc(st.url)}">
+    <input class="bin" aria-label="열 주소 또는 파일 경로" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8080 · C:\\폴더\\index.html · file:///…" value="${esc(st.url)}">
     <div class="berr" hidden></div>
     <iframe class="bframe" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
   </div>`;

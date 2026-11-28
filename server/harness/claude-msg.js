@@ -6,6 +6,7 @@
 const { recordUser, recordAssistant, noteHourly, keepText } = require("../turns");
 const { invalidateMessageSize } = require("../msg-cap");
 const activity = require("../activity");
+const { sessionTitleText } = require("../session-title");
 
 // assistant usage → omp 가 쓰는 모양. 캐시 생성·읽기는 새 입력과 별도 토큰이다.
 function usageOf(u) {
@@ -104,7 +105,7 @@ function onUser(st, o, ts) {
   if (!text.trim()) return; // tool_result 만 있는 사용자 레코드
   st.turns += 1;
   st.turnOver = false;
-  if (!st.firstUser) st.firstUser = text.replace(/\s+/g, " ").slice(0, 120);
+  if (!st.firstUser) st.firstUser = sessionTitleText(text);
   st.lastUser = text.replace(/\s+/g, " ").slice(0, 300);
   recordUser(st, text, ts);
   if (st.act) activity.onUserText(st.act, text, ts);

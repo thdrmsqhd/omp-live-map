@@ -8,6 +8,7 @@ const { CLAUDE_PROJECTS, HOURS } = require("../config");
 const { onAssistant, onUser } = require("./claude-msg");
 const lineage = require("../lineage");
 const pending = require("./claude-pending");
+const { sessionTitleText } = require("../session-title");
 
 const files = new Map(); // 절대 경로 -> { offset, pending, st }
 const MAX_PENDING = 1_048_576;
@@ -47,7 +48,7 @@ function ingestLine(st, raw) {
   if (o.cwd && !st.cwd) st.cwd = o.cwd;
   switch (o.type) {
     case "custom-title":
-      if (o.customTitle) st.title = String(o.customTitle);
+      if (o.customTitle) st.title = sessionTitleText(o.customTitle, 200) || st.title;
       break;
     case "cost-state":
       // 누적 비용(USD). 뒤에 오는 갱신 레코드가 덮어쓴다.

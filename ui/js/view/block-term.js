@@ -65,12 +65,12 @@ function termBlock(n) {
   return `<div class="term">
     <div class="tinfo"><span>terminal</span><span>·</span><span>Git Bash</span>
       <span class="cwd" title="클릭: 경로 복사">${esc(st.cwd || "-")}</span>
-      <input class="tq" autocomplete="off" spellcheck="false" placeholder="검색" value="${esc(st.q || "")}">
+      <input class="tq" aria-label="터미널 출력 검색" autocomplete="off" spellcheck="false" placeholder="검색" value="${esc(st.q || "")}">
       <span class="tqn">${termCount(st, hits)}</span>
       <button data-clear="1" style="padding:0 6px;font-size:10px">clear</button></div>
     <div class="term-history-nav"${st.q?" hidden":""}><button data-term-older="1"${start?"":" disabled"}>이전 출력</button><span>${end?start+1:0}–${end||0} / ${st.lines.length}</span><button data-term-latest="1"${st.historyOffset?"":" disabled"}>최신</button></div>
     <pre class="tout">${html}</pre>
-    <div class="tline"><span>$</span><input class="tin" autocomplete="off" spellcheck="false" placeholder="명령 입력 후 Enter (Shift+Enter: 백그라운드, ↑↓: 기록)"></div>
+    <div class="tline"><span>$</span><input class="tin" aria-label="터미널 명령" autocomplete="off" spellcheck="false" placeholder="명령 입력 후 Enter (Shift+Enter: 백그라운드, ↑↓: 기록)"></div>
   </div>`;
 }
 

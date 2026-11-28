@@ -4,6 +4,7 @@
   .attn-toast { pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 6px 7px;
     border-radius: 8px; border: 1px solid var(--border); background: #0d151de8; color: var(--fg);
     box-shadow: 0 8px 20px #0009; font-size: 11.5px; cursor: pointer; backdrop-filter: blur(2px);
+    /* unslop-anything-ignore reduced-motion — 대체는 tokens.css 의 prefers-reduced-motion 블록 */
     animation: attn-in .16s ease-out; }
   .attn-toast:hover { border-color: #2f5d85; background: #101c26f0; }
   @keyframes attn-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }

@@ -31,6 +31,10 @@
   button.stop { border-color: #6b2724; color: #ffb0aa; }
 
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* 움직임 줄이기: 앱 전체의 반복·강조 애니메이션을 여기 한 곳에서 끈다(관제 벽 반짝임·실행 점, 세션 목록 반짝임, 알림 토스트 포함).
+     각 파일의 animation 줄에는 이 블록을 가리키는 unslop-anything-ignore reduced-motion 주석이 있다. */
   @media (prefers-reduced-motion: reduce) {
-    .node.attn-ask, .node.attn-ask.big, .dot.live, .pendcard, .pendcard .sp { animation: none !important; }
+    .node.attn-ask, .node.attn-ask.big, .dot.live, .pendcard, .pendcard .sp,
+    .um-tile.um-flash, .um-flash, .um-stage.s-running .um-dot, .um-stage.merged.a-running .um-dot, .um-agent.a-running .um-adot,
+    .sl-sess.flash, .attn-toast { animation: none !important; }
   }

@@ -55,10 +55,9 @@ test("existing map opens a session card, restores panel state and renders update
       await page.waitForFunction(() => document.querySelector("#nodes").innerText.includes("Timing 0"), null, filter);
       assert.equal(await page.locator(".node.big.active-card [data-blk=editor]").count(),0);
       assert.equal(await page.locator(".node.big.active-card .card-summary>div").count(),6);
-      assert.equal(await page.locator(".node.big.active-card .card-metrics-detail").isVisible(),false);
-      await page.locator(".node.big.active-card [data-metrics-toggle]").click();
+      // 상세 지표는 접지 않고 늘 보인다(접기 단추 없음).
+      assert.equal(await page.locator(".node.big.active-card [data-metrics-toggle]").count(),0);
       assert.equal(await page.locator(".node.big.active-card .card-metrics-detail").isVisible(),true);
-      await page.locator(".node.big.active-card [data-metrics-toggle]").click();
       await page.locator(".node.big.active-card [data-card-editor]").click();
       const explorerFile = page.locator("#nodes .exr").filter({ hasText: editorFixture });
       await explorerFile.click(filter);

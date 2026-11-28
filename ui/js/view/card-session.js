@@ -31,14 +31,13 @@ function modelChip(n) {
   return `<span class="mod" title="${esc(n.provider ? n.provider + " · " : "")}${esc(m || "?")}">${esc(modelShort(m))}</span>`;
 }
 
-const CARD_METRICS_OPEN = new Set();
 function sessionChrome(n) {
   const isLocal = n.kind === "local";
   const series = n.series || [];
   const maxOut = series.length ? Math.max(...series.map((s) => s.out || 0)) : 0;
-  const ctx=ctxUsage(n),r=n.res,detail=CARD_METRICS_OPEN.has(n.id);
+  const ctx=ctxUsage(n),r=monitorResMeasured(n.res)?n.res:null;
   const metric=(label,value)=>`<div><small>${label}</small><strong>${esc(value)}</strong></div>`;
-  const summary=`<div class="card-summary">${metric("CPU",r?`${r.cpu}%`:"—")}${metric("RAM",r?memSize(r.mb):"—")}${metric("컨텍스트",ctx?.text||"—")}${metric("토큰",fmt(n.tokens?.total||0))}${metric("비용",krw(n.cost))}${metric("오류",String(n.errors||0))}<button data-metrics-toggle="1" aria-expanded="${detail}">${detail?"지표 접기":"상세 지표"}</button></div>`;
+  const summary=`<div class="card-summary">${metric("CPU",r?`${r.cpu}%`:"미수집")}${metric("RAM",r?memSize(r.mb):"미수집")}${metric("컨텍스트",ctx?.text||"—")}${metric("토큰",fmt(n.tokens?.total||0))}${metric("비용",krw(n.cost))}${metric("오류",String(n.errors||0))}</div>`;
   return `<div class="hd session-hd"><i class="dot ${n.status}" title="${esc(dotTitle(n))}"></i>
       ${nameField(n)}
       ${isLocal ? "" : harnessChip(n)}
@@ -49,7 +48,7 @@ function sessionChrome(n) {
       ${profileChip(n)}${typeof dockTag === "function" ? dockTag(n) : ""}${isLocal ? `<span class="mod">local</span>` : n.kind === "sub" || !cardBlockTypes(n).includes("chat") ? modelChip(n) : ""}
       ${n.kind!=="sub"?`<button class="x" data-card-editor="1" title="코드 편집기 열기">코드</button>`:""}${cardWindowActions(n.id)}</div>
     <div class="sub-t${SUB_OPEN.has(n.id) ? " open" : ""}" data-subtoggle="${esc(n.id)}" title="${esc(subtitleFull(n, isLocal))}">${esc(subtitleOf(n, isLocal))}</div>
-    ${isLocal ? resRow(n, true) : `${summary}<div class="card-metrics-detail"${detail?"":" hidden"}>${tokenSection(n)}
+    ${isLocal ? resRow(n, true) : `${summary}<div class="card-metrics-detail">${tokenSection(n)}
     <div class="sparkwrap" style="height:34px">
       <span class="rate">${n.liveTokPerSec} t/s</span>
       ${spark(series, (SATS.get(n.id)?.w || BIG_W) - 40, 30, "#2fbf9b", true, n.id)}
@@ -103,7 +102,6 @@ function bigCard(n) {
 function chromeClick(target, id) {
   const pick = (attr) => target.closest(`[${attr}]`);
   const toggle = (set) => { if (set.has(id)) set.delete(id); else set.add(id); renderMap(false, true); return true; };
-  if (pick("data-metrics-toggle")) return toggle(CARD_METRICS_OPEN);
   if (pick("data-ctxmore")) return toggle(CTX_OPEN);
   if (pick("data-toolsmore")) return toggle(TOOLS_OPEN);
   if (pick("data-subtoggle")) return toggle(SUB_OPEN);

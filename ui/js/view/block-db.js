@@ -63,7 +63,7 @@ function dbBlock(n) {
     <div class="dbpath"${f.type !== "sqlite" ? " hidden" : ""}>
       ${dbInput("path", "dfile", f.path, "C:\\path\\app.db")}
     </div>
-    <textarea class="dsql" spellcheck="false" placeholder="SELECT * FROM table LIMIT 20;  (Ctrl+Enter 실행)">${esc(st.sql)}</textarea>
+    <textarea class="dsql" spellcheck="false" aria-label="SQL 질의" placeholder="SELECT * FROM table LIMIT 20;  (Ctrl+Enter 실행)">${esc(st.sql)}</textarea>
     <div class="dres">${dbResultHTML(st.res)}</div>
     <div class="dhist">${dbHistHTML(st)}</div>
   </div>`;

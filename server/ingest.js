@@ -8,6 +8,7 @@ const { callsOf } = require("./agent-msgs");
 const { toolStart, toolResult, noteText } = require("./jobs");
 const { imageRef, textRefs } = require("./images");
 const activity = require("./activity");
+const { sessionTitleText } = require("./session-title");
 
 function newFileState(file) {
   const rel = path.relative(SESSIONS, file).split(path.sep);
@@ -111,7 +112,8 @@ function onUser(st, m, ts) {
   }
   // 큰 이미지는 uploads.js 가 본문 끝에 파일 경로로 붙인다. 신뢰 루트 안 이미지 경로만 싣는다.
   for (const ref of textRefs(text)) imgs.push(ref);
-  if (!st.firstUser && text) st.firstUser = text.replace(/\s+/g, " ").slice(0, 120);
+  // 첫 지시 = 시스템 머리말·글꼴에 없는 글리프를 걷어 낸 첫 의미 있는 사용자 줄(없으면 다음 메시지에서).
+  if (!st.firstUser && text) st.firstUser = sessionTitleText(text);
   if (text) st.lastUser = text.replace(/\s+/g, " ").slice(0, 300);
   // 본문이 없어도 이미지가 있으면 사용자 턴을 기록한다.
   // 서브에이전트 결과 안내문은 사용자 말풍선이 아니라 결과 카드로 기록한다.
@@ -182,7 +184,7 @@ function ingest(st, raw) {
   }
   const ts = e.timestamp ? Date.parse(e.timestamp) : 0;
   if (ts) st.lastTs = Math.max(st.lastTs, ts);
-  if (e.type === "title" && e.title) st.title = e.title;
+  if (e.type === "title" && e.title) st.title = sessionTitleText(e.title, 200) || st.title;
   else if (e.type === "session") {
     st.id = e.id || "";
     st.cwd = e.cwd || st.cwd;

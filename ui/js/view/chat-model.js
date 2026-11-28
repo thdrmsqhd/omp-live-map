@@ -4,7 +4,7 @@ const chatModelLabel = (n) => modelShort(n.model);
 
 function chatModelPickerHTML() {
   return `<div class="cmpick" hidden>
-    <input class="cmq" placeholder="모델 검색 (Enter: 첫 항목, Esc: 닫기)" spellcheck="false">
+    <input class="cmq" aria-label="모델 검색" placeholder="모델 검색 (Enter: 첫 항목, Esc: 닫기)" spellcheck="false">
     <div class="cmstat"></div>
     <div class="cmlist"></div>
   </div>`;

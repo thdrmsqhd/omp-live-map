@@ -23,8 +23,6 @@ $("zout").onclick = () => umapZoomTo(UM.view.k / 1.2);
 
 $("zk").onclick = () => umapZoomTo(1);
 
-$("zfit").onclick = () => umapFit();
-
 $("filters").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-f]");
   if (!b) return;

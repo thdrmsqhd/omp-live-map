@@ -3,6 +3,7 @@
   .node.attn-done { border-color: #2f9f72; box-shadow: 0 0 0 1px #2f9f7266, 0 6px 22px #2f9f7244; }
   .node.attn-done.big { box-shadow: 0 18px 48px #000a, 0 0 0 1px #2f9f7288, 0 0 26px #2f9f7255; }
   /* 선택 필요: 주황 테두리 펄스 */
+  /* unslop-anything-ignore reduced-motion — 대체는 tokens.css 의 prefers-reduced-motion 블록 */
   .node.attn-ask { border-color: #d99a2b; animation: attnAsk 1.6s ease-in-out infinite; }
   @keyframes attnAsk {
     0%, 100% { box-shadow: 0 0 0 1px #d99a2b55, 0 0 10px #d99a2b33; }

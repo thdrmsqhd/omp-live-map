@@ -1,13 +1,19 @@
 /* omp-live-map · view · 제자리 편집과 작은 ⋯ 메뉴. 한 맵의 띠 머리(상태 이름·예산·기간)·Task·단계 메뉴가 함께 쓴다.
-   글자를 누르면 그 자리에 입력 한 칸이 열린다. Enter·포커스 이동은 저장, Esc 는 취소. 저장 버튼은 없다. */
-function inlineEdit(target, { value = target.textContent, type = "text", placeholder = "", min, max, step, label, onSave }) {
+   글자를 누르면 그 자리에 입력 한 칸이 열린다. Enter·포커스 이동은 저장, Esc 는 취소. 저장 버튼은 없다.
+   multiline 이면 여러 줄 칸(Shift+Enter = 줄바꿈, Enter = 저장)이고 내용 줄 수만큼(최대 12줄) 높아진다. */
+function inlineEdit(target, { value = target.textContent, type = "text", placeholder = "", min, max, step, label, multiline = false, onSave }) {
   if (!target || target.__editing) return null;
-  const input = document.createElement("input");
-  Object.assign(input, { type, value: value ?? "", placeholder, className: "inline-edit", spellcheck: false });
+  const input = document.createElement(multiline ? "textarea" : "input");
+  Object.assign(input, { value: value ?? "", placeholder, className: "inline-edit" + (multiline ? " multi" : ""), spellcheck: false });
+  if (multiline) input.rows = Math.min(12, Math.max(3, String(value ?? "").split("\n").length + 1));
+  else input.type = type;
   for (const [key, limit] of Object.entries({ min, max, step })) if (limit !== undefined) input[key] = limit;
   input.setAttribute("aria-label", label || placeholder || "값 고치기");
   target.__editing = true;
+  // hidden 만으로는 display 를 정한 단추(카드 제목·표 칸)가 숨지 않는다 — 인라인 display 로 확실히 숨긴다.
+  const shown = target.style.display;
   target.hidden = true;
+  target.style.display = "none";
   target.after(input);
   input.focus();
   input.select?.();
@@ -18,13 +24,14 @@ function inlineEdit(target, { value = target.textContent, type = "text", placeho
     const next = input.value.trim();
     input.remove();
     target.hidden = false;
+    target.style.display = shown;
     target.__editing = false;
     if (!save || next === String(value ?? "").trim()) return;
     try { await onSave(next); } catch (error) { inlineFlash(target, error.message); }
   };
   input.addEventListener("keydown", (event) => {
     event.stopPropagation();
-    if (event.key === "Enter") { event.preventDefault(); void finish(true); }
+    if (event.key === "Enter" && !(multiline && event.shiftKey) && !event.isComposing) { event.preventDefault(); void finish(true); }
     else if (event.key === "Escape") { event.preventDefault(); void finish(false); }
   });
   input.addEventListener("blur", () => void finish(true));
