@@ -14,7 +14,7 @@
 
 ## 경계와 흐름
 - 루트 `server.js`가 `127.0.0.1`에 HTTP 서버를 열고 수집·방송 주기를 시작한다. 서버 코드를 바꾸면 프로세스를 재시작해야 한다.
-- `config.js`는 세션 경로·포트·시간 범위와 응답 크기 상수를 소유한다. `tail.js`는 세션 JSONL을 오프셋과 미완성 줄로 증분 수집하고, `ingest.js`는 이벤트를 파일별 상태로 누적한다. `snapshot.js`는 이를 세션·노드로 묶고 메시지 예산을 적용한다.
+- `config.js`는 세션 경로·포트·시간 범위와 응답 크기 상수를 소유한다. `tail.js`는 세션 JSONL을 오프셋과 미완성 줄로 증분 수집하고, `ingest.js`는 이벤트를 파일별 상태로 누적한다. `snapshot.js`는 이를 세션·노드로 묶고 메시지 예산을 적용한다. 활동 요약은 `activity.js`(순수: 줄마다 툴 호출·결과·발화를 누적 — 읽기·수정 +/−·명령 ✓/✗·최근 활동 10개·편집 조각, 상한 있음)가 `ingest.js`·`harness/claude-msg.js`에서 증분으로 쌓고, `activity-tree.js`가 `finishSession`에서 부모가 준 지시(목표)·받은 결과·자식 id 를 이어 노드의 `act`로 싣는다(맵 에이전트 노드의 계약).
 - `server.js`는 세션 파일을 2초마다 스캔하고 파일 감시 이벤트도 사용한다. `proc.js`는 4초마다 프로세스를 갱신한다. `active.js`, `ext-live.js`도 시작된다.
 - `routes.js`가 공통 가드 뒤 라우트 표와 `ui/` 정적 파일을 분기한다. `routes-ops.js`는 셸·잡·프로세스·인프라·DB, `routes-chat.js`는 세션·프롬프트·모델, `routes-context.js`는 맥락 API를 맡는다.
 - `sse.js`는 `/api/events` 구독자에 스냅샷과 `{chat: ...}`, `{live: ...}` 이벤트를 방송한다. 접속 시 `routes.js`가 스냅샷과 최근 출력을 재생한다. `live.js`는 RPC 프레임을 변환하고, `ext-live.js`는 확장 JSONL을 따로 읽되 맵 RPC 세션과 중복하지 않는다.

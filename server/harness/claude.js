@@ -28,7 +28,7 @@ function newState(file) {
     requests: 0, turns: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     cost: 0, auxCost: 0, auxRequests: 0, hourly: [], durationSum: 0, ttftSum: 0, ttftN: 0,
     recent: [], tools: new Map(), commands: [], files: [], errors: 0, ctx: null, messages: [],
-    jobs: [], active: new Map(), taskProfiles: new Map(), liveq: [],
+    jobs: [], active: new Map(), taskProfiles: new Map(), liveq: [], act: require("../activity").newActivity(),
     msgId: "", // 마지막 assistant API 메시지 id(블록별로 쪼개진 줄을 한 메시지로 합치는 기준)
     msgRef: null, // 그 id 로 기록한 메시지(아직 없으면 null)
   };

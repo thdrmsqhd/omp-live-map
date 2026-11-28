@@ -12,6 +12,9 @@ const { sumHourly } = require("./turns");
 const { attachImages } = require("./images");
 const { capMessages } = require("./msg-cap");
 const { HARNESSES } = require("./harness");
+const { treeActivity } = require("./activity-tree");
+
+const NODE_STATE = new WeakMap(); // 스냅샷 노드 → 파일 상태(활동 요약을 잇는 데만 쓴다)
 
 function tokPerSec(st) {
   if (!st.durationSum) return 0;
@@ -34,7 +37,7 @@ function sessionIdOf(st) {
 
 function nodeOf(st, now, last) {
   const card = lineage.cardOf(st.file);
-  return {
+  const node = {
     id: card || st.file,
     file: st.file, // 지금 실제 기록 파일(카드 id 와 다를 수 있다)
     harness: st.harness || "omp", // 이 세션을 만든 실행기. UI 는 이 값과 기능 플래그로 버튼을 가른다.
@@ -79,6 +82,8 @@ function nodeOf(st, now, last) {
     lastUser: st.lastUser,
     lastAssistant: st.lastAssistant,
   };
+  NODE_STATE.set(node, st);
+  return node;
 }
 
 // 서브에이전트는 마지막 assistant 응답이 툴 호출 없이 끝났거나 yield 결과 제출이 성공했으면 done(turnOver, server/jobs.js). session_exit 직후(2초)에 끝난 기록만 done, 그 뒤 이어 쓰였으면 90초 이내 live.
@@ -140,6 +145,8 @@ function finishSession(s) {
       n.agentThinking = prof.thinking;
     }
   }
+  // 노드마다 목표·지금 하는 일·읽기/수정/명령·결과·최근 활동, 부모가 준 지시와 자식 id(맵의 에이전트·서브에이전트 노드).
+  treeActivity(s.nodes, (n) => NODE_STATE.get(n) || null);
   s.jobs = [];
   for (const n of s.nodes) {
     const st = stateOf(n.file || n.id);
@@ -192,4 +199,11 @@ function snapshot() {
   };
 }
 
-module.exports = { snapshot, statusOf, sessionIdOf };
+// 카드 id → 그 카드의 지금 파일 상태(omp·Claude 메인·Claude 서브). 맵 서랍의 수정 내역(diff) 조회에 쓴다.
+function stateOfNode(id) {
+  const claude = require("./harness/claude");
+  for (const st of [...allStates(), ...claude.states()]) if ((lineage.cardOf(st.file) || st.file) === id || st.file === id) return st;
+  return null;
+}
+
+module.exports = { snapshot, statusOf, sessionIdOf, stateOfNode };

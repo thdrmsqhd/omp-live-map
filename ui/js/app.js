@@ -92,11 +92,10 @@ async function boot() {
   setConnected(true);
   renderMap(false, true);
   Promise.allSettled([fetchInfra(), fetchSys()]).then(() => renderMap(false, true));
-  // 한 맵 데이터(프로젝트·Task·단계·세션 연결). 처음 열면 전체가 보이게 맞춘다(저장한 맵 위치가 있으면 그 자리).
-  const firstView = !localStorage.getItem(UMAP_VIEW_KEY);
+  // 한 맵 데이터(프로젝트·Task·단계·세션 연결). 열 때마다 내용에 맞춰 읽을 수 있는 배율(70% 이상)로 보여 준다.
   const wantedRun = new URLSearchParams(location.search).get("run");
   if (wantedRun) history.replaceState(null, "", location.pathname);
-  void umapRefresh(true).then(() => { paintUmap(true); if (firstView) umapFit(); if (wantedRun) umapRevealRun(wantedRun); });
+  void umapRefresh(true).then(() => { paintUmap(true); umapFit(true); if (wantedRun) umapRevealRun(wantedRun); });
 
   function connectEvents() {
     const es = new EventSource("/api/events?graph=2");

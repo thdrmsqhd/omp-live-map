@@ -7,6 +7,7 @@ const { recordUser, recordAssistant, recordResults, noteHourly } = require("./tu
 const { callsOf } = require("./agent-msgs");
 const { toolStart, toolResult, noteText } = require("./jobs");
 const { imageRef, textRefs } = require("./images");
+const activity = require("./activity");
 
 function newFileState(file) {
   const rel = path.relative(SESSIONS, file).split(path.sep);
@@ -58,6 +59,7 @@ function newFileState(file) {
     pending: "",
     firstUser: "",
     turns: 0,
+    act: activity.newActivity(), // 활동 요약 누적(server/activity.js)
   };
 }
 
@@ -115,6 +117,7 @@ function onUser(st, m, ts) {
   // 서브에이전트 결과 안내문은 사용자 말풍선이 아니라 결과 카드로 기록한다.
   const asResult = /^\s*<system-notice>/.test(text) && recordResults(st, text, ts) > 0;
   if (!asResult && (text || imgs.length)) recordUser(st, text, ts, imgs);
+  activity.onUserText(st.act, text, ts);
   noteText(st, text, ts);
 }
 
@@ -149,9 +152,11 @@ function onAssistant(st, m, ts) {
   const tools = [...new Set(blocks.filter((c) => c.type === "toolCall" && c.name).map((c) => c.name))];
   const calls = blocks.flatMap((c) => (c.type === "toolCall" ? callsOf(c.name, toolArgs(c.arguments)) : []));
   recordAssistant(st, said, tools, ts, calls);
+  activity.onAssistantText(st.act, said, ts, m.stopReason === "error");
   for (const block of blocks) {
     if (block.type !== "toolCall") continue;
     const a = toolArgs(block.arguments);
+    activity.onCall(st.act, { id: block.id, name: block.name, args: a, ts });
     for (const k of PATH_KEYS) notePath(st, a[k]);
     if (block.name === "task") noteTasks(st, a);
     if (block.name === "bash" && typeof a.command === "string") {
@@ -163,6 +168,8 @@ function onAssistant(st, m, ts) {
 
 function onToolResult(st, e, m, ts) {
   if (e.errorMessage) st.errors += 1;
+  const text = typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((c) => (c && c.text) || "").join(" ") : "";
+  activity.onResult(st.act, { id: m.toolCallId, error: m.isError || e.errorMessage, text, ts });
   toolResult(st, e, m, ts);
 }
 
@@ -205,7 +212,7 @@ function ingest(st, raw) {
     }
   } else if (e.type === "custom_message" || e.type === "system") {
     noteText(st, String(e.content || ""), ts);
-    if (e.type === "custom_message") recordResults(st, String(e.content || ""), ts);
+    if (e.type === "custom_message") { recordResults(st, String(e.content || ""), ts); activity.onNotice(st.act, String(e.content || ""), ts); }
   } else if (e.type === "message") {
     const m = e.message || {};
     if (m.role === "user" || m.role === "assistant") st.turnOver = m.role === "assistant" && m.stopReason !== "toolUse";

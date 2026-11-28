@@ -1,4 +1,5 @@
-/* omp-live-map · view · 한 맵의 누르기: 띠 머리(접기·＋ Task·⋯·상태 이름·예산), Task(▶·⋯·서랍), 단계(칩·서랍·승인/반려·편집 ＋), 세션(펼치기·열기). */
+/* omp-live-map · view · 한 맵의 누르기: 띠 머리(＋ Task·⋯·상태 이름·예산), Task(▶·⋯·서랍), 단계(칩·서랍·승인/반려·편집 ＋),
+   에이전트 카드(카운터·한 일 줄 → 활동 서랍의 diff·대화 자리, 두 번 누르기 = 세션 열기). 접기·펼치기는 없다. */
 
 async function umapClick(event) {
   const target = event.target;
@@ -9,7 +10,6 @@ async function umapClick(event) {
   const taskId = card?.dataset.task, node = card?.dataset.node;
   const button = target.closest("[data-um]");
   switch (action) {
-    case "fold": umapToggleBand(band.key); return paintUmap(true);
     case "add-task": return umapOpenAdd(band.key);
     case "band-menu": return umapBandMenu(button, band);
     case "status": return umapStatusMenu(button, band, button.dataset.status);
@@ -18,7 +18,6 @@ async function umapClick(event) {
     case "budget": return umapBudgetEdit(button, band.project.id);
     case "run": return umapRunTask(umapTaskById(taskId)).then((run) => run && umapToast("실행을 시작했습니다 · 단계 아래에 세션이 이어집니다."));
     case "task-menu": return umapTaskMenu(button, taskId);
-    case "expand": umapToggleExpanded(umapTaskKey(taskId)); return paintUmap(true);
     case "edit-scope": UM.edit.scope = button.dataset.scope; UM.edit.status = button.dataset.scope === "template" ? "다음 변경부터 템플릿에 저장합니다" : "다음 변경부터 이 Task 사본에 저장합니다"; return paintUmap(true);
     case "edit-done": return umapStopEdit();
     case "insert": return umapInsertMenu(button, Number(button.dataset.index));
@@ -37,16 +36,23 @@ async function umapClick(event) {
         onSave: (reason) => reason ? umapDecide(task.run.id, node, "rejected", reason).then(() => umapToast("반려했습니다.")) : undefined });
     }
     case "open": return umapOpenSession(card.dataset.node);
+    case "act-edits": return openAgentDrawer(card.dataset.node, "edits");
+    case "act-cmds": return openAgentDrawer(card.dataset.node, "cmds");
+    case "act-reads": return openAgentDrawer(card.dataset.node, "reads");
+    case "act-item": {
+      const row = target.closest("[data-um]");
+      return row.dataset.file ? openAgentDrawer(card.dataset.node, "edits", { file: row.dataset.file, at: Number(row.dataset.ts) })
+        : openAgentDrawer(card.dataset.node, "talk", { at: Number(row.dataset.ts) });
+    }
     default: break;
   }
   if (!card || target.closest("button, input, select, textarea")) return;
-  if (card.classList.contains("um-done")) { umapToggleExpanded(umapTaskKey(taskId)); return paintUmap(true); }
   if (card.classList.contains("um-task")) return openTaskDrawer(taskId);
   if (card.classList.contains("um-stage")) return openStageDrawer(taskId, node, "stage");
-  // 세션: 두 번 누르기 = 전체 화면(칩을 펼치며 다시 그려도 두 번째 누르기의 detail 은 2다), 칩 한 번 누르기 = 카드로 펼치기.
-  if (card.classList.contains("um-sess") && card.dataset.node) {
-    if (event.detail >= 2) return umapOpenSession(card.dataset.node);
-    if (card.classList.contains("chip")) { umapToggleExpanded(card.dataset.key); paintUmap(true); }
+  // 에이전트 카드: 한 번 누르기 = 활동 서랍(대화 자리), 두 번 누르기 = 세션 전체 화면.
+  if (card.classList.contains("um-agent") && card.dataset.node) {
+    if (event.detail >= 2) { closeUmapDrawer(); return umapOpenSession(card.dataset.node); }
+    return openAgentDrawer(card.dataset.node, "head");
   }
 }
 
@@ -58,7 +64,6 @@ function umapBandMenu(anchor, band) {
   inlineMenu(anchor, [
     { label: "위로 옮기기", disabled: index === 0, run: () => { umapMoveBand(band.key, -1, keys); paintUmap(true); } },
     { label: "아래로 옮기기", disabled: index === keys.length - 1, run: () => { umapMoveBand(band.key, 1, keys); paintUmap(true); } },
-    { label: band.collapsed ? "펼치기" : "접기", run: () => { umapToggleBand(band.key); paintUmap(true); } },
     { label: "이 띠 자동 배치로 되돌리기", disabled: !Object.values(UM.manual).some((spot) => spot.band === band.key), run: () => { umapResetAllManual(band.key); paintUmap(true); } },
     ...(project ? [
       { label: "프로젝트 문서", run: () => openProjectDrawer(project) },
@@ -102,7 +107,6 @@ function umapTaskMenu(anchor, taskId) {
     ...(task.run && ["running", "queued", "waiting_approval", "paused", "interrupted"].includes(task.run.status) ? [{ label: "실행 취소", run: () => void umapRunAction(task.run.id, "cancel").catch((error) => umapToast(error.message)) }] : []),
     ...(failed && task.run?.status === "failed" ? [{ label: "‘" + failed.label + "’ 다시 시도", run: () => void umapRetry(task.run.id, failed.id).catch((error) => umapToast(error.message)) }] : []),
     ...statuses.map(({ status, label }) => ({ label: label + "(으)로 옮기기", disabled: busy, run: () => void umapMoveTask(taskId, status).catch((error) => umapToast(error.message)) })),
-    ...(task.status === "completed" && UM.expanded.has(umapTaskKey(taskId)) ? [{ label: "한 줄로 접기", run: () => { umapToggleExpanded(umapTaskKey(taskId)); paintUmap(true); } }] : []),
     { label: "자동 배치로 되돌리기", disabled: !umapIsManual(umapTaskKey(taskId)), run: () => umapResetItem(umapTaskKey(taskId)) },
   ]);
 }
@@ -116,9 +120,9 @@ function umapStageMenu(anchor, taskId, node) {
 }
 function umapSessionMenu(card) {
   const key = card.dataset.key, id = card.dataset.node;
-  inlineMenu(card.querySelector(".um-sess-name") || card, [
+  inlineMenu(card.querySelector(".um-role") || card, [
     { label: "열기 (전체 화면)", run: () => umapOpenSession(id) },
-    { label: UM.expanded.has(key) ? "칩으로 접기" : "카드로 펼치기", run: () => { umapToggleExpanded(key); paintUmap(true); } },
+    { label: "활동 서랍", run: () => openAgentDrawer(id, "head") },
     { label: "자동 배치로 되돌리기", disabled: !umapIsManual(key), run: () => umapResetItem(key) },
   ]);
 }
@@ -127,7 +131,6 @@ function umapSessionMenu(card) {
 function umapRevealRun(runId) {
   for (const band of UMAP_BANDS) for (const task of band.tasks) {
     if (task.run?.id !== runId) continue;
-    if (task.collapsed) { umapToggleExpanded(umapTaskKey(task.id)); paintUmap(true); }
     const box = UMAP_LAYOUT.boxes[umapTaskKey(task.id)];
     if (box) umapReveal(box, true);
     return;
@@ -141,7 +144,6 @@ function umapJumpAttention() {
   const list = umapAttention(UMAP_BANDS);
   if (!list.length) return umapToast("지금 개입이 필요한 항목이 없습니다.");
   const item = list[umapAttentionAt++ % list.length];
-  if (UM.collapsed.has(item.band)) { umapToggleBand(item.band); paintUmap(true); }
   const box = UMAP_LAYOUT.boxes[item.key];
   if (box) umapReveal(box, true);
   umapToast(item.label);

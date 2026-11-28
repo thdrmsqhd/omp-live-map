@@ -14,11 +14,13 @@ function umapZoomTo(k, at) {
   umapApplyView();
   umapSaveView();
 }
-function umapFit() {
+// 전체 보기(fit 버튼·전체 보기·키 0): 내용 전체가 들어오게 줄이거나(최소 20%) 작은 내용은 키워(최대 125%) 가운데에 둔다.
+// initial: 처음 열 때·필터를 바꿀 때는 폭에 맞추되 70%~100%(읽을 수 있는 배율)로 둔다. 아래는 굴려서 본다.
+function umapFit(initial = false) {
   if (!UMAP_LAYOUT) return;
   const rect = $("umap-viewport").getBoundingClientRect();
-  const k = Math.min(1, Math.max(0.2, Math.min((rect.width - 40) / Math.max(1, UMAP_LAYOUT.width), (rect.height - 70) / Math.max(1, UMAP_LAYOUT.height))));
-  UM.view = { x: 20, y: 56, k };
+  if (!rect.width || !rect.height) return;
+  UM.view = initial ? umapInitialView(UMAP_LAYOUT, rect) : umapFitView(UMAP_LAYOUT, rect);
   umapApplyView();
   umapSaveView();
 }
@@ -102,14 +104,14 @@ function bindUmapInput() {
     void umapClick(event).catch((error) => umapToast(error.message));
   });
   items.addEventListener("contextmenu", (event) => {
-    const card = event.target.closest(".um-sess[data-node]");
+    const card = event.target.closest(".um-agent[data-node]");
     if (!card) return;
     event.preventDefault();
     umapSessionMenu(card);
   });
   bindUmapAddLine(items);
   $("umap-reset").onclick = () => { umapResetAllManual(); paintUmap(true); umapToast("모든 카드를 자동 배치로 되돌렸습니다."); };
-  $("umap-fit-all").onclick = umapFit;
+  $("umap-fit-all").onclick = () => umapFit();
   addEventListener("keydown", umapKey, true);
   addEventListener("resize", () => paintUmapSoon());
 }

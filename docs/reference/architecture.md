@@ -31,7 +31,7 @@ ui/
   js/model/            layout(배치 계산, DOM 접근 없음) · activity(마지막 턴 활동 범위) · task-map(한 맵: Task 줄 순서·자동 배치·Workflow 편집 목록 연산)
   js/viewmodel/        map · session-rows · store · term · files · dbui · chat · context · dock(서브 도킹 상태) · claude-queue
                        task-map(UM 상태: 프로젝트 띠·옮긴 카드 자리·띠 순서/접힘 저장, 세션↔단계 잇기) · task-map-actions(서버 호출)
-  js/view/             한 맵(umap-render · umap-input(이동·확대·끌기) · umap-click · umap-edit(＋ Task 줄·Workflow 편집)
+  js/view/             한 맵(umap-render · umap-agent(에이전트·서브에이전트 카드 문장, 활동 서랍) · umap-input(이동·확대·끌기) · umap-click · umap-edit(＋ Task 줄·Workflow 편집)
                        · umap-drawer(단계·칩·Task 서랍, 이 Task만/템플릿) · umap-library · umap-topbar(자원 한 줄과 서랍)), monitor(두 모드 전환)
                        워크스페이스(render-map, patch-nodes, stage*, edges, minimap, menu, search, topbar)
                        카드(card-compact, card-session, card-metrics, charts, spark-hover, panel), 세션 목록(session-list)
@@ -51,6 +51,6 @@ docs/                  archify 구조 다이어그램(architecture · components
 - 엔지니어링 DB는 스키마를 올리기 전에 `engineering.sqlite.v<이전 버전>.bak`을 남깁니다. 에이전트 프로필은 하네스로 합쳤습니다. 앱을 열 때 남은 `definition`(kind=`profile`)과 예전 `session-harness.sqlite` 프로필을 같은 이름의 하네스(없으면 새 개인 하네스)로 옮기고, 프로필 노드를 쓰던 Workflow 버전은 Agent 단계가 그 하네스를 고정하도록 고친 뒤 프로필 정의를 지웁니다. ＋ 세션의 하네스 배정은 `session-harness.sqlite`에 남습니다(`server/engineering/harness-merge.js`, `server/harness/session-harness.js`, `tests/harness-merge.test.js`). v15에서 칸반 칸(`sdlc_stage`)은 프로젝트별로 더하고 지우는 칸이 되었고(칸별 Workflow 바인딩 제거), Task에 카드별 시간 한도·예산(NULL = 기본값)이 생겼습니다.
 - v14부터 Workflow도 개인·팀·프로젝트 범위를 가집니다(`workflow.scope`·`team`, 처음 저장할 때 정하고 바꾸지 않음). 프로젝트에서는 그 프로젝트·같은 팀·개인 Workflow가 보이고, 팀·개인 Workflow는 같은 범위에서 쓸 수 있는 정의·하위 Workflow만 참조합니다. 실행(`workflow_run.project`)은 시작한 프로젝트를 직접 적습니다(`tests/workflow-scope.test.js`).
 - 화면은 `renderMap()`이 조각 목록을 만들고 `patchPieces()`가 마크업이 바뀐 조각만 바꿉니다. 큰 카드는 스냅샷이 올 때 chrome만 교체하고, 블록이 사는 body는 블록 구성이 같으면 DOM을 유지합니다. 그래서 입력 포커스·스크롤·트리 펼침이 갱신에 끊기지 않습니다.
-- 한 맵(`GET /api/engineering/task-map?project=`)은 프로젝트의 Task마다 Workflow 단계(하네스·루프 칩, 상태, 승인 요청)와 그 단계를 돈 세션 id를 돌려줍니다. 세션 id는 실행기(adapters.js)가 진행 보고로 넘기고 `workflow-live`가 적어 두며, 끝난 시도는 `node_attempt`의 결과(`attempts[].sessionId`)에서 읽습니다. 화면은 이 id를 스냅샷 노드의 `sid`(JSONL 세션 id, `snapshot.js` `sessionIdOf`)와 맞춰 세션 카드를 단계 아래에 놓습니다(`tests/task-map.test.js`, `tests/umap-layout.test.js`).
+- 한 맵(`GET /api/engineering/task-map?project=`)은 프로젝트의 Task마다 Workflow 단계(하네스·루프 칩, 상태, 승인 요청)와 그 단계를 돈 세션 id를 돌려줍니다. 세션 id는 실행기(adapters.js)가 진행 보고로 넘기고 `workflow-live`가 적어 두며, 끝난 시도는 `node_attempt`의 결과(`attempts[].sessionId`)에서 읽습니다. 화면은 이 id를 스냅샷 노드의 `sid`(JSONL 세션 id, `snapshot.js` `sessionIdOf`)와 맞춰 에이전트 노드를 단계 아래에 놓고, 같은 세션의 서브 노드를 `parent`로 이어 가지로 답니다. 노드마다 서버 활동 요약 `act`(`server/activity.js`·`activity-tree.js`: 목표·상태·지금 하는 일·읽기/수정/명령·결과·최근 활동·자식)가 실립니다(`tests/task-map.test.js`, `tests/umap-layout.test.js`, `tests/activity-summary.test.js`).
 - 서랍의 저장 범위 '이 Task만'은 `task-local.js`가 Workflow·정의를 프로젝트 범위로 복사(` · Task <id 8자>`)하고 Task를 복사본에 고정합니다. 정의·Workflow·Task를 한 트랜잭션으로 쓰기 위해 `infrastructure/sqlite.js`의 `transaction()`은 이미 열린 트랜잭션 안에서는 그대로 함수만 부릅니다.
 - 새 블록은 `ui/js/view/block-<이름>.js`에서 `registerBlock({ type, slot, flex, render, mount, paint })`로 등록하고 `index.html`에 스크립트를 추가합니다. `render`는 바디를 만들 때, `mount`는 그 직후 1회, `paint`는 스냅샷 갱신 때 불립니다.

@@ -86,7 +86,6 @@ async function umapEditStage(taskId, node, scope, patch) {
 function umapStartEdit(taskId) {
   const task = umapTaskById(taskId);
   UM.edit = { task: taskId, ids: task.stages.map(({ id }) => id), added: {}, scope: "task", status: "" };
-  UM.expanded.add(umapTaskKey(taskId));
   umapNotify();
 }
 function umapStopEdit() { UM.edit = null; umapNotify(); }

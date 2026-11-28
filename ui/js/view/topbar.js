@@ -31,6 +31,8 @@ $("filters").addEventListener("click", (e) => {
   FILTER = b.dataset.f;
   for (const x of $("filters").querySelectorAll("button")) x.classList.toggle("on", x === b);
   renderMap(true, true);
+  // 보이는 세션이 바뀌었으니 맵을 다시 내용에 맞춘다(읽을 수 있는 배율 70% 이상).
+  if (typeof mapMode !== "undefined" && mapMode === "map") { paintUmap(true); umapFit(true); }
 });
 
 // 서버(SSE) 연결 상태. 끊기면 화면 값이 멈춘 것이므로 눈에 띄게 알린다.

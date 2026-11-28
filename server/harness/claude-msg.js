@@ -5,6 +5,7 @@
 
 const { recordUser, recordAssistant, noteHourly, keepText } = require("../turns");
 const { invalidateMessageSize } = require("../msg-cap");
+const activity = require("../activity");
 
 // assistant usage → omp 가 쓰는 모양. 캐시 생성·읽기는 새 입력과 별도 토큰이다.
 function usageOf(u) {
@@ -60,6 +61,10 @@ function onAssistant(st, o, ts) {
   // omp 와 같은 규칙: 마지막 assistant 가 툴 호출 없이 끝났으면 한 턴이 끝난 것이다.
   st.turnOver = m.stop_reason !== "tool_use";
   if (m.model) st.model = m.model;
+  if (st.act) {
+    for (const b of blocks) if (b && b.type === "tool_use" && b.name) activity.onCall(st.act, { id: b.id, name: b.name, args: b.input, ts });
+    if (said) activity.onAssistantText(st.act, said, ts);
+  }
   const id = m.id || o.requestId || "";
   if (id && id === st.msgId) { mergeAssistant(st, said, tools, ts); return; }
   st.msgId = id;
@@ -87,6 +92,11 @@ function onAssistant(st, o, ts) {
 function onUser(st, o, ts) {
   // sidechain 레코드는 서브에이전트 기록 파일의 본문이다. 메인 파일에 섞여 오면 버린다.
   if (o.isSidechain && !st.sidechain) return;
+  // 툴 결과(tool_result 블록)는 사용자 발화가 아니지만 활동 요약의 명령 통과/실패·서브에이전트 결과다.
+  const content = (o.message || {}).content;
+  if (st.act && Array.isArray(content)) for (const b of content) {
+    if (b && b.type === "tool_result") activity.onResult(st.act, { id: b.tool_use_id, error: b.is_error, text: typeof b.content === "string" ? b.content : textOf(b.content), ts });
+  }
   // 하네스가 끼워 넣은 지시·스킬 본문(isMeta)·기록 전용 항목은 사용자 발화가 아니다.
   // omp 는 같은 내용을 toolResult 로 남기므로 사용자 메시지로 올리면 대화가 달라진다.
   if (o.isMeta || o.isVisibleInTranscriptOnly) return;
@@ -97,6 +107,7 @@ function onUser(st, o, ts) {
   if (!st.firstUser) st.firstUser = text.replace(/\s+/g, " ").slice(0, 120);
   st.lastUser = text.replace(/\s+/g, " ").slice(0, 300);
   recordUser(st, text, ts);
+  if (st.act) activity.onUserText(st.act, text, ts);
 }
 
 module.exports = { onAssistant, onUser };

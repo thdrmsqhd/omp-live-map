@@ -20,7 +20,6 @@ function umapOpenAdd(bandKey, { run = false } = {}) {
   if (!key) return;
   UM.adding = { band: key, run, focus: true, text: "" };
   UM.current = key;
-  if (UM.collapsed.has(key)) umapToggleBand(key);
   paintUmap(true);
   const box = UMAP_LAYOUT?.boxes["add:" + key];
   if (box) umapReveal(box);
@@ -97,7 +96,10 @@ function umapEditStageMenu(anchor, taskId, node) {
 }
 // 편집 중 단계 끌기가 끝나면 놓은 x 로 새 자리를 정한다(옮긴 자리로 저장하지 않는다).
 function umapDropStage(taskId, node, worldX) {
-  const index = umapDropIndex(worldX, UM.edit.ids.length);
+  // 단계 칸 폭은 그 아래 에이전트 나무만큼 달라서 실제 칸 위치로 자리를 찾는다.
+  const task = umapTaskById(taskId);
+  const xs = (task?.stages || []).map(({ id }) => UMAP_LAYOUT?.boxes[umapStageKey(taskId, id)]?.x).filter(Number.isFinite);
+  const index = umapDropIndex(worldX, UM.edit.ids.length, xs.length === UM.edit.ids.length ? xs : undefined);
   const next = umapMoveStage(UM.edit.ids, node, index);
   if (next.join() !== UM.edit.ids.join()) void umapSaveEdit(next); else paintUmap(true);
 }
